@@ -13,7 +13,9 @@ import {
 } from "react-leaflet";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-const VIETBANDO_URL = `${API_URL}/api/tiles/{z}/{x}/{y}`;
+
+const OSM_TILE_URL =
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 const LAND_COLORS = {
   ODT: "#ef4444",
@@ -321,12 +323,12 @@ export default function App() {
             <CurrentLocation />
             <ZoomControl position="bottomright" />
             <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="Vietbando">
+              <LayersControl.BaseLayer checked name="OpenStreetMap">
                 <TileLayer
-                  url={VIETBANDO_URL}
+                  url={OSM_TILE_URL}
                   minZoom={0}
-                  maxZoom={18}
-                  attribution="Vietbando"
+                  maxZoom={19}
+                  attribution='&copy; OpenStreetMap contributors'
                 />
               </LayersControl.BaseLayer>
               <LayersControl.Overlay checked name="Thửa đất">
