@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+import os
+
+import requests
+from dotenv import load_dotenv
+from flask import Flask, Response, jsonify, request
+from flask_cors import CORS
+
+
+load_dotenv()
+app = Flask(__name__)
+
+frontend_url = os.getenv("FRONTEND_URL", "*")
+allowed_origins = (
+    "*"
+    if frontend_url == "*"
+    else [origin.strip() for origin in frontend_url.split(",") if origin.strip()]
+)
+CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+
+VIETBANDO_TILE_URL = os.getenv(
+    "VIETBANDO_TILE_URL",
+    "http://images.vietbando.com/ImageLoader/GetImage.ashx"
+    "?Ver=2016&LayerIds=VBD&Y={y}&X={x}&Level={z}",
+)
+
+
+def supabase_headers() -> dict[str, str]:
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not key:
+        raise RuntimeError("Thiếu SUPABASE_SERVICE_ROLE_KEY")
+
+    headers = {"apikey": key}
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {key}"
+    return headers
+
+
+@app.get("/api/health")
+def health():
+    return {
+        "ok": True,
+        "service": "webgis-api",
+        "environment": os.getenv("RENDER", "local"),
+    }
+
+
+@app.get("/api/parcels")
+def parcels():
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    params = {
+        "select": "id,ma_xa,so_to,so_thua,muc_dich_su_dung,dien_tich,ten_chu,dia_chi,geom",
+        "order": "so_to.asc,so_thua.asc",
+        "limit": min(int(request.args.get("limit", 5000)), 10000),
+    }
+    ma_xa = request.args.get("ma_xa", "").strip()
+    if ma_xa:
+        params["ma_xa"] = f"eq.{ma_xa}"
+
+    try:
+        response = requests.get(
+            f"{base_url}/rest/v1/thua_dat",
+            headers=supabase_headers(),
+            params=params,
+            timeout=60,
+        )
+        response.raise_for_status()
+    except (requests.RequestException, RuntimeError) as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    features = []
+    for row in response.json():
+        geometry = row.pop("geom", None)
+        if geometry:
+            features.append(
+                {
+                    "type": "Feature",
+                    "id": row.get("id"),
+                    "geometry": geometry,
+                    "properties": row,
+                }
+            )
+    return jsonify({"type": "FeatureCollection", "features": features})
+
+
+@app.get("/api/tiles/<int:z>/<int:x>/<int:y>")
+def vietbando_tile(z: int, x: int, y: int):
+    if not 0 <= z <= 18:
+        return jsonify({"error": "Mức zoom không hợp lệ"}), 400
+
+    tile_url = VIETBANDO_TILE_URL.format(z=z, x=x, y=y)
+    try:
+        upstream = requests.get(
+            tile_url,
+            headers={
+                "User-Agent": "WebGIS-ThuaDat/1.0",
+                "Referer": os.getenv("VIETBANDO_REFERER", ""),
+            },
+            timeout=20,
+        )
+        upstream.raise_for_status()
+    except requests.RequestException as exc:
+        return jsonify({"error": f"Không tải được tile Vietbando: {exc}"}), 502
+
+    content_type = upstream.headers.get("Content-Type", "image/png")
+    return Response(
+        upstream.content,
+        status=200,
+        content_type=content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+if __name__ == "__main__":
+    app.run(
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "5000")),
+        debug=os.getenv("FLASK_DEBUG", "false").lower() == "true",
+    )

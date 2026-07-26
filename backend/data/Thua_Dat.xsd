@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema targetNamespace="http://www.vietbando.com/gml/vlis" xmlns:app="http://www.vietbando.com/gml/vlis" xmlns:gmlce="http://www.opengis.net/gml/3.3/ce" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xml="http://www.w3.org/XML/1998/namespace" elementFormDefault="qualified">
+<xsd:import namespace="http://www.opengis.net/gml/3.2" schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/gml.xsd"/>
+<xsd:element name="Thua_Dat" type="Thua_DatType" substitutionGroup="gml:_Feature"/>
+<xsd:complexType name="Thua_DatType">
+<xsd:complexContent>
+<xsd:extension>
+<base>gml:AbstractFeatureType</base>
+</xsd:extension>
+<xsd:sequence>
+<xsd:element name="Geometry" type="gml:GeometryPropertyType"/>
+<xsd:element name="soHieuToBanDo" type="xsd:integer"/>
+<xsd:element name="soThuTuThua" type="xsd:integer"/>
+<xsd:element name="maXa" type="xsd:string"/>
+<xsd:element name="mucDichSuDung" type="xsd:string"/>
+<xsd:element name="dienTich" type="xsd:float"/>
+<xsd:element name="tenChu" type="xsd:string"/>
+<xsd:element name="diaChi" type="xsd:string"/>
+</xsd:sequence>
+</xsd:complexContent>
+</xsd:complexType>
+</xsd:schema>
