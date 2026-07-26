@@ -21,7 +21,7 @@ CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
 VIETBANDO_TILE_URL = os.getenv(
     "VIETBANDO_TILE_URL",
-    "http://images.vietbando.com/ImageLoader/GetImage.ashx"
+    "https://images.vietbando.com/ImageLoader/GetImage.ashx"
     "?Ver=2016&LayerIds=VBD&Y={y}&X={x}&Level={z}",
 )
 
@@ -92,27 +92,106 @@ def vietbando_tile(z: int, x: int, y: int):
     if not 0 <= z <= 18:
         return jsonify({"error": "Mức zoom không hợp lệ"}), 400
 
-    tile_url = VIETBANDO_TILE_URL.format(z=z, x=x, y=y)
+    tile_url = VIETBANDO_TILE_URL.format(
+        z=z,
+        x=x,
+        y=y,
+    )
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/150.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8",
+    }
+
+    referer = os.getenv("VIETBANDO_REFERER", "").strip()
+    if referer:
+        headers["Referer"] = referer
+
     try:
+        app.logger.info("Đang gọi Vietbando: %s", tile_url)
+
         upstream = requests.get(
             tile_url,
-            headers={
-                "User-Agent": "WebGIS-ThuaDat/1.0",
-                "Referer": os.getenv("VIETBANDO_REFERER", ""),
-            },
-            timeout=20,
+            headers=headers,
+            timeout=(10, 30),
+            allow_redirects=True,
         )
-        upstream.raise_for_status()
-    except requests.RequestException as exc:
-        return jsonify({"error": f"Không tải được tile Vietbando: {exc}"}), 502
 
-    content_type = upstream.headers.get("Content-Type", "image/png")
-    return Response(
-        upstream.content,
-        status=200,
-        content_type=content_type,
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+        content_type = upstream.headers.get("Content-Type", "")
+
+        app.logger.info(
+            "Vietbando status=%s, content-type=%s, bytes=%s, final-url=%s",
+            upstream.status_code,
+            content_type,
+            len(upstream.content),
+            upstream.url,
+        )
+
+        if upstream.status_code != 200:
+            body_preview = ""
+
+            if not content_type.lower().startswith("image/"):
+                body_preview = upstream.text[:500]
+
+            app.logger.error(
+                "Vietbando trả lỗi: status=%s, body=%s",
+                upstream.status_code,
+                body_preview,
+            )
+
+            return jsonify({
+                "error": "Vietbando trả về mã lỗi",
+                "upstream_status": upstream.status_code,
+                "content_type": content_type,
+                "final_url": upstream.url,
+                "body": body_preview,
+            }), 502
+
+        if not content_type.lower().startswith("image/"):
+            body_preview = upstream.text[:500]
+
+            app.logger.error(
+                "Vietbando không trả ảnh: content-type=%s, body=%s",
+                content_type,
+                body_preview,
+            )
+
+            return jsonify({
+                "error": "Vietbando không trả dữ liệu ảnh",
+                "content_type": content_type,
+                "body": body_preview,
+            }), 502
+
+        return Response(
+            upstream.content,
+            status=200,
+            content_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=86400",
+            },
+        )
+
+    except requests.Timeout:
+        app.logger.exception("Vietbando timeout: %s", tile_url)
+
+        return jsonify({
+            "error": "Máy chủ Vietbando phản hồi quá lâu",
+        }), 504
+
+    except requests.RequestException as exc:
+        app.logger.exception(
+            "Không kết nối được Vietbando: %s",
+            exc,
+        )
+
+        return jsonify({
+            "error": "Không kết nối được máy chủ Vietbando",
+            "detail": str(exc),
+        }), 502
 
 
 if __name__ == "__main__":
