@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from dotenv import load_dotenv
@@ -59,23 +60,40 @@ def fetch_all_rows(
 ) -> list[dict]:
     # Supabase giới hạn "Max Rows" mặc định 1000 dòng/request bất kể limit
     # truyền vào, nên phải phân trang bằng header Range để lấy hết dữ liệu.
-    rows = []
-    start = 0
-    while len(rows) < requested_limit:
+    # Lấy tổng số dòng ngay ở trang đầu (Prefer: count=exact) rồi tải các
+    # trang còn lại song song thay vì tuần tự để giảm thời gian chờ.
+    endpoint = f"{base_url}/rest/v1/{table}"
+
+    def fetch_page(start: int, count_exact: bool = False) -> tuple[list[dict], str]:
         end = start + page_size - 1
         page_headers = {**headers, "Range-Unit": "items", "Range": f"{start}-{end}"}
+        if count_exact:
+            page_headers["Prefer"] = "count=exact"
         response = requests.get(
-            f"{base_url}/rest/v1/{table}",
-            headers=page_headers,
-            params=params,
-            timeout=60,
+            endpoint, headers=page_headers, params=params, timeout=60
         )
         response.raise_for_status()
-        page = response.json()
-        rows.extend(page)
-        if len(page) < page_size:
-            break
-        start += page_size
+        return response.json(), response.headers.get("Content-Range", "")
+
+    first_page, content_range = fetch_page(0, count_exact=True)
+    rows = first_page
+
+    total = None
+    if "/" in content_range:
+        total_part = content_range.rsplit("/", 1)[-1]
+        if total_part.isdigit():
+            total = int(total_part)
+
+    if total is None or len(first_page) < page_size:
+        return rows[:requested_limit]
+
+    remaining_limit = min(total, requested_limit)
+    starts = list(range(page_size, remaining_limit, page_size))
+    if starts:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            for page, _ in executor.map(fetch_page, starts):
+                rows.extend(page)
+
     return rows[:requested_limit]
 
 
@@ -119,8 +137,16 @@ def parcels():
 
     try:
         headers = supabase_headers()
-        rows = fetch_all_rows(base_url, "thua_dat", parcel_params, headers, requested_limit)
-        sync_rows = fetch_all_rows(base_url, "dong_bo_du_lieu", sync_params, headers, 50000)
+        # Tải song song 2 bảng thay vì lần lượt để giảm thời gian phản hồi.
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            rows_future = executor.submit(
+                fetch_all_rows, base_url, "thua_dat", parcel_params, headers, requested_limit
+            )
+            sync_future = executor.submit(
+                fetch_all_rows, base_url, "dong_bo_du_lieu", sync_params, headers, 50000
+            )
+            rows = rows_future.result()
+            sync_rows = sync_future.result()
     except (requests.RequestException, RuntimeError) as exc:
         return jsonify({"error": str(exc)}), 502
 
