@@ -180,6 +180,27 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   color: #7c9490; background: #e6f3f0; cursor: not-allowed;
 }
 
+.importWrap { flex: 1; display: grid; place-items: start center; padding: 40px 20px; }
+.importCard {
+  width: 100%; max-width: 420px; padding: 24px;
+  display: flex; flex-direction: column; gap: 10px;
+  border-radius: 16px; background: white; border: 1px solid #d4e1de;
+  box-shadow: 0 10px 30px #234e4820;
+}
+.importCard label { font-weight: 700; font-size: 13px; color: #2f5552; margin-top: 6px; }
+.importCard input[type="file"],
+.importCard input[type="password"] {
+  padding: 10px 12px; border: 1px solid #b9ccc8; border-radius: 10px;
+  background: white; font-size: 13px; color: #173f3c;
+}
+.importButton {
+  margin-top: 14px; padding: 12px;
+  border: 0; border-radius: 10px; color: white; background: #0f766e;
+  font-weight: 700; font-size: 13px;
+}
+.importButton:hover { background: #0b5f59; }
+.importButton:disabled { background: #9db8b4; cursor: not-allowed; }
+
 @media (max-width: 760px) {
   .topbar { height: 66px; flex-basis: 66px; padding: 0 13px; }
   .brandMark { width: 40px; height: 40px; border-radius: 12px; }

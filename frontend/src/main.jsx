@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import "./styles.css";
 import App from "./App.jsx";
 import ToolsPage from "./ToolsPage.jsx";
+import ImportGmlPage from "./ImportGmlPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -22,7 +23,15 @@ function Root() {
   if (path.startsWith("/tools")) {
     return <ToolsPage onNavigateHome={() => navigate("/")} />;
   }
-  return <App onNavigateTools={() => navigate("/tools")} />;
+  if (path.startsWith("/import-gml")) {
+    return <ImportGmlPage onNavigateHome={() => navigate("/")} />;
+  }
+  return (
+    <App
+      onNavigateTools={() => navigate("/tools")}
+      onNavigateImport={() => navigate("/import-gml")}
+    />
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(

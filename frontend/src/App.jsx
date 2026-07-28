@@ -155,7 +155,7 @@ function CurrentLocation() {
   );
 }
 
-export default function App({ onNavigateTools }) {
+export default function App({ onNavigateTools, onNavigateImport }) {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
@@ -257,6 +257,16 @@ export default function App({ onNavigateTools }) {
           }}
         >
           ⬇ Tải công cụ
+        </a>
+        <a
+          className="backLink"
+          href="/import-gml"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigateImport?.();
+          }}
+        >
+          ⇪ Nhập GML
         </a>
       </header>
 

@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
+from gml_reader import parse_gml_bytes, rows_from_geojson
+
 
 load_dotenv()
 app = Flask(__name__)
@@ -85,6 +87,54 @@ def parcels():
                 }
             )
     return jsonify({"type": "FeatureCollection", "features": features})
+
+
+@app.post("/api/import-gml")
+def import_gml():
+    import_token = os.getenv("IMPORT_TOKEN", "")
+    if import_token and request.headers.get("X-Import-Token", "") != import_token:
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Thiếu file GML"}), 400
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        data = parse_gml_bytes(uploaded.read())
+    except Exception as exc:
+        return jsonify({"error": f"Không đọc được file GML: {exc}"}), 400
+
+    rows = rows_from_geojson(data)
+    if not rows:
+        return jsonify({"error": "File GML không có thửa đất hợp lệ"}), 400
+
+    try:
+        headers = {
+            **supabase_headers(),
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        }
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    endpoint = f"{base_url}/rest/v1/thua_dat?on_conflict=ma_xa,so_to,so_thua"
+    batch_size = 200
+    imported = 0
+    try:
+        for start in range(0, len(rows), batch_size):
+            batch = rows[start : start + batch_size]
+            response = requests.post(endpoint, headers=headers, json=batch, timeout=120)
+            response.raise_for_status()
+            imported += len(batch)
+    except requests.RequestException as exc:
+        detail = exc.response.text if exc.response is not None else str(exc)
+        return jsonify({"error": detail, "imported": imported, "total": len(rows)}), 502
+
+    return jsonify({"ok": True, "total": len(rows), "imported": imported})
 
 
 @app.get("/api/tiles/<int:z>/<int:x>/<int:y>")

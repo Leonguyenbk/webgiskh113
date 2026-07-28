@@ -32,9 +32,7 @@ def _ring(pos_list: str, transformer: Transformer) -> list[list[float]]:
     return result
 
 
-def read_gml(path: str | Path) -> dict:
-    source = Path(path)
-    root = ET.parse(source).getroot()
+def _parse_root(root: ET.Element) -> dict:
     transformer = Transformer.from_crs("EPSG:9218", "EPSG:4326", always_xy=True)
     features = []
 
@@ -82,6 +80,24 @@ def read_gml(path: str | Path) -> dict:
         "crs": {"type": "name", "properties": {"name": "EPSG:4326"}},
         "features": features,
     }
+
+
+def read_gml(path: str | Path) -> dict:
+    root = ET.parse(Path(path)).getroot()
+    return _parse_root(root)
+
+
+def parse_gml_bytes(data: bytes) -> dict:
+    root = ET.fromstring(data)
+    return _parse_root(root)
+
+
+def rows_from_geojson(data: dict) -> list[dict]:
+    rows = []
+    for feature in data["features"]:
+        props = feature["properties"]
+        rows.append({**props, "geom": feature["geometry"]})
+    return rows
 
 
 def write_geojson(data: dict, path: str | Path) -> None:

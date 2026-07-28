@@ -7,20 +7,12 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-from gml_reader import read_gml, write_geojson
+from gml_reader import read_gml, rows_from_geojson, write_geojson
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_GML = BASE_DIR / "data" / "Thua_Dat.gml"
 DEFAULT_OUTPUT = BASE_DIR / "data" / "thua_dat_4326.geojson"
-
-
-def rows_from_geojson(data: dict) -> list[dict]:
-    rows = []
-    for feature in data["features"]:
-        props = feature["properties"]
-        rows.append({**props, "geom": feature["geometry"]})
-    return rows
 
 
 def upload_rows(rows: list[dict], batch_size: int = 100) -> None:
