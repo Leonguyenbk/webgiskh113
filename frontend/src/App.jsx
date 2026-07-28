@@ -155,7 +155,7 @@ function CurrentLocation() {
   );
 }
 
-export default function App() {
+export default function App({ onNavigateTools }) {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
@@ -248,6 +248,16 @@ export default function App() {
           <strong>{filtered?.features?.length ?? 0}</strong>
           <span>thửa hiển thị</span>
         </div>
+        <a
+          className="backLink"
+          href="/tools"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigateTools?.();
+          }}
+        >
+          ⬇ Tải công cụ
+        </a>
       </header>
 
       <section className="workspace">

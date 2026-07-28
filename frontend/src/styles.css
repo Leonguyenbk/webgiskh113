@@ -37,6 +37,13 @@ button { cursor: pointer; }
 .count { margin-left: auto; display: flex; flex-direction: column; text-align: right; }
 .count strong { font-size: 22px; color: #d9f99d; }
 .count span { font-size: 11px; color: #bfe6df; }
+.backLink {
+  margin-left: 18px; padding: 9px 16px;
+  border: 1px solid #ffffff40; border-radius: 10px;
+  color: white; background: #ffffff1a; text-decoration: none;
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.backLink:hover { background: #ffffff33; }
 
 .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: 340px 1fr; }
 .sidebar {
@@ -148,11 +155,38 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .leaflet-bar a { color: #0f5f59 !important; }
 .leaflet-tooltip { border: 0; border-radius: 7px; font-family: inherit; font-size: 11px; box-shadow: 0 4px 14px #173f3c44; }
 
+.toolsShell { min-height: 100vh; display: flex; flex-direction: column; }
+.toolsGrid {
+  flex: 1; padding: 32px; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px; align-content: start;
+}
+.toolCard {
+  padding: 20px; border-radius: 16px;
+  background: white; border: 1px solid #d4e1de;
+  box-shadow: 0 10px 30px #234e4820;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.toolCard h2 { margin: 0; font-size: 16px; color: #0f5a55; }
+.toolCard p { margin: 0; flex: 1; color: #52736f; font-size: 13px; line-height: 1.5; }
+.downloadButton {
+  display: inline-block; padding: 10px 14px;
+  border-radius: 9px; text-align: center;
+  color: white; background: #0f766e; text-decoration: none;
+  font-weight: 700; font-size: 12px;
+}
+.downloadButton:hover { background: #0b5f59; }
+.downloadButton.disabled {
+  color: #7c9490; background: #e6f3f0; cursor: not-allowed;
+}
+
 @media (max-width: 760px) {
   .topbar { height: 66px; flex-basis: 66px; padding: 0 13px; }
   .brandMark { width: 40px; height: 40px; border-radius: 12px; }
   .topbar h1 { font-size: 16px; }
   .topbar p { display: none; }
+  .backLink { margin-left: 10px; padding: 7px 10px; font-size: 11px; }
+  .toolsGrid { padding: 16px; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: 42% 58%; }
   .sidebar { order: 2; padding: 14px; border-right: 0; border-top: 1px solid #cfddda; }
   .mapWrap { order: 1; }
