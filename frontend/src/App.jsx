@@ -47,15 +47,22 @@ function getLandColor(landType = "") {
   return LAND_COLORS[normalized] || LAND_COLORS.DEFAULT;
 }
 
-function FitBounds({ data, focusFeature, focusTick }) {
+function FitBounds({ data, focusFeature, focusTick, hasUserLocation }) {
   const map = useMap();
+  const didInitialFit = useRef(false);
   useEffect(() => {
     const target = focusFeature
       ? L.geoJSON(focusFeature)
       : data?.features?.length
         ? L.geoJSON(data)
         : null;
-    if (target) map.fitBounds(target.getBounds(), { padding: [30, 30], maxZoom: 18 });
+    if (!target) return;
+
+    const isInitialFit = !didInitialFit.current;
+    didInitialFit.current = true;
+    if (isInitialFit && !focusFeature && hasUserLocation) return;
+
+    map.fitBounds(target.getBounds(), { padding: [30, 30], maxZoom: 18 });
   }, [data, focusFeature, focusTick, map]);
   return null;
 }
@@ -64,7 +71,7 @@ function EmptyValue({ children }) {
   return children ? children : <span className="empty">Chưa có</span>;
 }
 
-function CurrentLocation() {
+function CurrentLocation({ onLocated }) {
   const map = useMap();
   const [position, setPosition] = useState(null);
   const [accuracy, setAccuracy] = useState(0);
@@ -87,6 +94,7 @@ function CurrentLocation() {
         setPosition(currentPosition);
         setAccuracy(coords.accuracy || 0);
         map.flyTo(currentPosition, 18, { animate: true, duration: 1.2 });
+        onLocated?.();
       },
       (geoError) => {
         const messages = {
@@ -105,6 +113,11 @@ function CurrentLocation() {
       },
     );
   };
+
+  useEffect(() => {
+    locateMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
@@ -162,6 +175,7 @@ export default function App({ onNavigateTools, onNavigateImport }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [focusTick, setFocusTick] = useState(0);
+  const [hasUserLocation, setHasUserLocation] = useState(false);
   const layerRef = useRef(null);
 
   useEffect(() => {
@@ -340,7 +354,7 @@ export default function App({ onNavigateTools, onNavigateImport }) {
             zoomControl={false}
             className="map"
           >
-            <CurrentLocation />
+            <CurrentLocation onLocated={() => setHasUserLocation(true)} />
             <ZoomControl position="bottomright" />
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="OpenStreetMap">
@@ -364,6 +378,7 @@ export default function App({ onNavigateTools, onNavigateImport }) {
               data={filtered}
               focusFeature={selectedFeature}
               focusTick={focusTick}
+              hasUserLocation={hasUserLocation}
             />
           </MapContainer>
           <div className="mapHint">Bấm vào ranh thửa để xem thông tin</div>
