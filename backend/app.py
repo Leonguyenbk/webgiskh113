@@ -55,28 +55,47 @@ def parcels():
     if not base_url:
         return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
 
+    requested_limit = min(int(request.args.get("limit", 5000)), 50000)
+
     params = {
         "select": "id,ma_xa,so_to,so_thua,muc_dich_su_dung,dien_tich,ten_chu,dia_chi,geom",
         "order": "so_to.asc,so_thua.asc",
-        "limit": min(int(request.args.get("limit", 5000)), 10000),
     }
     ma_xa = request.args.get("ma_xa", "").strip()
     if ma_xa:
         params["ma_xa"] = f"eq.{ma_xa}"
 
+    # Supabase giới hạn "Max Rows" mặc định 1000 dòng/request bất kể limit
+    # truyền vào, nên phải phân trang bằng header Range để lấy hết dữ liệu.
+    page_size = 1000
+    rows = []
     try:
-        response = requests.get(
-            f"{base_url}/rest/v1/thua_dat",
-            headers=supabase_headers(),
-            params=params,
-            timeout=60,
-        )
-        response.raise_for_status()
+        base_headers = supabase_headers()
+        start = 0
+        while len(rows) < requested_limit:
+            end = start + page_size - 1
+            page_headers = {
+                **base_headers,
+                "Range-Unit": "items",
+                "Range": f"{start}-{end}",
+            }
+            response = requests.get(
+                f"{base_url}/rest/v1/thua_dat",
+                headers=page_headers,
+                params=params,
+                timeout=60,
+            )
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            start += page_size
     except (requests.RequestException, RuntimeError) as exc:
         return jsonify({"error": str(exc)}), 502
 
     features = []
-    for row in response.json():
+    for row in rows[:requested_limit]:
         geometry = row.pop("geom", None)
         if geometry:
             features.append(

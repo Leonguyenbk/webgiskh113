@@ -76,9 +76,24 @@ def _row_to_record(cells: list) -> dict | None:
     return record
 
 
+def _decode_csv_bytes(data: bytes) -> str:
+    if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+        return data.decode("utf-16")
+    for encoding in ("utf-8-sig", "cp1258", "cp1252"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
 def parse_csv(data: bytes) -> list[dict]:
-    text = data.decode("utf-8-sig")
-    rows = list(csv.reader(io.StringIO(text)))
+    text = _decode_csv_bytes(data)
+    try:
+        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    rows = list(csv.reader(io.StringIO(text), dialect))
     return [record for row in rows[1:] if (record := _row_to_record(row))]
 
 
