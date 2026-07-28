@@ -40,7 +40,7 @@ Name: webgis-thua-dat-api
 Root Directory: backend
 Language: Python 3
 Build Command: pip install -r requirements.txt
-Start Command: gunicorn app:app
+Start Command: gunicorn app:app --timeout 300
 Health Check Path: /api/health
 ```
 
