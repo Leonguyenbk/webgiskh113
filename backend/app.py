@@ -49,6 +49,51 @@ def health():
     }
 
 
+def fetch_all_rows(
+    base_url: str,
+    table: str,
+    params: dict,
+    headers: dict,
+    requested_limit: int,
+    page_size: int = 1000,
+) -> list[dict]:
+    # Supabase giới hạn "Max Rows" mặc định 1000 dòng/request bất kể limit
+    # truyền vào, nên phải phân trang bằng header Range để lấy hết dữ liệu.
+    rows = []
+    start = 0
+    while len(rows) < requested_limit:
+        end = start + page_size - 1
+        page_headers = {**headers, "Range-Unit": "items", "Range": f"{start}-{end}"}
+        response = requests.get(
+            f"{base_url}/rest/v1/{table}",
+            headers=page_headers,
+            params=params,
+            timeout=60,
+        )
+        response.raise_for_status()
+        page = response.json()
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        start += page_size
+    return rows[:requested_limit]
+
+
+SYNC_STATUS_FIELDS = [
+    "da_xuat_so_dia_chinh_dien_tu",
+    "chua_xuat_so_dia_chinh_dien_tu",
+    "dong_bo_3_khoi",
+    "khong_dong_bo_3_khoi",
+    "chi_co_du_lieu_thuoc_tinh",
+    "khop_csdlqg_dan_cu",
+    "chua_khop_csdlqg_dan_cu",
+    "khong_xac_dinh_csdlqg_dan_cu",
+    "van_hanh_24_7",
+    "khong_van_hanh_24_7",
+    "phan_loai_ke_hoach_2959",
+]
+
+
 @app.get("/api/parcels")
 def parcels():
     base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
@@ -56,56 +101,45 @@ def parcels():
         return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
 
     requested_limit = min(int(request.args.get("limit", 5000)), 50000)
+    ma_xa = request.args.get("ma_xa", "").strip()
 
-    params = {
+    parcel_params = {
         "select": "id,ma_xa,so_to,so_thua,muc_dich_su_dung,dien_tich,ten_chu,dia_chi,geom",
         "order": "so_to.asc,so_thua.asc",
     }
-    ma_xa = request.args.get("ma_xa", "").strip()
+    sync_params = {
+        "select": "ma_xa,so_to,so_thua," + ",".join(SYNC_STATUS_FIELDS),
+    }
     if ma_xa:
-        params["ma_xa"] = f"eq.{ma_xa}"
+        parcel_params["ma_xa"] = f"eq.{ma_xa}"
+        sync_params["ma_xa"] = f"eq.{ma_xa}"
 
-    # Supabase giới hạn "Max Rows" mặc định 1000 dòng/request bất kể limit
-    # truyền vào, nên phải phân trang bằng header Range để lấy hết dữ liệu.
-    page_size = 1000
-    rows = []
     try:
-        base_headers = supabase_headers()
-        start = 0
-        while len(rows) < requested_limit:
-            end = start + page_size - 1
-            page_headers = {
-                **base_headers,
-                "Range-Unit": "items",
-                "Range": f"{start}-{end}",
-            }
-            response = requests.get(
-                f"{base_url}/rest/v1/thua_dat",
-                headers=page_headers,
-                params=params,
-                timeout=60,
-            )
-            response.raise_for_status()
-            page = response.json()
-            rows.extend(page)
-            if len(page) < page_size:
-                break
-            start += page_size
+        headers = supabase_headers()
+        rows = fetch_all_rows(base_url, "thua_dat", parcel_params, headers, requested_limit)
+        sync_rows = fetch_all_rows(base_url, "dong_bo_du_lieu", sync_params, headers, 50000)
     except (requests.RequestException, RuntimeError) as exc:
         return jsonify({"error": str(exc)}), 502
 
+    sync_by_key = {
+        (row["ma_xa"], row["so_to"], row["so_thua"]): row for row in sync_rows
+    }
+
     features = []
-    for row in rows[:requested_limit]:
+    for row in rows:
         geometry = row.pop("geom", None)
-        if geometry:
-            features.append(
-                {
-                    "type": "Feature",
-                    "id": row.get("id"),
-                    "geometry": geometry,
-                    "properties": row,
-                }
-            )
+        if not geometry:
+            continue
+        sync_info = sync_by_key.get((row["ma_xa"], row["so_to"], row["so_thua"]))
+        row["dong_bo"] = {k: v for k, v in sync_info.items() if k not in ("ma_xa", "so_to", "so_thua")} if sync_info else None
+        features.append(
+            {
+                "type": "Feature",
+                "id": row.get("id"),
+                "geometry": geometry,
+                "properties": row,
+            }
+        )
     return jsonify({"type": "FeatureCollection", "features": features})
 
 

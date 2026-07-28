@@ -17,34 +17,48 @@ const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 const OSM_TILE_URL =
   "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-const LAND_COLORS = {
-  ODT: "#ef4444",
-  ONT: "#f97316",
-  CLN: "#84cc16",
-  BHK: "#facc15",
-  LUC: "#22c55e",
-  DGT: "#64748b",
-  TMD: "#a855f7",
-  SKC: "#8b5cf6",
-  "ODT+CLN": "#ec4899",
-  DEFAULT: "#06b6d4",
+const GROUP_COLORS = {
+  "NHÓM 1": "#22c55e",
+  "NHÓM 2": "#ef4444",
+  DEFAULT: "#94a3b8",
 };
 
-const LAND_LABELS = {
-  ODT: "Đất ở đô thị",
-  ONT: "Đất ở nông thôn",
-  CLN: "Cây lâu năm",
-  BHK: "Cây hàng năm khác",
-  LUC: "Đất chuyên trồng lúa",
-  DGT: "Đất giao thông",
-  TMD: "Thương mại, dịch vụ",
-  SKC: "Cơ sở sản xuất",
-  "ODT+CLN": "Đất ở + cây lâu năm",
+const GROUP_LABELS = {
+  "NHÓM 1": "Nhóm 1",
+  "NHÓM 2": "Nhóm 2",
+  DEFAULT: "Chưa phân loại / chưa có dữ liệu đồng bộ",
 };
 
-function getLandColor(landType = "") {
-  const normalized = landType.trim().toUpperCase().replaceAll(" ", "");
-  return LAND_COLORS[normalized] || LAND_COLORS.DEFAULT;
+function getGroupKey(phanLoai = "") {
+  const normalized = phanLoai.trim().toUpperCase();
+  return GROUP_COLORS[normalized] ? normalized : "DEFAULT";
+}
+
+function getGroupColor(phanLoai = "") {
+  return GROUP_COLORS[getGroupKey(phanLoai)];
+}
+
+const MISSING_INFO_RULES = [
+  { field: "chua_xuat_so_dia_chinh_dien_tu", label: "Chưa được xuất số địa chính điện tử" },
+  {
+    field: "khong_dong_bo_3_khoi",
+    label: "Không đồng bộ 3 khối thông tin (không gian, thuộc tính, phi cấu trúc)",
+  },
+  { field: "chi_co_du_lieu_thuoc_tinh", label: "Chỉ có dữ liệu thuộc tính (thiếu dữ liệu không gian)" },
+  {
+    field: "chua_khop_csdlqg_dan_cu",
+    label: "Thông tin người sử dụng đất chưa khớp với CSDLQG về dân cư",
+  },
+  {
+    field: "khong_xac_dinh_csdlqg_dan_cu",
+    label: "Không xác định được người sử dụng đất trong CSDLQG về dân cư",
+  },
+  { field: "khong_van_hanh_24_7", label: "Dữ liệu không được vận hành 24/7" },
+];
+
+function getMissingInfo(dongBo) {
+  if (!dongBo) return ["Chưa có dữ liệu đồng bộ cho thửa này"];
+  return MISSING_INFO_RULES.filter((rule) => dongBo[rule.field]).map((rule) => rule.label);
 }
 
 function googleMapsDirectionsUrl(feature) {
@@ -229,7 +243,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
       weight: isSelected ? 4 : 1.5,
       fillColor: isSelected
         ? "#2563eb"
-        : getLandColor(feature.properties?.muc_dich_su_dung),
+        : getGroupColor(feature.properties?.dong_bo?.phan_loai_ke_hoach_2959),
       fillOpacity: isSelected ? 0.75 : 0.55,
     };
   };
@@ -345,7 +359,34 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
                 <div><dt>Diện tích</dt><dd>{Number(selected.dien_tich).toLocaleString("vi-VN")} m²</dd></div>
                 <div><dt>Chủ sử dụng</dt><dd><EmptyValue>{selected.ten_chu}</EmptyValue></dd></div>
                 <div><dt>Địa chỉ</dt><dd><EmptyValue>{selected.dia_chi}</EmptyValue></dd></div>
+                <div>
+                  <dt>Phân loại KH 2959</dt>
+                  <dd>
+                    <span
+                      className="tag"
+                      style={{
+                        color: "white",
+                        backgroundColor: getGroupColor(selected.dong_bo?.phan_loai_ke_hoach_2959),
+                      }}
+                    >
+                      {selected.dong_bo?.phan_loai_ke_hoach_2959 ||
+                        GROUP_LABELS[getGroupKey(selected.dong_bo?.phan_loai_ke_hoach_2959)]}
+                    </span>
+                  </dd>
+                </div>
               </dl>
+              <div className="missingInfo">
+                <strong>Thông tin còn thiếu</strong>
+                {getMissingInfo(selected.dong_bo).length ? (
+                  <ul>
+                    {getMissingInfo(selected.dong_bo).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="missingInfoOk">Đầy đủ thông tin đồng bộ</span>
+                )}
+              </div>
               <button
                 className="zoomButton"
                 onClick={() => setFocusTick((value) => value + 1)}
@@ -408,11 +449,11 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
           </MapContainer>
           <div className="mapHint">Bấm vào ranh thửa để xem thông tin</div>
           <div className="landLegend">
-            <strong>Loại đất</strong>
-            {Object.entries(LAND_LABELS).map(([code, label]) => (
+            <strong>Phân loại KH 2959/KH-BNNMT-BCA</strong>
+            {Object.entries(GROUP_LABELS).map(([code, label]) => (
               <div key={code}>
-                <span style={{ backgroundColor: LAND_COLORS[code] }} />
-                <label>{code} – {label}</label>
+                <span style={{ backgroundColor: GROUP_COLORS[code] }} />
+                <label>{label}</label>
               </div>
             ))}
           </div>
