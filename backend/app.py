@@ -109,6 +109,9 @@ def parcels():
     }
     sync_params = {
         "select": "ma_xa,so_to,so_thua," + ",".join(SYNC_STATUS_FIELDS),
+        # Phân trang bằng header Range bắt buộc phải có order cố định,
+        # nếu không Postgrest có thể trả thiếu/lặp dòng giữa các trang.
+        "order": "ma_xa.asc,so_to.asc,so_thua.asc",
     }
     if ma_xa:
         parcel_params["ma_xa"] = f"eq.{ma_xa}"
@@ -121,16 +124,20 @@ def parcels():
     except (requests.RequestException, RuntimeError) as exc:
         return jsonify({"error": str(exc)}), 502
 
-    sync_by_key = {
-        (row["ma_xa"], row["so_to"], row["so_thua"]): row for row in sync_rows
-    }
+    def sync_key(record: dict) -> tuple:
+        # ma_xa có thể lệch khoảng trắng/hoa-thường giữa dữ liệu GML và
+        # CSV/Excel nhập tay, nên chuẩn hoá trước khi so khớp khóa.
+        ma_xa_value = str(record.get("ma_xa") or "").strip().upper()
+        return (ma_xa_value, record.get("so_to"), record.get("so_thua"))
+
+    sync_by_key = {sync_key(row): row for row in sync_rows}
 
     features = []
     for row in rows:
         geometry = row.pop("geom", None)
         if not geometry:
             continue
-        sync_info = sync_by_key.get((row["ma_xa"], row["so_to"], row["so_thua"]))
+        sync_info = sync_by_key.get(sync_key(row))
         row["dong_bo"] = {k: v for k, v in sync_info.items() if k not in ("ma_xa", "so_to", "so_thua")} if sync_info else None
         features.append(
             {
