@@ -5,6 +5,7 @@ import "./styles.css";
 import App from "./App.jsx";
 import ToolsPage from "./ToolsPage.jsx";
 import ImportGmlPage from "./ImportGmlPage.jsx";
+import ImportSyncPage from "./ImportSyncPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -26,10 +27,14 @@ function Root() {
   if (path.startsWith("/import-gml")) {
     return <ImportGmlPage onNavigateHome={() => navigate("/")} />;
   }
+  if (path.startsWith("/import-dong-bo")) {
+    return <ImportSyncPage onNavigateHome={() => navigate("/")} />;
+  }
   return (
     <App
       onNavigateTools={() => navigate("/tools")}
       onNavigateImport={() => navigate("/import-gml")}
+      onNavigateSync={() => navigate("/import-dong-bo")}
     />
   );
 }

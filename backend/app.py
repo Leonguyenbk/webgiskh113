@@ -8,6 +8,7 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 from gml_reader import parse_gml_bytes, rows_from_geojson
+from sync_reader import parse_sync_file
 
 
 load_dotenv()
@@ -89,10 +90,37 @@ def parcels():
     return jsonify({"type": "FeatureCollection", "features": features})
 
 
+def upsert_to_supabase(
+    base_url: str,
+    table: str,
+    on_conflict: str,
+    resolution: str,
+    rows: list[dict],
+    batch_size: int = 200,
+) -> int:
+    headers = {
+        **supabase_headers(),
+        "Content-Type": "application/json",
+        "Prefer": f"resolution={resolution},return=minimal",
+    }
+    endpoint = f"{base_url}/rest/v1/{table}?on_conflict={on_conflict}"
+    imported = 0
+    for start in range(0, len(rows), batch_size):
+        batch = rows[start : start + batch_size]
+        response = requests.post(endpoint, headers=headers, json=batch, timeout=120)
+        response.raise_for_status()
+        imported += len(batch)
+    return imported
+
+
+def check_import_token() -> bool:
+    import_token = os.getenv("IMPORT_TOKEN", "")
+    return not import_token or request.headers.get("X-Import-Token", "") == import_token
+
+
 @app.post("/api/import-gml")
 def import_gml():
-    import_token = os.getenv("IMPORT_TOKEN", "")
-    if import_token and request.headers.get("X-Import-Token", "") != import_token:
+    if not check_import_token():
         return jsonify({"error": "Mã xác thực không đúng"}), 401
 
     uploaded = request.files.get("file")
@@ -113,26 +141,52 @@ def import_gml():
         return jsonify({"error": "File GML không có thửa đất hợp lệ"}), 400
 
     try:
-        headers = {
-            **supabase_headers(),
-            "Content-Type": "application/json",
-            "Prefer": "resolution=ignore-duplicates,return=minimal",
-        }
+        imported = upsert_to_supabase(
+            base_url, "thua_dat", "ma_xa,so_to,so_thua", "ignore-duplicates", rows
+        )
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 500
-
-    endpoint = f"{base_url}/rest/v1/thua_dat?on_conflict=ma_xa,so_to,so_thua"
-    batch_size = 200
-    imported = 0
-    try:
-        for start in range(0, len(rows), batch_size):
-            batch = rows[start : start + batch_size]
-            response = requests.post(endpoint, headers=headers, json=batch, timeout=120)
-            response.raise_for_status()
-            imported += len(batch)
     except requests.RequestException as exc:
         detail = exc.response.text if exc.response is not None else str(exc)
-        return jsonify({"error": detail, "imported": imported, "total": len(rows)}), 502
+        return jsonify({"error": detail, "total": len(rows)}), 502
+
+    return jsonify({"ok": True, "total": len(rows), "imported": imported})
+
+
+@app.post("/api/import-dong-bo")
+def import_dong_bo():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Thiếu file CSV/Excel"}), 400
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        rows = parse_sync_file(uploaded.filename, uploaded.read())
+    except Exception as exc:
+        return jsonify({"error": f"Không đọc được file: {exc}"}), 400
+
+    if not rows:
+        return jsonify({"error": "File không có dòng dữ liệu hợp lệ"}), 400
+
+    try:
+        imported = upsert_to_supabase(
+            base_url,
+            "dong_bo_du_lieu",
+            "ma_xa,so_to,so_thua",
+            "merge-duplicates",
+            rows,
+        )
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+    except requests.RequestException as exc:
+        detail = exc.response.text if exc.response is not None else str(exc)
+        return jsonify({"error": detail, "total": len(rows)}), 502
 
     return jsonify({"ok": True, "total": len(rows), "imported": imported})
 

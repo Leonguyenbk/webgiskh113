@@ -173,7 +173,7 @@ function CurrentLocation({ onLocated }) {
   );
 }
 
-export default function App({ onNavigateTools, onNavigateImport }) {
+export default function App({ onNavigateTools, onNavigateImport, onNavigateSync }) {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
@@ -286,6 +286,16 @@ export default function App({ onNavigateTools, onNavigateImport }) {
           }}
         >
           ⇪ Nhập GML
+        </a>
+        <a
+          className="backLink"
+          href="/import-dong-bo"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigateSync?.();
+          }}
+        >
+          ⇪ Nhập đồng bộ
         </a>
       </header>
 
