@@ -48,11 +48,7 @@ create table if not exists public.dong_bo_du_lieu (
     phan_loai_ke_hoach_2959 text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    constraint dong_bo_du_lieu_ma_xa_so_to_so_thua_key unique (ma_xa, so_to, so_thua),
-    constraint dong_bo_du_lieu_thua_dat_fkey
-        foreign key (ma_xa, so_to, so_thua)
-        references public.thua_dat (ma_xa, so_to, so_thua)
-        on delete cascade
+    constraint dong_bo_du_lieu_ma_xa_so_to_so_thua_key unique (ma_xa, so_to, so_thua)
 );
 
 create index if not exists dong_bo_du_lieu_tra_cuu_idx
