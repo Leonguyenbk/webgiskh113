@@ -47,6 +47,11 @@ function getLandColor(landType = "") {
   return LAND_COLORS[normalized] || LAND_COLORS.DEFAULT;
 }
 
+function googleMapsDirectionsUrl(feature) {
+  const center = L.geoJSON(feature).getBounds().getCenter();
+  return `https://www.google.com/maps/dir/?api=1&destination=${center.lat},${center.lng}`;
+}
+
 function FitBounds({ data, focusFeature, focusTick, hasUserLocation }) {
   const map = useMap();
   const didInitialFit = useRef(false);
@@ -337,6 +342,16 @@ export default function App({ onNavigateTools, onNavigateImport }) {
               >
                 Phóng đến thửa
               </button>
+              {selectedFeature && (
+                <a
+                  className="directionsButton"
+                  href={googleMapsDirectionsUrl(selectedFeature)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  🧭 Chỉ đường Google Maps
+                </a>
+              )}
             </div>
           ) : (
             <div className="emptyState">

@@ -107,6 +107,13 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   border: 0; border-radius: 9px; color: white; background: #0f766e; font-weight: 700; font-size: 12px;
 }
 .zoomButton:hover { background: #0b5f59; }
+.directionsButton {
+  display: block; width: calc(100% - 36px); margin: 0 18px 18px;
+  padding: 10px; border: 1px solid #0f766e; border-radius: 9px;
+  color: #0f766e; background: white; text-align: center;
+  text-decoration: none; font-weight: 700; font-size: 12px;
+}
+.directionsButton:hover { background: #e6f3f0; }
 .emptyState { display: grid; justify-items: center; gap: 8px; padding: 38px 12px; color: #718783; text-align: center; }
 .emptyState div { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; color: #0f766e; background: #dbefeb; font-size: 30px; }
 .emptyState strong { color: #345b57; font-size: 13px; }
