@@ -151,6 +151,16 @@ def upsert_to_supabase(
     rows: list[dict],
     batch_size: int = 200,
 ) -> int:
+    # "ON CONFLICT DO UPDATE" (resolution=merge-duplicates) lỗi nếu cùng 1
+    # câu lệnh có 2 dòng trùng khóa xung đột, nên phải loại trùng trước khi
+    # gửi lên Supabase — giữ lại dòng xuất hiện sau cùng trong file nguồn.
+    key_fields = [field.strip() for field in on_conflict.split(",")]
+    deduped = {}
+    for row in rows:
+        key = tuple(row.get(field) for field in key_fields)
+        deduped[key] = row
+    rows = list(deduped.values())
+
     headers = {
         **supabase_headers(),
         "Content-Type": "application/json",
