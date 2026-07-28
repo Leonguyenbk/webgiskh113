@@ -28,7 +28,7 @@ def upload_rows(rows: list[dict], batch_size: int = 100) -> None:
     headers = {
         "apikey": service_key,
         "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=minimal",
+        "Prefer": "resolution=ignore-duplicates,return=minimal",
     }
     if not service_key.startswith("sb_secret_"):
         headers["Authorization"] = f"Bearer {service_key}"

@@ -116,7 +116,7 @@ def import_gml():
         headers = {
             **supabase_headers(),
             "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates,return=minimal",
+            "Prefer": "resolution=ignore-duplicates,return=minimal",
         }
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 500
