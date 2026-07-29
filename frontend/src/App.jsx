@@ -23,6 +23,14 @@ import {
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const GOOGLE_SUBDOMAINS = ["mt0", "mt1", "mt2", "mt3"];
+const GOOGLE_HYBRID_URL = "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}";
+const GOOGLE_SATELLITE_URL = "https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}";
+
+// Esri: chính chủ, miễn phí cho ứng dụng phi thương mại.
+const ESRI_IMAGERY_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/" +
+  "World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
 // Số thửa mỗi lô. Giữ dưới MAX_PAGE_SIZE của backend (3000),
 // vượt qua thì backend tự kẹp lại và vòng lặp hiểu nhầm là đã hết dữ liệu.
@@ -535,12 +543,52 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
             <ZoomControl position="bottomright" />
 
             <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="OpenStreetMap">
+              <LayersControl.BaseLayer name="OpenStreetMap">
                 <TileLayer
                   url={OSM_TILE_URL}
                   minZoom={0}
                   maxZoom={19}
                   attribution="&copy; OpenStreetMap contributors"
+                />
+              </LayersControl.BaseLayer>
+
+              <LayersControl.BaseLayer checked name="Vệ tinh (Google)">
+                <TileLayer
+                  url={GOOGLE_HYBRID_URL}
+                  subdomains={GOOGLE_SUBDOMAINS}
+                  minZoom={0}
+                  maxZoom={21}
+                  maxNativeZoom={20}
+                  attribution="&copy; Google"
+                />
+              </LayersControl.BaseLayer>
+
+              <LayersControl.BaseLayer name="Vệ tinh trần (Google)">
+                <TileLayer
+                  url={GOOGLE_SATELLITE_URL}
+                  subdomains={GOOGLE_SUBDOMAINS}
+                  minZoom={0}
+                  maxZoom={21}
+                  maxNativeZoom={20}
+                  attribution="&copy; Google"
+                />
+              </LayersControl.BaseLayer>
+
+              <LayersControl.BaseLayer name="Vệ tinh (Esri)">
+                <TileLayer
+                  url={ESRI_IMAGERY_URL}
+                  minZoom={0}
+                  maxZoom={19}
+                  attribution="&copy; Esri, Maxar, Earthstar Geographics"
+                />
+              </LayersControl.BaseLayer>
+
+              <LayersControl.BaseLayer name="Vietbando">
+                <TileLayer
+                  url={`${API_URL}/api/tiles/{z}/{x}/{y}`}
+                  minZoom={0}
+                  maxZoom={18}
+                  attribution="&copy; Vietbando"
                 />
               </LayersControl.BaseLayer>
 
