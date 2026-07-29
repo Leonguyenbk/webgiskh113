@@ -29,6 +29,31 @@ VIETBANDO_TILE_URL = os.getenv(
     "?Ver=2016&LayerIds=VBD&Y={y}&X={x}&Level={z}",
 )
 
+# Trần cứng số thửa mỗi lô. Vượt mức này Supabase dễ chạm statement_timeout
+# khi phải sinh GeoJSON cho quá nhiều hình học trong một câu lệnh.
+MAX_PAGE_SIZE = 3000
+DEFAULT_PAGE_SIZE = 1000
+
+# Ngưỡng giản lược hình học theo mức zoom, đơn vị độ (EPSG:4326).
+# 0.00001 độ ~ 1,1 m. Zoom càng xa càng giản lược mạnh vì màn hình
+# không thể hiện nổi chi tiết ở mức đó.
+SIMPLIFY_BY_ZOOM = (
+    (17, 0.0),
+    (15, 0.000008),
+    (13, 0.000030),
+    (11, 0.000080),
+    (0, 0.000200),
+)
+
+SPATIAL_ARGS = (
+    "west",
+    "south",
+    "east",
+    "north",
+    "center_lng",
+    "center_lat",
+)
+
 
 def supabase_headers() -> dict[str, str]:
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -58,10 +83,12 @@ def fetch_all_rows(
     requested_limit: int,
     page_size: int = 1000,
 ) -> list[dict]:
+    # Tiện ích phân trang REST của Supabase. Endpoint /api/parcels không còn
+    # dùng hàm này nữa (đã chuyển sang RPC), nhưng giữ lại vì các tác vụ
+    # đọc bảng khác vẫn cần.
+    #
     # Supabase giới hạn "Max Rows" mặc định 1000 dòng/request bất kể limit
     # truyền vào, nên phải phân trang bằng header Range để lấy hết dữ liệu.
-    # Lấy tổng số dòng ngay ở trang đầu (Prefer: count=exact) rồi tải các
-    # trang còn lại song song thay vì tuần tự để giảm thời gian chờ.
     endpoint = f"{base_url}/rest/v1/{table}"
 
     def fetch_page(start: int, count_exact: bool = False) -> tuple[list[dict], str]:
@@ -112,68 +139,220 @@ SYNC_STATUS_FIELDS = [
 ]
 
 
-@app.get("/api/parcels")
-def parcels():
-    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    if not base_url:
-        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+# =========================================================
+# TIỆN ÍCH CHO TRUY VẤN THEO KHUNG BẢN ĐỒ
+# =========================================================
 
-    requested_limit = min(int(request.args.get("limit", 5000)), 50000)
-    ma_xa = request.args.get("ma_xa", "").strip()
 
-    parcel_params = {
-        "select": "id,ma_xa,so_to,so_thua,muc_dich_su_dung,dien_tich,ten_chu,dia_chi,geom",
-        "order": "so_to.asc,so_thua.asc",
-    }
-    sync_params = {
-        "select": "ma_xa,so_to,so_thua," + ",".join(SYNC_STATUS_FIELDS),
-        # Phân trang bằng header Range bắt buộc phải có order cố định,
-        # nếu không Postgrest có thể trả thiếu/lặp dòng giữa các trang.
-        "order": "ma_xa.asc,so_to.asc,so_thua.asc",
-    }
-    if ma_xa:
-        parcel_params["ma_xa"] = f"eq.{ma_xa}"
-        sync_params["ma_xa"] = f"eq.{ma_xa}"
+def simplify_for_zoom(zoom: int) -> float:
+    """Trả về ngưỡng giản lược hình học ứng với mức zoom."""
+    for min_zoom, tolerance in SIMPLIFY_BY_ZOOM:
+        if zoom >= min_zoom:
+            return tolerance
+    return 0.0
+
+
+def read_bbox():
+    """
+    Đọc và kiểm tra khung bản đồ từ query string.
+
+    Trả về (values, None) khi hợp lệ, hoặc (None, response_loi) khi không.
+    """
+    missing = [name for name in SPATIAL_ARGS if request.args.get(name) in (None, "")]
+
+    if missing:
+        return None, (
+            jsonify({"error": "Thiếu tham số khung bản đồ: " + ", ".join(missing)}),
+            400,
+        )
 
     try:
-        headers = supabase_headers()
-        # Tải song song 2 bảng thay vì lần lượt để giảm thời gian phản hồi.
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            rows_future = executor.submit(
-                fetch_all_rows, base_url, "thua_dat", parcel_params, headers, requested_limit
-            )
-            sync_future = executor.submit(
-                fetch_all_rows, base_url, "dong_bo_du_lieu", sync_params, headers, 50000
-            )
-            rows = rows_future.result()
-            sync_rows = sync_future.result()
-    except (requests.RequestException, RuntimeError) as exc:
-        return jsonify({"error": str(exc)}), 502
+        values = {name: float(request.args[name]) for name in SPATIAL_ARGS}
+    except (TypeError, ValueError):
+        return None, (jsonify({"error": "Tọa độ khung bản đồ không phải số"}), 400)
 
-    def sync_key(record: dict) -> tuple:
-        # ma_xa có thể lệch khoảng trắng/hoa-thường giữa dữ liệu GML và
-        # CSV/Excel nhập tay, nên chuẩn hoá trước khi so khớp khóa.
-        ma_xa_value = str(record.get("ma_xa") or "").strip().upper()
-        return (ma_xa_value, record.get("so_to"), record.get("so_thua"))
+    # Leaflet trả kinh độ ngoài [-180, 180] khi người dùng kéo bản đồ vòng
+    # qua đường đổi ngày. Kẹp lại thay vì báo lỗi để bản đồ không đứng hình.
+    for name in ("west", "east", "center_lng"):
+        values[name] = max(-180.0, min(180.0, values[name]))
 
-    sync_by_key = {sync_key(row): row for row in sync_rows}
+    for name in ("south", "north", "center_lat"):
+        values[name] = max(-90.0, min(90.0, values[name]))
 
-    features = []
-    for row in rows:
-        geometry = row.pop("geom", None)
-        if not geometry:
-            continue
-        sync_info = sync_by_key.get(sync_key(row))
-        row["dong_bo"] = {k: v for k, v in sync_info.items() if k not in ("ma_xa", "so_to", "so_thua")} if sync_info else None
-        features.append(
-            {
-                "type": "Feature",
-                "id": row.get("id"),
-                "geometry": geometry,
-                "properties": row,
-            }
+    if values["west"] >= values["east"] or values["south"] >= values["north"]:
+        return None, (jsonify({"error": "Khung bản đồ không hợp lệ"}), 400)
+
+    return values, None
+
+
+def call_rpc(function_name: str, payload: dict, timeout: int = 30):
+    """
+    Gọi RPC Supabase.
+
+    Trả về (ket_qua, None) khi thành công, hoặc (None, response_loi).
+    """
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+
+    if not base_url:
+        return None, (
+            jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}),
+            500,
         )
-    return jsonify({"type": "FeatureCollection", "features": features})
+
+    try:
+        headers = {**supabase_headers(), "Content-Type": "application/json"}
+    except RuntimeError as exc:
+        return None, (jsonify({"error": str(exc)}), 500)
+
+    try:
+        response = requests.post(
+            f"{base_url}/rest/v1/rpc/{function_name}",
+            headers=headers,
+            json=payload,
+            timeout=timeout,
+        )
+    except requests.Timeout:
+        return None, (
+            jsonify({
+                "error": (
+                    "Supabase phản hồi quá chậm. "
+                    "Hãy phóng to bản đồ để thu hẹp khu vực."
+                )
+            }),
+            504,
+        )
+    except requests.RequestException as exc:
+        return None, (jsonify({"error": str(exc)}), 502)
+
+    if not response.ok:
+        # Trả nguyên văn lỗi Postgres ra frontend: statement timeout,
+        # sai SRID, sai tên cột đều lộ ra ở đây.
+        try:
+            detail = response.json()
+        except ValueError:
+            detail = {}
+
+        message = (
+            detail.get("message")
+            or detail.get("error")
+            or response.text
+            or "Supabase trả về lỗi không rõ nguyên nhân"
+        )
+
+        app.logger.error(
+            "RPC %s lỗi: status=%s, body=%s",
+            function_name,
+            response.status_code,
+            response.text[:500],
+        )
+
+        if "statement timeout" in str(message).lower():
+            message = (
+                "Truy vấn vượt quá thời gian cho phép. "
+                "Hãy phóng to bản đồ hoặc giảm số thửa mỗi lô."
+            )
+
+        return None, (jsonify({"error": message}), 502)
+
+    try:
+        return response.json(), None
+    except ValueError:
+        return None, (
+            jsonify({"error": "Supabase trả về dữ liệu không phải JSON"}),
+            502,
+        )
+
+
+# =========================================================
+# ĐẾM SỐ THỬA TRONG KHUNG
+# Chỉ đụng index GIST, không sinh GeoJSON nên rất nhanh.
+# Frontend gọi trước để biết khung hiện tại còn bao nhiêu thửa chưa vẽ.
+# =========================================================
+
+
+@app.get("/api/parcels/count")
+def parcels_count():
+    values, error_response = read_bbox()
+
+    if error_response:
+        return error_response
+
+    ma_xa = request.args.get("ma_xa", "").strip()
+
+    result, error_response = call_rpc(
+        "count_parcels_in_view",
+        {
+            "p_west": values["west"],
+            "p_south": values["south"],
+            "p_east": values["east"],
+            "p_north": values["north"],
+            "p_ma_xa": ma_xa or None,
+        },
+        timeout=20,
+    )
+
+    if error_response:
+        return error_response
+
+    try:
+        total = int(result)
+    except (TypeError, ValueError):
+        total = 0
+
+    return jsonify({"total": total})
+
+
+# =========================================================
+# LẤY THỬA THEO KHUNG BẢN ĐỒ
+# =========================================================
+
+
+@app.get("/api/parcels")
+def parcels():
+    try:
+        requested_limit = min(
+            max(int(request.args.get("limit", DEFAULT_PAGE_SIZE)), 1),
+            MAX_PAGE_SIZE,
+        )
+        page_offset = max(int(request.args.get("offset", 0)), 0)
+        zoom = int(float(request.args.get("zoom", 16)))
+    except (TypeError, ValueError):
+        return jsonify({"error": "limit, offset hoặc zoom không hợp lệ"}), 400
+
+    values, error_response = read_bbox()
+
+    if error_response:
+        return error_response
+
+    ma_xa = request.args.get("ma_xa", "").strip()
+
+    result, error_response = call_rpc(
+        "get_parcels_in_view",
+        {
+            "p_west": values["west"],
+            "p_south": values["south"],
+            "p_east": values["east"],
+            "p_north": values["north"],
+            "p_center_lng": values["center_lng"],
+            "p_center_lat": values["center_lat"],
+            "p_limit": requested_limit,
+            "p_offset": page_offset,
+            "p_ma_xa": ma_xa or None,
+            "p_simplify": simplify_for_zoom(zoom),
+        },
+        timeout=45,
+    )
+
+    if error_response:
+        return error_response
+
+    if not isinstance(result, dict):
+        return jsonify({"type": "FeatureCollection", "features": []})
+
+    result.setdefault("type", "FeatureCollection")
+    result.setdefault("features", [])
+
+    return jsonify(result)
 
 
 def upsert_to_supabase(
