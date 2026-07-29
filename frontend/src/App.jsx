@@ -129,6 +129,8 @@ function FitBounds({ focusFeature, focusTick }) {
 // Không nghe sự kiện moveend, kéo bản đồ không gọi lại API.
 // =========================================================
 
+const DEFAULT_BBOX = { west: 102, south: 8, east: 110, north: 24 };
+
 function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
   const map = useMap();
 
@@ -139,54 +141,20 @@ function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
       onLoading(true);
       onError("");
 
+      const baseParams = {
+        west: String(DEFAULT_BBOX.west),
+        south: String(DEFAULT_BBOX.south),
+        east: String(DEFAULT_BBOX.east),
+        north: String(DEFAULT_BBOX.north),
+        center_lng: String((DEFAULT_BBOX.west + DEFAULT_BBOX.east) / 2),
+        center_lat: String((DEFAULT_BBOX.south + DEFAULT_BBOX.north) / 2),
+        zoom: "18",
+      };
+
+      const collected = [];
+      const seen = new Set();
+
       try {
-        // Bước 1: hỏi dữ liệu nằm ở đâu.
-        const extentResponse = await fetch(`${API_URL}/api/parcels/extent`, {
-          signal: controller.signal,
-        });
-
-        if (!extentResponse.ok) {
-          throw new Error(
-            "Không xác định được phạm vi dữ liệu. Kiểm tra hàm " +
-              "get_parcels_extent trên Supabase.",
-          );
-        }
-
-        const extent = await extentResponse.json();
-
-        if (
-          !extent ||
-          typeof extent.west !== "number" ||
-          typeof extent.south !== "number"
-        ) {
-          throw new Error("Bảng thửa đất chưa có dữ liệu");
-        }
-
-        // Bước 2: nhảy bản đồ tới vùng có thửa.
-        map.fitBounds(
-          [
-            [extent.south, extent.west],
-            [extent.north, extent.east],
-          ],
-          { padding: [20, 20], maxZoom: 17 },
-        );
-
-        // Bước 3: tải hết thửa trong phạm vi đó.
-        const baseParams = {
-          west: String(extent.west - EXTENT_PADDING),
-          south: String(extent.south - EXTENT_PADDING),
-          east: String(extent.east + EXTENT_PADDING),
-          north: String(extent.north + EXTENT_PADDING),
-          center_lng: String((extent.west + extent.east) / 2),
-          center_lat: String((extent.south + extent.north) / 2),
-
-          // Zoom cao nhất: giữ nguyên hình học, không giản lược.
-          zoom: "18",
-        };
-
-        const collected = [];
-        const seen = new Set();
-
         for (
           let offset = 0;
           offset < MAX_FEATURES && !controller.signal.aborted;
@@ -220,23 +188,31 @@ function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
             added += 1;
           });
 
-          // Vẽ dần từng lô để người dùng thấy tiến độ.
           onData({ type: "FeatureCollection", features: collected.slice() });
           onMeta({ loaded: collected.length });
 
-          // Lô cuối: server trả về ít hơn một trang đầy.
           if (features.length < PAGE_SIZE) break;
 
-          // Lô đầy nhưng không thửa nào mới nghĩa là server bỏ qua offset.
           if (added === 0) {
             throw new Error(
-              "Server trả về cùng một lô dữ liệu. Hãy kiểm tra tham số " +
-                "p_offset trong hàm get_parcels_in_view.",
+              "Server trả về cùng một lô dữ liệu. Kiểm tra p_offset " +
+                "trong hàm get_parcels_in_view.",
             );
           }
 
-          // Nhường luồng cho trình duyệt vẽ xong lô vừa nhận.
           await new Promise((resolve) => window.setTimeout(resolve, 60));
+        }
+
+        // Khớp bản đồ vào chính dữ liệu vừa tải.
+        if (collected.length > 0 && !controller.signal.aborted) {
+          const bounds = L.geoJSON({
+            type: "FeatureCollection",
+            features: collected,
+          }).getBounds();
+
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [20, 20], maxZoom: 17 });
+          }
         }
       } catch (error) {
         if (error.name !== "AbortError") onError(error.message);
