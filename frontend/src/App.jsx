@@ -24,15 +24,16 @@ const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-// Số thửa mỗi lô. Nhỏ hơn 2000 để tránh statement timeout của Supabase.
+// Số thửa mỗi lô. Giữ dưới MAX_PAGE_SIZE của backend (3000),
+// vượt qua thì backend tự kẹp lại và vòng lặp hiểu nhầm là đã hết dữ liệu.
 const PAGE_SIZE = 1000;
 
-// Trần cứng số thửa vẽ cùng lúc. Leaflet canvas xử lý mượt tới
-// khoảng mức này; vượt qua thì thao tác kéo/zoom bắt đầu giật.
-const MAX_FEATURES = 8000;
+// Chốt an toàn cho vòng lặp phân trang. Không phải giới hạn hiển thị:
+// chỉ để phòng trường hợp server phân trang sai và lặp vô tận.
+const MAX_FEATURES = 50000;
 
-// Chờ người dùng ngừng kéo bản đồ rồi mới gọi API.
-const MOVE_DEBOUNCE_MS = 350;
+// Nới khung quanh phạm vi dữ liệu để không sót thửa nằm sát mép, đơn vị độ.
+const EXTENT_PADDING = 0.01;
 
 const GROUP_COLORS = {
   "NHÓM 1": "#22c55e",
@@ -119,148 +120,135 @@ function FitBounds({ focusFeature, focusTick }) {
 }
 
 // =========================================================
-// TẢI THỬA THEO KHUNG BẢN ĐỒ ĐANG XEM
+// TẢI TOÀN BỘ THỬA MỘT LƯỢT
 //
-// Bản cũ gửi khung -180/-90/180/90 nên luôn yêu cầu server
-// trả về toàn bộ DB. Bản này gửi đúng khung người dùng đang nhìn,
-// tải lại mỗi khi bản đồ dừng di chuyển.
+// Với quy mô vài nghìn thửa, tải theo khung bản đồ là thừa và
+// gây ra chuyện bản đồ trắng trơn khi người dùng đứng ở vùng
+// chưa có dữ liệu. Component này hỏi phạm vi dữ liệu trước,
+// nhảy bản đồ tới đó, rồi tải hết trong một lượt.
+// Không nghe sự kiện moveend, kéo bản đồ không gọi lại API.
 // =========================================================
 
-function ViewportParcelLoader({ onData, onLoading, onError, onMeta }) {
+function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
   const map = useMap();
-  const controllerRef = useRef(null);
-  const timerRef = useRef(null);
 
-  const load = useCallback(async () => {
-    controllerRef.current?.abort();
-
+  useEffect(() => {
     const controller = new AbortController();
-    controllerRef.current = controller;
 
-    const bounds = map.getBounds();
-    const center = map.getCenter();
-    const zoom = map.getZoom();
-
-    const baseParams = {
-      west: String(bounds.getWest()),
-      south: String(bounds.getSouth()),
-      east: String(bounds.getEast()),
-      north: String(bounds.getNorth()),
-      center_lng: String(center.lng),
-      center_lat: String(center.lat),
-      zoom: String(zoom),
-    };
-
-    onLoading(true);
-    onError("");
-
-    const collected = [];
-    const seen = new Set();
-
-    try {
-      // Đếm trước để biết khung này có bao nhiêu thửa.
-      // Lỗi ở bước đếm không chặn việc tải dữ liệu.
-      let totalInView = null;
+    const run = async () => {
+      onLoading(true);
+      onError("");
 
       try {
-        const countResponse = await fetch(
-          `${API_URL}/api/parcels/count?${new URLSearchParams(baseParams)}`,
-          { signal: controller.signal },
-        );
-
-        if (countResponse.ok) {
-          const countResult = await countResponse.json();
-          totalInView = countResult.total ?? null;
-          onMeta({ total: totalInView, loaded: 0, truncated: false });
-        }
-      } catch (countError) {
-        if (countError.name === "AbortError") return;
-      }
-
-      for (
-        let offset = 0;
-        offset < MAX_FEATURES && !controller.signal.aborted;
-        offset += PAGE_SIZE
-      ) {
-        const params = new URLSearchParams({
-          ...baseParams,
-          limit: String(PAGE_SIZE),
-          offset: String(offset),
+        // Bước 1: hỏi dữ liệu nằm ở đâu.
+        const extentResponse = await fetch(`${API_URL}/api/parcels/extent`, {
+          signal: controller.signal,
         });
 
-        const response = await fetch(
-          `${API_URL}/api/parcels?${params.toString()}`,
-          { signal: controller.signal },
-        );
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || "Không tải được dữ liệu thửa đất");
-        }
-
-        const features = result?.features || [];
-
-        let added = 0;
-
-        features.forEach((feature) => {
-          const key = featureKey(feature);
-          if (seen.has(key)) return;
-          seen.add(key);
-          collected.push(feature);
-          added += 1;
-        });
-
-        onData({
-          type: "FeatureCollection",
-          features: collected.slice(),
-        });
-
-        onMeta({
-          total: totalInView,
-          loaded: collected.length,
-          truncated:
-            features.length >= PAGE_SIZE &&
-            offset + PAGE_SIZE >= MAX_FEATURES,
-        });
-
-        // Lô cuối: server trả về ít hơn một trang đầy.
-        if (features.length < PAGE_SIZE) break;
-
-        // Chốt an toàn: lô đầy nhưng không thửa nào mới nghĩa là
-        // server đang bỏ qua offset. Dừng lại thay vì lặp vô tận.
-        if (added === 0) {
+        if (!extentResponse.ok) {
           throw new Error(
-            "Server trả về cùng một lô dữ liệu. Hãy kiểm tra tham số " +
-              "p_offset trong hàm get_parcels_in_view.",
+            "Không xác định được phạm vi dữ liệu. Kiểm tra hàm " +
+              "get_parcels_extent trên Supabase.",
           );
         }
 
-        // Nhường luồng cho trình duyệt vẽ xong lô vừa nhận.
-        await new Promise((resolve) => window.setTimeout(resolve, 60));
+        const extent = await extentResponse.json();
+
+        if (
+          !extent ||
+          typeof extent.west !== "number" ||
+          typeof extent.south !== "number"
+        ) {
+          throw new Error("Bảng thửa đất chưa có dữ liệu");
+        }
+
+        // Bước 2: nhảy bản đồ tới vùng có thửa.
+        map.fitBounds(
+          [
+            [extent.south, extent.west],
+            [extent.north, extent.east],
+          ],
+          { padding: [20, 20], maxZoom: 17 },
+        );
+
+        // Bước 3: tải hết thửa trong phạm vi đó.
+        const baseParams = {
+          west: String(extent.west - EXTENT_PADDING),
+          south: String(extent.south - EXTENT_PADDING),
+          east: String(extent.east + EXTENT_PADDING),
+          north: String(extent.north + EXTENT_PADDING),
+          center_lng: String((extent.west + extent.east) / 2),
+          center_lat: String((extent.south + extent.north) / 2),
+
+          // Zoom cao nhất: giữ nguyên hình học, không giản lược.
+          zoom: "18",
+        };
+
+        const collected = [];
+        const seen = new Set();
+
+        for (
+          let offset = 0;
+          offset < MAX_FEATURES && !controller.signal.aborted;
+          offset += PAGE_SIZE
+        ) {
+          const params = new URLSearchParams({
+            ...baseParams,
+            limit: String(PAGE_SIZE),
+            offset: String(offset),
+          });
+
+          const response = await fetch(
+            `${API_URL}/api/parcels?${params.toString()}`,
+            { signal: controller.signal },
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || "Không tải được dữ liệu thửa đất");
+          }
+
+          const features = result?.features || [];
+          let added = 0;
+
+          features.forEach((feature) => {
+            const key = featureKey(feature);
+            if (seen.has(key)) return;
+            seen.add(key);
+            collected.push(feature);
+            added += 1;
+          });
+
+          // Vẽ dần từng lô để người dùng thấy tiến độ.
+          onData({ type: "FeatureCollection", features: collected.slice() });
+          onMeta({ loaded: collected.length });
+
+          // Lô cuối: server trả về ít hơn một trang đầy.
+          if (features.length < PAGE_SIZE) break;
+
+          // Lô đầy nhưng không thửa nào mới nghĩa là server bỏ qua offset.
+          if (added === 0) {
+            throw new Error(
+              "Server trả về cùng một lô dữ liệu. Hãy kiểm tra tham số " +
+                "p_offset trong hàm get_parcels_in_view.",
+            );
+          }
+
+          // Nhường luồng cho trình duyệt vẽ xong lô vừa nhận.
+          await new Promise((resolve) => window.setTimeout(resolve, 60));
+        }
+      } catch (error) {
+        if (error.name !== "AbortError") onError(error.message);
+      } finally {
+        if (!controller.signal.aborted) onLoading(false);
       }
-    } catch (error) {
-      if (error.name !== "AbortError") onError(error.message);
-    } finally {
-      if (!controller.signal.aborted) onLoading(false);
-    }
+    };
+
+    run();
+
+    return () => controller.abort();
   }, [map, onData, onLoading, onError, onMeta]);
-
-  useEffect(() => {
-    const schedule = () => {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(load, MOVE_DEBOUNCE_MS);
-    };
-
-    schedule();
-    map.on("moveend", schedule);
-
-    return () => {
-      map.off("moveend", schedule);
-      window.clearTimeout(timerRef.current);
-      controllerRef.current?.abort();
-    };
-  }, [map, load]);
 
   return null;
 }
@@ -310,10 +298,9 @@ function CurrentLocation({ onLocated }) {
     );
   };
 
-  useEffect(() => {
-    locateMe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Không tự định vị lúc mở trang: việc đó kéo bản đồ về chỗ người dùng
+  // đang đứng và đè lên khung dữ liệu vừa khớp xong.
+  // Người dùng bấm nút "Vị trí của tôi" khi cần.
 
   return (
     <>
@@ -368,16 +355,11 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [meta, setMeta] = useState({ total: null, loaded: 0, truncated: false });
+  const [meta, setMeta] = useState({ loaded: 0 });
   const [focusTick, setFocusTick] = useState(0);
   const layerRef = useRef(null);
 
-  // Thay toàn bộ dữ liệu theo khung đang xem thay vì gộp dồn mãi.
-  // Gộp dồn là lý do bản cũ càng dùng càng nặng.
-  const handleData = useCallback((result) => {
-    setData(result);
-  }, []);
-
+  const handleData = useCallback((result) => setData(result), []);
   const handleLoading = useCallback((value) => setLoading(value), []);
   const handleError = useCallback((message) => setError(message), []);
   const handleMeta = useCallback((value) => setMeta(value), []);
@@ -406,8 +388,6 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
     };
   }, [data, query]);
 
-  // Giữ nguyên feature đã bấm, kể cả khi thửa đó rơi ra
-  // ngoài khung sau khi người dùng kéo bản đồ.
   const selectedFeature = selected?.feature || null;
 
   const style = useCallback(
@@ -453,6 +433,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
   }, [filtered, style]);
 
   const shownCount = filtered?.features?.length ?? 0;
+  const isFiltering = query.trim().length > 0;
 
   return (
     <main className="shell">
@@ -465,8 +446,8 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
         <div className="count">
           <strong>{shownCount.toLocaleString("vi-VN")}</strong>
           <span>
-            {meta.total !== null && meta.total > shownCount
-              ? `/ ${meta.total.toLocaleString("vi-VN")} thửa trong khung`
+            {isFiltering && meta.loaded > shownCount
+              ? `/ ${meta.loaded.toLocaleString("vi-VN")} thửa`
               : "thửa hiển thị"}
           </span>
         </div>
@@ -528,15 +509,18 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
             )}
           </div>
 
-          {loading && <div className="notice">Đang tải dữ liệu Supabase…</div>}
-
-          {!loading && meta.truncated && (
+          {loading && (
             <div className="notice">
-              <strong>Khu vực này quá nhiều thửa</strong>
-              <span>
-                Đang hiển thị {MAX_FEATURES.toLocaleString("vi-VN")} thửa gần
-                tâm bản đồ nhất. Phóng to để xem đầy đủ.
-              </span>
+              {meta.loaded > 0
+                ? `Đang tải… ${meta.loaded.toLocaleString("vi-VN")} thửa`
+                : "Đang tải dữ liệu Supabase…"}
+            </div>
+          )}
+
+          {!loading && !error && shownCount === 0 && !isFiltering && (
+            <div className="notice">
+              <strong>Chưa có thửa nào</strong>
+              <span>Hãy nhập dữ liệu GML trước khi xem bản đồ.</span>
             </div>
           )}
 
@@ -563,7 +547,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
             // Canvas thay cho SVG: vẽ hàng nghìn polygon vẫn mượt.
             preferCanvas
           >
-            <ViewportParcelLoader
+            <AllParcelsLoader
               onData={handleData}
               onLoading={handleLoading}
               onError={handleError}

@@ -301,6 +301,17 @@ def parcels_count():
 
     return jsonify({"total": total})
 
+@app.get("/api/parcels/extent")
+def parcels_extent():
+    result, error_response = call_rpc("get_parcels_extent", {}, timeout=20)
+
+    if error_response:
+        return error_response
+
+    if not isinstance(result, dict):
+        return jsonify({"error": "Bảng thửa đất chưa có dữ liệu"}), 404
+
+    return jsonify(result)
 
 # =========================================================
 # LẤY THỬA THEO KHUNG BẢN ĐỒ
