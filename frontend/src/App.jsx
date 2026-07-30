@@ -128,36 +128,31 @@ function FitBounds({ focusFeature, focusTick }) {
 }
 
 // =========================================================
-// TẢI TOÀN BỘ THỬA MỘT LƯỢT
+// TRA CỨU THEO BỘ LỌC
 //
-// Với quy mô vài nghìn thửa, tải theo khung bản đồ là thừa và
-// gây ra chuyện bản đồ trắng trơn khi người dùng đứng ở vùng
-// chưa có dữ liệu. Component này hỏi phạm vi dữ liệu trước,
-// nhảy bản đồ tới đó, rồi tải hết trong một lượt.
-// Không nghe sự kiện moveend, kéo bản đồ không gọi lại API.
+// Không còn tự tải toàn tỉnh khi mở trang. Người dùng chọn mã xã
+// (bắt buộc), nhóm, số tờ, số thửa rồi bấm "Tra cứu" mới gọi API.
+// Component này chỉ chạy lại khi `filters` đổi tham chiếu (mỗi lần
+// bấm Tra cứu tạo object filters mới, kể cả giữ nguyên giá trị).
 // =========================================================
 
-const DEFAULT_BBOX = { west: 102, south: 8, east: 110, north: 24 };
-
-function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
+function SearchParcelsLoader({ filters, onData, onLoading, onError, onMeta }) {
   const map = useMap();
 
   useEffect(() => {
+    if (!filters) return;
+
     const controller = new AbortController();
 
     const run = async () => {
       onLoading(true);
       onError("");
+      onData(null);
 
-      const baseParams = {
-        west: String(DEFAULT_BBOX.west),
-        south: String(DEFAULT_BBOX.south),
-        east: String(DEFAULT_BBOX.east),
-        north: String(DEFAULT_BBOX.north),
-        center_lng: String((DEFAULT_BBOX.west + DEFAULT_BBOX.east) / 2),
-        center_lat: String((DEFAULT_BBOX.south + DEFAULT_BBOX.north) / 2),
-        zoom: "18",
-      };
+      const baseParams = { ma_xa: filters.maXa };
+      if (filters.nhom) baseParams.nhom = filters.nhom;
+      if (filters.soTo) baseParams.so_to = filters.soTo;
+      if (filters.soThua) baseParams.so_thua = filters.soThua;
 
       const collected = [];
       const seen = new Set();
@@ -175,7 +170,7 @@ function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
           });
 
           const response = await fetch(
-            `${API_URL}/api/parcels?${params.toString()}`,
+            `${API_URL}/api/parcels/search?${params.toString()}`,
             { signal: controller.signal },
           );
 
@@ -204,14 +199,14 @@ function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
           if (added === 0) {
             throw new Error(
               "Server trả về cùng một lô dữ liệu. Kiểm tra p_offset " +
-                "trong hàm get_parcels_in_view.",
+                "trong hàm search_parcels.",
             );
           }
 
           await new Promise((resolve) => window.setTimeout(resolve, 60));
         }
 
-        // Khớp bản đồ vào chính dữ liệu vừa tải.
+        // Khớp bản đồ vào chính kết quả vừa tra cứu.
         if (collected.length > 0 && !controller.signal.aborted) {
           const bounds = L.geoJSON({
             type: "FeatureCollection",
@@ -232,7 +227,7 @@ function AllParcelsLoader({ onData, onLoading, onError, onMeta }) {
     run();
 
     return () => controller.abort();
-  }, [map, onData, onLoading, onError, onMeta]);
+  }, [filters, map, onData, onLoading, onError, onMeta]);
 
   return null;
 }
@@ -247,51 +242,62 @@ function CurrentLocation({ onLocated }) {
   const [accuracy, setAccuracy] = useState(0);
   const [locationError, setLocationError] = useState("");
 
-  const locateMe = () => {
-    setLocationError("");
+  const locateMe = useCallback(
+    (isAuto = false) => {
+      setLocationError("");
 
-    if (!window.isSecureContext) {
-      setLocationError("Định vị cần HTTPS hoặc localhost.");
-      return;
-    }
+      if (!window.isSecureContext) {
+        if (!isAuto) setLocationError("Định vị cần HTTPS hoặc localhost.");
+        return;
+      }
 
-    if (!navigator.geolocation) {
-      setLocationError("Thiết bị không hỗ trợ định vị.");
-      return;
-    }
+      if (!navigator.geolocation) {
+        if (!isAuto) setLocationError("Thiết bị không hỗ trợ định vị.");
+        return;
+      }
 
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const currentPosition = [coords.latitude, coords.longitude];
-        setPosition(currentPosition);
-        setAccuracy(coords.accuracy || 0);
-        map.flyTo(currentPosition, 18, { animate: true, duration: 1.2 });
-        onLocated?.();
-      },
-      (geoError) => {
-        const messages = {
-          1: "Chưa cho phép truy cập vị trí.",
-          2: "Thiết bị không xác định được vị trí.",
-          3: "Quá thời gian chờ GPS.",
-        };
-        setLocationError(
-          messages[geoError.code] || "Không lấy được vị trí hiện tại.",
-        );
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
-    );
-  };
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          const currentPosition = [coords.latitude, coords.longitude];
+          setPosition(currentPosition);
+          setAccuracy(coords.accuracy || 0);
+          map.flyTo(currentPosition, 18, { animate: true, duration: 1.2 });
+          onLocated?.();
+        },
+        (geoError) => {
+          // Lúc mới mở trang, im lặng bỏ qua lỗi (ví dụ chưa cấp quyền) thay
+          // vì dọa người dùng ngay khi họ chưa bấm gì.
+          if (isAuto) return;
 
-  // Không tự định vị lúc mở trang: việc đó kéo bản đồ về chỗ người dùng
-  // đang đứng và đè lên khung dữ liệu vừa khớp xong.
-  // Người dùng bấm nút "Vị trí của tôi" khi cần.
+          const messages = {
+            1: "Chưa cho phép truy cập vị trí.",
+            2: "Thiết bị không xác định được vị trí.",
+            3: "Quá thời gian chờ GPS.",
+          };
+          setLocationError(
+            messages[geoError.code] || "Không lấy được vị trí hiện tại.",
+          );
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+      );
+    },
+    [map, onLocated],
+  );
+
+  // Không còn tự tải toàn tỉnh khi mở trang (giờ chờ người dùng chọn bộ
+  // lọc), nên tự định vị ngay lúc mở để bản đồ khớp vào vị trí người dùng
+  // trước tiên, thay vì đợi bấm nút "Vị trí của tôi".
+  useEffect(() => {
+    locateMe(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
       <button
         type="button"
         className="locateButton"
-        onClick={locateMe}
+        onClick={() => locateMe(false)}
         title="Hiển thị vị trí hiện tại"
       >
         ◎ <span>Vị trí của tôi</span>
@@ -337,16 +343,75 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [meta, setMeta] = useState({ loaded: 0 });
   const [focusTick, setFocusTick] = useState(0);
   const layerRef = useRef(null);
 
+  // Bộ lọc tra cứu: mã xã (bắt buộc), nhóm, số tờ, số thửa.
+  const [xaOptions, setXaOptions] = useState([]);
+  const [xaError, setXaError] = useState("");
+  const [maXa, setMaXa] = useState("");
+  const [nhom, setNhom] = useState("");
+  const [soTo, setSoTo] = useState("");
+  const [soThua, setSoThua] = useState("");
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`${API_URL}/api/parcels/xa-list`, { signal: controller.signal })
+      .then((response) => response.json())
+      .then((result) => {
+        if (result?.error) throw new Error(result.error);
+        setXaOptions(result?.items || []);
+      })
+      .catch((fetchError) => {
+        if (fetchError.name !== "AbortError") setXaError(fetchError.message);
+      });
+
+    return () => controller.abort();
+  }, []);
+
   const handleData = useCallback((result) => setData(result), []);
   const handleLoading = useCallback((value) => setLoading(value), []);
   const handleError = useCallback((message) => setError(message), []);
   const handleMeta = useCallback((value) => setMeta(value), []);
+
+  const handleSearch = useCallback(() => {
+    if (!maXa) return;
+
+    setSelected(null);
+    setQuery("");
+    setSubmittedFilters({
+      maXa,
+      nhom,
+      soTo: soTo.trim(),
+      soThua: soThua.trim(),
+    });
+    setFiltersOpen(false);
+  }, [maXa, nhom, soTo, soThua]);
+
+  const handleResetFilters = useCallback(() => {
+    setMaXa("");
+    setNhom("");
+    setSoTo("");
+    setSoThua("");
+    setSubmittedFilters(null);
+    setFiltersOpen(true);
+    setSelected(null);
+    setQuery("");
+    setData(null);
+    setError("");
+    setMeta({ loaded: 0 });
+  }, []);
+
+  const handleSelectParcel = useCallback((feature) => {
+    setSelected({ id: feature.id, feature, ...feature.properties });
+    setFocusTick((value) => value + 1);
+  }, []);
 
   const filtered = useMemo(() => {
     if (!data) return null;
@@ -390,19 +455,19 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
     [selected],
   );
 
-  const onEachFeature = useCallback((feature, layer) => {
-    const p = feature.properties;
+  const onEachFeature = useCallback(
+    (feature, layer) => {
+      const p = feature.properties;
 
-    layer.bindTooltip(`Tờ ${p.so_to} · Thửa ${p.so_thua}`, {
-      sticky: true,
-      direction: "top",
-    });
+      layer.bindTooltip(`Tờ ${p.so_to} · Thửa ${p.so_thua}`, {
+        sticky: true,
+        direction: "top",
+      });
 
-    layer.on("click", () => {
-      setSelected({ id: feature.id, feature, ...p });
-      setFocusTick((value) => value + 1);
-    });
-  }, []);
+      layer.on("click", () => handleSelectParcel(feature));
+    },
+    [handleSelectParcel],
+  );
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -430,9 +495,11 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
         <div className="count">
           <strong>{shownCount.toLocaleString("vi-VN")}</strong>
           <span>
-            {isFiltering && meta.loaded > shownCount
-              ? `/ ${meta.loaded.toLocaleString("vi-VN")} thửa`
-              : "thửa hiển thị"}
+            {!submittedFilters
+              ? "chưa tra cứu"
+              : isFiltering && meta.loaded > shownCount
+                ? `/ ${meta.loaded.toLocaleString("vi-VN")} thửa`
+                : "thửa hiển thị"}
           </span>
         </div>
         <a
@@ -470,43 +537,156 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
       <section className="workspace">
         <aside className="sidebar">
           <div className="filterHeader">
-            <strong>Bộ lọc dữ liệu</strong>
-            <span>Lọc các thửa đất đang hiển thị</span>
-          </div>
+            <div>
+              <strong>Bộ lọc dữ liệu</strong>
+              <span>Chọn điều kiện rồi bấm Tra cứu</span>
+            </div>
 
-          <label htmlFor="search">Tìm kiếm thửa đất</label>
-
-          <div className="searchBox">
-            <span>⌕</span>
-
-            <input
-              id="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Số tờ, số thửa, mã xã, loại đất…"
-            />
-
-            {query && (
-              <button type="button" onClick={() => setQuery("")}>
-                ×
+            {submittedFilters && (
+              <button
+                type="button"
+                className="filterToggle"
+                onClick={() => setFiltersOpen((value) => !value)}
+              >
+                {filtersOpen ? "Ẩn bộ lọc" : "Đổi bộ lọc"}
               </button>
             )}
           </div>
+
+          {!filtersOpen && submittedFilters && (
+            <div className="filterSummary">
+              <span className="tag">{submittedFilters.maXa}</span>
+              {submittedFilters.nhom && (
+                <span className="tag">
+                  {GROUP_LABELS[submittedFilters.nhom] || submittedFilters.nhom}
+                </span>
+              )}
+              {submittedFilters.soTo && (
+                <span className="tag">Tờ {submittedFilters.soTo}</span>
+              )}
+              {submittedFilters.soThua && (
+                <span className="tag">Thửa {submittedFilters.soThua}</span>
+              )}
+            </div>
+          )}
+
+          {filtersOpen && (
+            <>
+              <label htmlFor="filterMaXa">Mã xã</label>
+              <select
+                id="filterMaXa"
+                className="filterSelect"
+                value={maXa}
+                onChange={(event) => setMaXa(event.target.value)}
+              >
+                <option value="">— Chọn mã xã —</option>
+                {xaOptions.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+
+              <label htmlFor="filterNhom">Nhóm</label>
+              <select
+                id="filterNhom"
+                className="filterSelect"
+                value={nhom}
+                onChange={(event) => setNhom(event.target.value)}
+              >
+                <option value="">Tất cả nhóm</option>
+                <option value="NHÓM 1">Nhóm 1</option>
+                <option value="NHÓM 2">Nhóm 2</option>
+                <option value="DEFAULT">Chưa phân loại</option>
+              </select>
+
+              <div className="filterRow">
+                <div>
+                  <label htmlFor="filterSoTo">Số tờ</label>
+                  <input
+                    id="filterSoTo"
+                    className="filterInput"
+                    inputMode="numeric"
+                    value={soTo}
+                    onChange={(event) => setSoTo(event.target.value)}
+                    placeholder="VD: 12"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="filterSoThua">Số thửa</label>
+                  <input
+                    id="filterSoThua"
+                    className="filterInput"
+                    inputMode="numeric"
+                    value={soThua}
+                    onChange={(event) => setSoThua(event.target.value)}
+                    placeholder="VD: 34"
+                  />
+                </div>
+              </div>
+
+              <div className="filterActions">
+                <button
+                  type="button"
+                  className="searchButton"
+                  onClick={handleSearch}
+                  disabled={!maXa || loading}
+                >
+                  Tra cứu
+                </button>
+
+                {submittedFilters && (
+                  <button
+                    type="button"
+                    className="resetButton"
+                    onClick={handleResetFilters}
+                  >
+                    Xóa lọc
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {xaError && (
+            <div className="notice error">
+              <strong>Không tải được danh sách mã xã</strong>
+              <span>{xaError}</span>
+            </div>
+          )}
 
           {loading && (
             <div className="notice">
               {meta.loaded > 0
                 ? `Đang tải… ${meta.loaded.toLocaleString("vi-VN")} thửa`
-                : "Đang tải dữ liệu Supabase…"}
+                : "Đang tra cứu Supabase…"}
             </div>
           )}
 
-          {!loading && !error && shownCount === 0 && !isFiltering && (
-            <div className="notice">
-              <strong>Chưa có thửa nào</strong>
-              <span>Hãy nhập dữ liệu GML trước khi xem bản đồ.</span>
+          {!loading && !error && !submittedFilters && (
+            <div className="filterPlaceholder">
+              <div>☷</div>
+              <strong>Chưa tra cứu</strong>
+              <span>
+                Chọn mã xã (và nhóm, số tờ, số thửa nếu cần) rồi bấm Tra cứu
+                để xem thửa đất.
+              </span>
             </div>
           )}
+
+          {!loading &&
+            !error &&
+            submittedFilters &&
+            shownCount === 0 &&
+            !isFiltering && (
+              <div className="notice">
+                <strong>Không tìm thấy thửa nào</strong>
+                <span>
+                  Hãy đổi mã xã, nhóm, số tờ hoặc số thửa rồi tra cứu lại.
+                </span>
+              </div>
+            )}
 
           {error && (
             <div className="notice error">
@@ -515,11 +695,67 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
             </div>
           )}
 
-          <div className="filterPlaceholder">
-            <div>☷</div>
-            <strong>Bộ lọc sẽ bổ sung sau</strong>
-            <span>Khu vực này sẽ chứa các điều kiện lọc dữ liệu.</span>
-          </div>
+          {data && (
+            <>
+              <label htmlFor="search">Lọc nhanh trong kết quả</label>
+
+              <div className="searchBox">
+                <span>⌕</span>
+
+                <input
+                  id="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Số tờ, số thửa, mã xã, loại đất…"
+                />
+
+                {query && (
+                  <button type="button" onClick={() => setQuery("")}>
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div className="parcelListHeader">
+                Danh sách thửa ({shownCount.toLocaleString("vi-VN")})
+              </div>
+
+              <div className="parcelList">
+                {filtered.features.length === 0 ? (
+                  <div className="parcelListEmpty">
+                    Không có thửa nào khớp bộ lọc nhanh.
+                  </div>
+                ) : (
+                  filtered.features.map((feature) => {
+                    const p = feature.properties;
+                    const isActive = feature.id === selected?.id;
+
+                    return (
+                      <button
+                        key={featureKey(feature)}
+                        type="button"
+                        className={`parcelListItem${isActive ? " active" : ""}`}
+                        onClick={() => handleSelectParcel(feature)}
+                      >
+                        <span
+                          className="parcelListDot"
+                          style={{
+                            backgroundColor: getGroupColor(
+                              p.dong_bo?.phan_loai_ke_hoach_2959,
+                            ),
+                          }}
+                        />
+                        <span className="parcelListLabel">
+                          Tờ {p.so_to} · Thửa {p.so_thua}
+                        </span>
+                        <span className="parcelListXa">{p.ma_xa}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
         </aside>
 
         <div className="mapWrap">
@@ -531,7 +767,8 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
             // Canvas thay cho SVG: vẽ hàng nghìn polygon vẫn mượt.
             preferCanvas
           >
-            <AllParcelsLoader
+            <SearchParcelsLoader
+              filters={submittedFilters}
               onData={handleData}
               onLoading={handleLoading}
               onError={handleError}

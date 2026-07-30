@@ -134,19 +134,43 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   box-shadow: 0 5px 15px #102a2b40; font-size: 11px; pointer-events: none;
 }
 .locateButton {
-  position: absolute; top: 82px; right: 10px; z-index: 1000;
-  display: flex; align-items: center; gap: 6px;
-  padding: 9px 12px; border: 0; border-radius: 8px;
-  color: #0f5f59; background: white;
-  box-shadow: 0 4px 16px #0f172a40;
-  font-size: 12px; font-weight: 700;
+  position: absolute;
+  right: 10px;
+  bottom: 92px;          /* chừa chỗ cho ZoomControl bên dưới */
+  z-index: 1000;         /* phải ≥ 1000 để nằm trên các lớp bản đồ */
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 8px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
 }
-.locateButton:hover { background: #ecfdf5; }
+
+.locateButton:hover {
+  background: #f1f5f9;
+}
+
 .locationError {
-  position: absolute; top: 125px; right: 10px; z-index: 1000;
-  max-width: 230px; padding: 8px 10px; border-radius: 7px;
-  color: #991b1b; background: #fee2e2; font-size: 11px;
-  box-shadow: 0 4px 16px #0f172a30;
+  position: absolute;
+  right: 10px;
+  bottom: 140px;
+  z-index: 1000;
+  max-width: 240px;
+
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
 }
 .landLegend {
   position: absolute; left: 16px; bottom: 18px; z-index: 600;
@@ -234,9 +258,38 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 
 .filterHeader {
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.filterHeader > div {
+  display: flex;
   flex-direction: column;
   gap: 5px;
-  margin-bottom: 22px;
+}
+
+.filterToggle {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: 1px solid #b9ccc8;
+  border-radius: 8px;
+  color: #0f766e;
+  background: white;
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.filterToggle:hover { background: #f1f7f5; }
+
+.filterSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -10px 0 18px;
 }
 
 .filterHeader strong {
@@ -281,6 +334,133 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .filterPlaceholder span {
   font-size: 11px;
   line-height: 1.5;
+}
+
+.filterSelect,
+.filterInput {
+  width: 100%;
+  height: 42px;
+  margin-bottom: 14px;
+  padding: 0 12px;
+  border: 1px solid #b9ccc8;
+  border-radius: 10px;
+  background: white;
+  color: #173f3c;
+  font-size: 13px;
+}
+
+.filterSelect:focus,
+.filterInput:focus {
+  outline: 0;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px #14b8a622;
+}
+
+.filterRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.filterRow .filterInput { margin-bottom: 0; }
+.filterRow label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 13px; color: #2f5552; }
+.filterRow > div { display: flex; flex-direction: column; }
+
+.filterActions {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.searchButton {
+  flex: 1;
+  padding: 11px;
+  border: 0;
+  border-radius: 10px;
+  color: white;
+  background: #0f766e;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.searchButton:hover:not(:disabled) { background: #0b5f59; }
+.searchButton:disabled { background: #9db8b4; cursor: not-allowed; }
+
+.resetButton {
+  padding: 11px 14px;
+  border: 1px solid #b9ccc8;
+  border-radius: 10px;
+  color: #345b57;
+  background: white;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.resetButton:hover { background: #f1f7f5; }
+
+.parcelListHeader {
+  margin: 18px 0 8px;
+  font-weight: 700;
+  font-size: 12px;
+  color: #2f5552;
+}
+
+.parcelList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.parcelListItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid #d4e1de;
+  border-radius: 10px;
+  background: white;
+  text-align: left;
+  font-size: 12px;
+  color: #173f3c;
+}
+
+.parcelListItem:hover { background: #f1f7f5; }
+
+.parcelListItem.active {
+  border-color: #0f766e;
+  background: #e6f3f0;
+  box-shadow: 0 0 0 2px #14b8a622;
+}
+
+.parcelListDot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.parcelListLabel {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parcelListXa {
+  flex: 0 0 auto;
+  color: #718783;
+  font-size: 11px;
+}
+
+.parcelListEmpty {
+  padding: 14px;
+  color: #718783;
+  font-size: 12px;
+  text-align: center;
 }
 
 .mapWrap {

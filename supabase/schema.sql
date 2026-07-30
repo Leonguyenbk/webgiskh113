@@ -63,3 +63,95 @@ create policy "Cho phép đọc đồng bộ dữ liệu"
     to anon, authenticated
     using (true);
 
+-- =========================================================
+-- BỘ LỌC TRA CỨU: mã xã (bắt buộc) + nhóm + số tờ + số thửa
+-- Dùng cho /api/parcels/xa-list và /api/parcels/search ở backend.
+-- Khác get_parcels_in_view: không lọc theo khung bản đồ, luôn yêu cầu
+-- mã xã để tránh quét toàn tỉnh.
+-- =========================================================
+
+create or replace function public.list_ma_xa()
+returns table (ma_xa text)
+language sql
+stable
+as $$
+    select distinct t.ma_xa
+    from public.thua_dat t
+    order by t.ma_xa;
+$$;
+
+grant execute on function public.list_ma_xa() to anon, authenticated;
+
+create or replace function public.search_parcels(
+    p_ma_xa text,
+    p_nhom text default null,
+    p_so_to integer default null,
+    p_so_thua integer default null,
+    p_limit integer default 1000,
+    p_offset integer default 0,
+    p_simplify double precision default 0
+)
+returns jsonb
+language sql
+stable
+as $$
+    select jsonb_build_object(
+        'type', 'FeatureCollection',
+        'features', coalesce(jsonb_agg(feature), '[]'::jsonb)
+    )
+    from (
+        select jsonb_build_object(
+            'type', 'Feature',
+            'id', t.id,
+            'geometry', ST_AsGeoJSON(
+                case when p_simplify > 0
+                     then ST_SimplifyPreserveTopology(t.geom, p_simplify)
+                     else t.geom
+                end
+            )::jsonb,
+            'properties', jsonb_build_object(
+                'ma_xa', t.ma_xa,
+                'so_to', t.so_to,
+                'so_thua', t.so_thua,
+                'muc_dich_su_dung', t.muc_dich_su_dung,
+                'dien_tich', t.dien_tich,
+                'ten_chu', t.ten_chu,
+                'dia_chi', t.dia_chi,
+                'dong_bo', case when d.id is null then null else jsonb_build_object(
+                    'da_xuat_so_dia_chinh_dien_tu', d.da_xuat_so_dia_chinh_dien_tu,
+                    'chua_xuat_so_dia_chinh_dien_tu', d.chua_xuat_so_dia_chinh_dien_tu,
+                    'dong_bo_3_khoi', d.dong_bo_3_khoi,
+                    'khong_dong_bo_3_khoi', d.khong_dong_bo_3_khoi,
+                    'chi_co_du_lieu_thuoc_tinh', d.chi_co_du_lieu_thuoc_tinh,
+                    'khop_csdlqg_dan_cu', d.khop_csdlqg_dan_cu,
+                    'chua_khop_csdlqg_dan_cu', d.chua_khop_csdlqg_dan_cu,
+                    'khong_xac_dinh_csdlqg_dan_cu', d.khong_xac_dinh_csdlqg_dan_cu,
+                    'van_hanh_24_7', d.van_hanh_24_7,
+                    'khong_van_hanh_24_7', d.khong_van_hanh_24_7,
+                    'phan_loai_ke_hoach_2959', d.phan_loai_ke_hoach_2959
+                ) end
+            )
+        ) as feature
+        from public.thua_dat t
+        left join public.dong_bo_du_lieu d
+            on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+        where t.ma_xa = p_ma_xa
+          and (p_so_to is null or t.so_to = p_so_to)
+          and (p_so_thua is null or t.so_thua = p_so_thua)
+          and (
+              p_nhom is null
+              or (
+                  p_nhom = 'DEFAULT'
+                  and coalesce(upper(trim(d.phan_loai_ke_hoach_2959)), '') not in ('NHÓM 1', 'NHÓM 2')
+              )
+              or upper(trim(d.phan_loai_ke_hoach_2959)) = p_nhom
+          )
+        order by t.so_to, t.so_thua
+        limit p_limit offset p_offset
+    ) features;
+$$;
+
+grant execute on function public.search_parcels(
+    text, text, integer, integer, integer, integer, double precision
+) to anon, authenticated;
+

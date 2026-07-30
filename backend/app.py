@@ -366,6 +366,92 @@ def parcels():
     return jsonify(result)
 
 
+# =========================================================
+# TRA CỨU THEO BỘ LỌC: mã xã (bắt buộc) + nhóm + số tờ + số thửa
+# Không lọc theo khung bản đồ như /api/parcels, nên phải luôn có mã xã
+# để tránh quét toàn tỉnh.
+# =========================================================
+
+ALLOWED_NHOM = {"NHÓM 1", "NHÓM 2", "DEFAULT"}
+
+
+def read_optional_int(name: str):
+    """Đọc tham số int tùy chọn. Trả về (giá_trị, None) hoặc (None, response_loi)."""
+    raw = request.args.get(name, "").strip()
+    if not raw:
+        return None, None
+    try:
+        return int(raw), None
+    except ValueError:
+        return None, (jsonify({"error": f"{name} phải là số nguyên"}), 400)
+
+
+@app.get("/api/parcels/xa-list")
+def parcels_xa_list():
+    result, error_response = call_rpc("list_ma_xa", {}, timeout=20)
+
+    if error_response:
+        return error_response
+
+    rows = result if isinstance(result, list) else []
+    items = sorted({row.get("ma_xa") for row in rows if row.get("ma_xa")})
+
+    return jsonify({"items": items})
+
+
+@app.get("/api/parcels/search")
+def parcels_search():
+    ma_xa = request.args.get("ma_xa", "").strip()
+    if not ma_xa:
+        return jsonify({"error": "Thiếu mã xã"}), 400
+
+    nhom = request.args.get("nhom", "").strip().upper()
+    if nhom and nhom not in ALLOWED_NHOM:
+        return jsonify({"error": "Giá trị nhóm không hợp lệ"}), 400
+
+    so_to, error_response = read_optional_int("so_to")
+    if error_response:
+        return error_response
+
+    so_thua, error_response = read_optional_int("so_thua")
+    if error_response:
+        return error_response
+
+    try:
+        requested_limit = min(
+            max(int(request.args.get("limit", DEFAULT_PAGE_SIZE)), 1),
+            MAX_PAGE_SIZE,
+        )
+        page_offset = max(int(request.args.get("offset", 0)), 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "limit hoặc offset không hợp lệ"}), 400
+
+    result, error_response = call_rpc(
+        "search_parcels",
+        {
+            "p_ma_xa": ma_xa,
+            "p_nhom": nhom or None,
+            "p_so_to": so_to,
+            "p_so_thua": so_thua,
+            "p_limit": requested_limit,
+            "p_offset": page_offset,
+            "p_simplify": 0,
+        },
+        timeout=45,
+    )
+
+    if error_response:
+        return error_response
+
+    if not isinstance(result, dict):
+        return jsonify({"type": "FeatureCollection", "features": []})
+
+    result.setdefault("type", "FeatureCollection")
+    result.setdefault("features", [])
+
+    return jsonify(result)
+
+
 def upsert_to_supabase(
     base_url: str,
     table: str,
