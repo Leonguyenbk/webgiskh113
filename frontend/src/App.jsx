@@ -43,6 +43,24 @@ const MAX_FEATURES = 50000;
 // Nới khung quanh phạm vi dữ liệu để không sót thửa nằm sát mép, đơn vị độ.
 const EXTENT_PADDING = 0.01;
 
+// "Quanh vị trí của tôi": dò dần bán kính (mét) tới khi đủ khoảng
+// NEAR_ME_TARGET thửa hoặc hết mức thử, thay vì đoán cứng một khung cố định
+// (mật độ thửa đất khác nhau rất nhiều giữa khu đô thị và vùng thưa dân).
+const NEAR_ME_RADII_METERS = [500, 1000, 2000, 4000, 8000, 16000];
+const NEAR_ME_TARGET = 1000;
+const NEAR_ME_ZOOM = 17;
+
+function metersToDegrees(meters, latDeg) {
+  const dLat = meters / 111320;
+  const dLng = meters / (111320 * Math.max(Math.cos((latDeg * Math.PI) / 180), 0.1));
+  return { dLat, dLng };
+}
+
+function boundsForRadius(lat, lng, meters) {
+  const { dLat, dLng } = metersToDegrees(meters, lat);
+  return { west: lng - dLng, east: lng + dLng, south: lat - dLat, north: lat + dLat };
+}
+
 const GROUP_COLORS = {
   "NHÓM 1": "#22c55e",
   "NHÓM 2": "#ef4444",
@@ -232,11 +250,128 @@ function SearchParcelsLoader({ filters, onData, onLoading, onError, onMeta }) {
   return null;
 }
 
+// =========================================================
+// "QUANH VỊ TRÍ CỦA TÔI"
+//
+// Không biết trước mã xã, nên không dùng được /api/parcels/search.
+// Dò dần bán kính quanh vị trí GPS bằng /api/parcels/count (chỉ đụng
+// index GIST, rất nhẹ) tới khi đủ ~NEAR_ME_TARGET thửa, rồi mới gọi
+// /api/parcels (bbox) một lần để lấy hình học.
+// =========================================================
+
+function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!request) return;
+
+    const controller = new AbortController();
+
+    const run = async () => {
+      onLoading(true);
+      onError("");
+      onData(null);
+      onMeta({ loaded: 0 });
+
+      const { lat, lng } = request;
+
+      try {
+        let chosenBounds = boundsForRadius(
+          lat,
+          lng,
+          NEAR_ME_RADII_METERS[NEAR_ME_RADII_METERS.length - 1],
+        );
+
+        for (const radius of NEAR_ME_RADII_METERS) {
+          if (controller.signal.aborted) return;
+
+          const bounds = boundsForRadius(lat, lng, radius);
+          chosenBounds = bounds;
+
+          const countParams = new URLSearchParams({
+            west: String(bounds.west),
+            south: String(bounds.south),
+            east: String(bounds.east),
+            north: String(bounds.north),
+            center_lng: String(lng),
+            center_lat: String(lat),
+          });
+
+          const countResponse = await fetch(
+            `${API_URL}/api/parcels/count?${countParams.toString()}`,
+            { signal: controller.signal },
+          );
+          const countResult = await countResponse.json();
+
+          if (!countResponse.ok) {
+            throw new Error(
+              countResult.error || "Không đếm được số thửa quanh vị trí",
+            );
+          }
+
+          if ((countResult.total || 0) >= NEAR_ME_TARGET) break;
+        }
+
+        if (controller.signal.aborted) return;
+
+        const params = new URLSearchParams({
+          west: String(chosenBounds.west),
+          south: String(chosenBounds.south),
+          east: String(chosenBounds.east),
+          north: String(chosenBounds.north),
+          center_lng: String(lng),
+          center_lat: String(lat),
+          limit: String(NEAR_ME_TARGET),
+          offset: "0",
+          zoom: String(NEAR_ME_ZOOM),
+        });
+
+        const response = await fetch(
+          `${API_URL}/api/parcels?${params.toString()}`,
+          { signal: controller.signal },
+        );
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Không tải được thửa đất quanh vị trí",
+          );
+        }
+
+        const features = result?.features || [];
+        onData({ type: "FeatureCollection", features });
+        onMeta({ loaded: features.length });
+
+        if (features.length > 0) {
+          const bounds = L.geoJSON({
+            type: "FeatureCollection",
+            features,
+          }).getBounds();
+
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [20, 20], maxZoom: 18 });
+          }
+        }
+      } catch (error) {
+        if (error.name !== "AbortError") onError(error.message);
+      } finally {
+        if (!controller.signal.aborted) onLoading(false);
+      }
+    };
+
+    run();
+
+    return () => controller.abort();
+  }, [request, map, onData, onLoading, onError, onMeta]);
+
+  return null;
+}
+
 function EmptyValue({ children }) {
   return children ? children : <span className="empty">Chưa có</span>;
 }
 
-function CurrentLocation({ onLocated }) {
+function CurrentLocation({ onLocated, onPosition }) {
   const map = useMap();
   const [position, setPosition] = useState(null);
   const [accuracy, setAccuracy] = useState(0);
@@ -263,6 +398,7 @@ function CurrentLocation({ onLocated }) {
           setAccuracy(coords.accuracy || 0);
           map.flyTo(currentPosition, 18, { animate: true, duration: 1.2 });
           onLocated?.();
+          onPosition?.({ lat: coords.latitude, lng: coords.longitude });
         },
         (geoError) => {
           // Lúc mới mở trang, im lặng bỏ qua lỗi (ví dụ chưa cấp quyền) thay
@@ -281,7 +417,7 @@ function CurrentLocation({ onLocated }) {
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
       );
     },
-    [map, onLocated],
+    [map, onLocated, onPosition],
   );
 
   // Không còn tự tải toàn tỉnh khi mở trang (giờ chờ người dùng chọn bộ
@@ -349,6 +485,11 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
   const [focusTick, setFocusTick] = useState(0);
   const layerRef = useRef(null);
 
+  // "Quanh vị trí của tôi": biết vị trí GPS ngay khi có (kể cả tự động lúc
+  // mở trang), nhưng chỉ thật sự tải thửa đất khi người dùng bấm nút.
+  const [myPosition, setMyPosition] = useState(null);
+  const [nearMeRequest, setNearMeRequest] = useState(null);
+
   // Bộ lọc tra cứu: mã xã (bắt buộc), nhóm, số tờ, số thửa.
   const [xaOptions, setXaOptions] = useState([]);
   const [xaError, setXaError] = useState("");
@@ -412,6 +553,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
 
     setSelected(null);
     setQuery("");
+    setNearMeRequest(null);
     setSubmittedFilters({
       maXa,
       nhom,
@@ -421,6 +563,16 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
     setFiltersOpen(false);
   }, [maXa, nhom, soTo, soThua]);
 
+  const handleNearMe = useCallback(() => {
+    if (!myPosition) return;
+
+    setSelected(null);
+    setQuery("");
+    setSubmittedFilters(null);
+    setFiltersOpen(false);
+    setNearMeRequest({ ...myPosition, tick: Date.now() });
+  }, [myPosition]);
+
   const handleResetFilters = useCallback(() => {
     setMaXa("");
     setXaQuery("");
@@ -429,6 +581,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
     setSoTo("");
     setSoThua("");
     setSubmittedFilters(null);
+    setNearMeRequest(null);
     setFiltersOpen(true);
     setSelected(null);
     setQuery("");
@@ -513,6 +666,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
 
   const shownCount = filtered?.features?.length ?? 0;
   const isFiltering = query.trim().length > 0;
+  const hasActiveQuery = Boolean(submittedFilters || nearMeRequest);
 
   return (
     <main className="shell">
@@ -525,7 +679,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
         <div className="count">
           <strong>{shownCount.toLocaleString("vi-VN")}</strong>
           <span>
-            {!submittedFilters
+            {!hasActiveQuery
               ? "chưa tra cứu"
               : isFiltering && meta.loaded > shownCount
                 ? `/ ${meta.loaded.toLocaleString("vi-VN")} thửa`
@@ -572,7 +726,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
               <span>Chọn điều kiện rồi bấm Tra cứu</span>
             </div>
 
-            {submittedFilters && (
+            {hasActiveQuery && (
               <button
                 type="button"
                 className="filterToggle"
@@ -602,8 +756,31 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
             </div>
           )}
 
+          {!filtersOpen && nearMeRequest && (
+            <div className="filterSummary">
+              <span className="tag">📍 Quanh vị trí của bạn</span>
+            </div>
+          )}
+
           {filtersOpen && (
             <>
+              <button
+                type="button"
+                className="nearMeButton"
+                onClick={handleNearMe}
+                disabled={!myPosition || loading}
+              >
+                📍 Xem ~{NEAR_ME_TARGET.toLocaleString("vi-VN")} thửa quanh vị trí của tôi
+              </button>
+
+              {!myPosition && (
+                <div className="nearMeHint">Đang chờ định vị GPS…</div>
+              )}
+
+              <div className="filterDivider">
+                <span>hoặc lọc theo mã xã</span>
+              </div>
+
               <label htmlFor="filterMaXa">Xã / phường</label>
               <div className="comboBox">
                 <input
@@ -697,7 +874,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
                   Tra cứu
                 </button>
 
-                {submittedFilters && (
+                {hasActiveQuery && (
                   <button
                     type="button"
                     className="resetButton"
@@ -725,26 +902,28 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
             </div>
           )}
 
-          {!loading && !error && !submittedFilters && (
+          {!loading && !error && !hasActiveQuery && (
             <div className="filterPlaceholder">
               <div>☷</div>
               <strong>Chưa tra cứu</strong>
               <span>
-                Chọn mã xã (và nhóm, số tờ, số thửa nếu cần) rồi bấm Tra cứu
-                để xem thửa đất.
+                Bấm "Xem thửa quanh vị trí của tôi", hoặc chọn mã xã (và nhóm,
+                số tờ, số thửa nếu cần) rồi bấm Tra cứu để xem thửa đất.
               </span>
             </div>
           )}
 
           {!loading &&
             !error &&
-            submittedFilters &&
+            hasActiveQuery &&
             shownCount === 0 &&
             !isFiltering && (
               <div className="notice">
                 <strong>Không tìm thấy thửa nào</strong>
                 <span>
-                  Hãy đổi mã xã, nhóm, số tờ hoặc số thửa rồi tra cứu lại.
+                  {submittedFilters
+                    ? "Hãy đổi mã xã, nhóm, số tờ hoặc số thửa rồi tra cứu lại."
+                    : "Không có thửa đất nào quanh vị trí của bạn."}
                 </span>
               </div>
             )}
@@ -838,7 +1017,15 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
               onMeta={handleMeta}
             />
 
-            <CurrentLocation />
+            <NearMeLoader
+              request={nearMeRequest}
+              onData={handleData}
+              onLoading={handleLoading}
+              onError={handleError}
+              onMeta={handleMeta}
+            />
+
+            <CurrentLocation onPosition={setMyPosition} />
 
             <ZoomControl position="bottomright" />
 

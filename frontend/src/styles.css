@@ -336,6 +336,49 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   line-height: 1.5;
 }
 
+.nearMeButton {
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 11px;
+  border: 1px solid #0f766e;
+  border-radius: 10px;
+  color: white;
+  background: #0f766e;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.nearMeButton:hover:not(:disabled) { background: #0b5f59; }
+.nearMeButton:disabled {
+  border-color: #b9ccc8;
+  color: #7c9490;
+  background: #e6f3f0;
+  cursor: not-allowed;
+}
+
+.nearMeHint {
+  margin-bottom: 14px;
+  color: #718783;
+  font-size: 11px;
+}
+
+.filterDivider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 16px;
+  color: #9badaa;
+  font-size: 11px;
+}
+
+.filterDivider::before,
+.filterDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #d8e5e2;
+}
+
 .filterSelect,
 .filterInput {
   width: 100%;
