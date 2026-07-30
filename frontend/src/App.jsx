@@ -10,15 +10,25 @@ import L from "leaflet";
 
 import {
   Circle,
-  CircleMarker,
   GeoJSON,
   LayersControl,
   MapContainer,
+  Marker,
+  Pane,
   Popup,
   TileLayer,
   ZoomControl,
   useMap,
 } from "react-leaflet";
+
+// CircleMarker (canvas) đè cả bản đồ ở pane của nó, chặn click vào thửa đất
+// bên dưới. L.Marker chỉ chiếm đúng vùng icon nhỏ nên không có vấn đề đó.
+const CURRENT_LOCATION_ICON = L.divIcon({
+  className: "myLocationMarker",
+  html: '<span class="myLocationDot"></span>',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+});
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -446,34 +456,26 @@ function CurrentLocation({ onLocated, onPosition }) {
 
       {position && (
         <>
-          <Circle
-            center={position}
-            radius={Math.min(accuracy, 10)}
-            pane="markerPane"
-            pathOptions={{
-              color: "#2563eb",
-              fillColor: "#60a5fa",
-              fillOpacity: 0.12,
-              weight: 1,
-            }}
-          />
-          <CircleMarker
-            center={position}
-            radius={8}
-            pane="markerPane"
-            pathOptions={{
-              color: "#ffffff",
-              fillColor: "#2563eb",
-              fillOpacity: 1,
-              weight: 3,
-            }}
-          >
+          <Pane name="myAccuracyPane" style={{ zIndex: 450, pointerEvents: "none" }}>
+            <Circle
+              center={position}
+              radius={Math.min(accuracy, 10)}
+              pathOptions={{
+                color: "#2563eb",
+                fillColor: "#60a5fa",
+                fillOpacity: 0.12,
+                weight: 1,
+              }}
+            />
+          </Pane>
+
+          <Marker position={position} icon={CURRENT_LOCATION_ICON}>
             <Popup>
               <strong>Vị trí hiện tại</strong>
               <br />
               Sai số khoảng {Math.round(accuracy)} m
             </Popup>
-          </CircleMarker>
+          </Marker>
         </>
       )}
     </>

@@ -172,6 +172,15 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   font-size: 12px;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
 }
+.myLocationDot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 2px #2563eb99, 0 1px 5px rgba(0, 0, 0, 0.35);
+}
 .landLegend {
   position: absolute; left: 16px; bottom: 18px; z-index: 600;
   min-width: 196px; max-height: 240px; overflow: auto;
