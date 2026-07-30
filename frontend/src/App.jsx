@@ -449,6 +449,7 @@ function CurrentLocation({ onLocated, onPosition }) {
           <Circle
             center={position}
             radius={Math.min(accuracy, 10)}
+            pane="markerPane"
             pathOptions={{
               color: "#2563eb",
               fillColor: "#60a5fa",
@@ -459,6 +460,7 @@ function CurrentLocation({ onLocated, onPosition }) {
           <CircleMarker
             center={position}
             radius={8}
+            pane="markerPane"
             pathOptions={{
               color: "#ffffff",
               fillColor: "#2563eb",
