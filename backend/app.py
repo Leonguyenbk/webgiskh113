@@ -388,13 +388,17 @@ def read_optional_int(name: str):
 
 @app.get("/api/parcels/xa-list")
 def parcels_xa_list():
-    result, error_response = call_rpc("list_ma_xa", {}, timeout=20)
+    result, error_response = call_rpc("list_xa_phuong", {}, timeout=20)
 
     if error_response:
         return error_response
 
     rows = result if isinstance(result, list) else []
-    items = sorted({row.get("ma_xa") for row in rows if row.get("ma_xa")})
+    items = [
+        {"ma_xa": row.get("ma_xa"), "ten_xa": row.get("ten_xa")}
+        for row in rows
+        if row.get("ma_xa")
+    ]
 
     return jsonify({"items": items})
 

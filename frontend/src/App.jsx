@@ -353,6 +353,8 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
   const [xaOptions, setXaOptions] = useState([]);
   const [xaError, setXaError] = useState("");
   const [maXa, setMaXa] = useState("");
+  const [xaQuery, setXaQuery] = useState("");
+  const [xaDropdownOpen, setXaDropdownOpen] = useState(false);
   const [nhom, setNhom] = useState("");
   const [soTo, setSoTo] = useState("");
   const [soThua, setSoThua] = useState("");
@@ -373,6 +375,31 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
       });
 
     return () => controller.abort();
+  }, []);
+
+  const xaNameByCode = useMemo(() => {
+    const map = {};
+    xaOptions.forEach(({ ma_xa, ten_xa }) => {
+      if (ma_xa) map[ma_xa] = ten_xa || ma_xa;
+    });
+    return map;
+  }, [xaOptions]);
+
+  const filteredXaOptions = useMemo(() => {
+    const keyword = xaQuery.trim().toLocaleLowerCase("vi");
+    if (!keyword) return xaOptions;
+
+    return xaOptions.filter(
+      ({ ma_xa, ten_xa }) =>
+        (ten_xa || "").toLocaleLowerCase("vi").includes(keyword) ||
+        (ma_xa || "").toLocaleLowerCase("vi").includes(keyword),
+    );
+  }, [xaOptions, xaQuery]);
+
+  const handleSelectXa = useCallback((code, name) => {
+    setMaXa(code);
+    setXaQuery(name || code);
+    setXaDropdownOpen(false);
   }, []);
 
   const handleData = useCallback((result) => setData(result), []);
@@ -396,6 +423,8 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
 
   const handleResetFilters = useCallback(() => {
     setMaXa("");
+    setXaQuery("");
+    setXaDropdownOpen(false);
     setNhom("");
     setSoTo("");
     setSoThua("");
@@ -427,6 +456,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
           p.so_thua,
           `${p.so_to}/${p.so_thua}`,
           p.ma_xa,
+          xaNameByCode[p.ma_xa],
           p.muc_dich_su_dung,
         ]
           .filter((value) => value !== null && value !== undefined)
@@ -435,7 +465,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
           ),
       ),
     };
-  }, [data, query]);
+  }, [data, query, xaNameByCode]);
 
   const selectedFeature = selected?.feature || null;
 
@@ -555,7 +585,9 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
 
           {!filtersOpen && submittedFilters && (
             <div className="filterSummary">
-              <span className="tag">{submittedFilters.maXa}</span>
+              <span className="tag">
+                {xaNameByCode[submittedFilters.maXa] || submittedFilters.maXa}
+              </span>
               {submittedFilters.nhom && (
                 <span className="tag">
                   {GROUP_LABELS[submittedFilters.nhom] || submittedFilters.nhom}
@@ -572,20 +604,49 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
 
           {filtersOpen && (
             <>
-              <label htmlFor="filterMaXa">Mã xã</label>
-              <select
-                id="filterMaXa"
-                className="filterSelect"
-                value={maXa}
-                onChange={(event) => setMaXa(event.target.value)}
-              >
-                <option value="">— Chọn mã xã —</option>
-                {xaOptions.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
+              <label htmlFor="filterMaXa">Xã / phường</label>
+              <div className="comboBox">
+                <input
+                  id="filterMaXa"
+                  type="text"
+                  className="filterInput"
+                  autoComplete="off"
+                  value={xaQuery}
+                  placeholder="Nhập tên xã/phường để tìm…"
+                  onChange={(event) => {
+                    setXaQuery(event.target.value);
+                    setMaXa("");
+                    setXaDropdownOpen(true);
+                  }}
+                  onFocus={() => setXaDropdownOpen(true)}
+                  onBlur={() => setXaDropdownOpen(false)}
+                />
+
+                {xaDropdownOpen && (
+                  <div className="comboBoxList">
+                    {filteredXaOptions.length === 0 ? (
+                      <div className="comboBoxEmpty">
+                        Không tìm thấy xã/phường
+                      </div>
+                    ) : (
+                      filteredXaOptions.map(({ ma_xa, ten_xa }) => (
+                        <div
+                          key={ma_xa}
+                          className={`comboBoxItem${
+                            ma_xa === maXa ? " active" : ""
+                          }`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            handleSelectXa(ma_xa, ten_xa);
+                          }}
+                        >
+                          {ten_xa || ma_xa}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
 
               <label htmlFor="filterNhom">Nhóm</label>
               <select
@@ -748,7 +809,9 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
                         <span className="parcelListLabel">
                           Tờ {p.so_to} · Thửa {p.so_thua}
                         </span>
-                        <span className="parcelListXa">{p.ma_xa}</span>
+                        <span className="parcelListXa">
+                          {xaNameByCode[p.ma_xa] || p.ma_xa}
+                        </span>
                       </button>
                     );
                   })
@@ -889,9 +952,11 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
 
                 <dl>
                   <div>
-                    <dt>Mã xã</dt>
+                    <dt>Xã / phường</dt>
                     <dd>
-                      <EmptyValue>{selected.ma_xa}</EmptyValue>
+                      <EmptyValue>
+                        {xaNameByCode[selected.ma_xa] || selected.ma_xa}
+                      </EmptyValue>
                     </dd>
                   </div>
 

@@ -82,6 +82,20 @@ $$;
 
 grant execute on function public.list_ma_xa() to anon, authenticated;
 
+-- Danh sách mã xã kèm tên xã (bảng public.danhsachxaphuong) để combobox
+-- hiển thị tên cho dễ nhận biết, còn tra cứu vẫn dùng mã xã.
+create or replace function public.list_xa_phuong()
+returns table (ma_xa text, ten_xa text)
+language sql
+stable
+as $$
+    select x.ma_xa, x.ten_xa
+    from public.danhsachxaphuong x
+    order by x.ten_xa;
+$$;
+
+grant execute on function public.list_xa_phuong() to anon, authenticated;
+
 create or replace function public.search_parcels(
     p_ma_xa text,
     p_nhom text default null,

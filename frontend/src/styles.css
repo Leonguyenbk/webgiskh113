@@ -356,6 +356,46 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   box-shadow: 0 0 0 3px #14b8a622;
 }
 
+.comboBox {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.comboBox .filterInput { margin-bottom: 0; }
+
+.comboBoxList {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+
+  max-height: 220px;
+  overflow-y: auto;
+
+  border: 1px solid #b9ccc8;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 10px 24px #0f172a30;
+}
+
+.comboBoxItem {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #173f3c;
+}
+
+.comboBoxItem:hover,
+.comboBoxItem.active {
+  background: #f1f7f5;
+}
+
+.comboBoxEmpty {
+  padding: 9px 12px;
+  color: #718783;
+  font-size: 12px;
+}
+
 .filterRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
