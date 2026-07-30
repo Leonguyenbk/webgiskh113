@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
-from gml_reader import parse_gml_bytes, rows_from_geojson
+import gml_reader
 from sync_reader import parse_sync_file
 
 
@@ -508,11 +508,12 @@ def import_gml():
         return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
 
     try:
-        data = parse_gml_bytes(uploaded.read())
+        # Đọc thẳng từ stream upload (không .read() cả file vào bytes)
+        # và parse GML kiểu streaming để tránh hết bộ nhớ với file lớn.
+        rows = list(gml_reader.iter_rows(uploaded.stream))
     except Exception as exc:
         return jsonify({"error": f"Không đọc được file GML: {exc}"}), 400
 
-    rows = rows_from_geojson(data)
     if not rows:
         return jsonify({"error": "File GML không có thửa đất hợp lệ"}), 400
 
