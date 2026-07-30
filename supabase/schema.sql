@@ -64,6 +64,133 @@ create policy "Cho phép đọc đồng bộ dữ liệu"
     using (true);
 
 -- =========================================================
+-- LẤY/ĐẾM THỬA THEO KHUNG BẢN ĐỒ (dùng cho /api/parcels,
+-- /api/parcels/count ở backend — kể cả tính năng "quanh vị trí của tôi").
+--
+-- Trước đây 2 hàm này chỉ được tạo tay trực tiếp trong Supabase, không có
+-- trong file này. Nay bổ sung lại đầy đủ, kèm p_nhom để lọc theo phân loại
+-- KH 2959 (giống search_parcels bên dưới).
+-- =========================================================
+
+drop function if exists public.count_parcels_in_view(
+    double precision, double precision, double precision, double precision, text
+);
+
+create or replace function public.count_parcels_in_view(
+    p_west double precision,
+    p_south double precision,
+    p_east double precision,
+    p_north double precision,
+    p_ma_xa text default null,
+    p_nhom text default null
+)
+returns integer
+language sql
+stable
+as $$
+    select count(*)::integer
+    from public.thua_dat t
+    left join public.dong_bo_du_lieu d
+        on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+    where t.geom && ST_MakeEnvelope(p_west, p_south, p_east, p_north, 4326)
+      and (p_ma_xa is null or t.ma_xa = p_ma_xa)
+      and (
+          p_nhom is null
+          or (
+              p_nhom = 'DEFAULT'
+              and coalesce(upper(trim(d.phan_loai_ke_hoach_2959)), '') not in ('NHÓM 1', 'NHÓM 2')
+          )
+          or upper(trim(d.phan_loai_ke_hoach_2959)) = p_nhom
+      );
+$$;
+
+grant execute on function public.count_parcels_in_view(
+    double precision, double precision, double precision, double precision, text, text
+) to anon, authenticated;
+
+drop function if exists public.get_parcels_in_view(
+    double precision, double precision, double precision, double precision,
+    double precision, double precision, integer, integer, text, double precision
+);
+
+create or replace function public.get_parcels_in_view(
+    p_west double precision,
+    p_south double precision,
+    p_east double precision,
+    p_north double precision,
+    p_center_lng double precision,
+    p_center_lat double precision,
+    p_limit integer default 1000,
+    p_offset integer default 0,
+    p_ma_xa text default null,
+    p_simplify double precision default 0,
+    p_nhom text default null
+)
+returns jsonb
+language sql
+stable
+as $$
+    select jsonb_build_object(
+        'type', 'FeatureCollection',
+        'features', coalesce(jsonb_agg(feature), '[]'::jsonb)
+    )
+    from (
+        select jsonb_build_object(
+            'type', 'Feature',
+            'id', t.id,
+            'geometry', ST_AsGeoJSON(
+                case when p_simplify > 0
+                     then ST_SimplifyPreserveTopology(t.geom, p_simplify)
+                     else t.geom
+                end
+            )::jsonb,
+            'properties', jsonb_build_object(
+                'ma_xa', t.ma_xa,
+                'so_to', t.so_to,
+                'so_thua', t.so_thua,
+                'muc_dich_su_dung', t.muc_dich_su_dung,
+                'dien_tich', t.dien_tich,
+                'ten_chu', t.ten_chu,
+                'dia_chi', t.dia_chi,
+                'dong_bo', case when d.id is null then null else jsonb_build_object(
+                    'da_xuat_so_dia_chinh_dien_tu', d.da_xuat_so_dia_chinh_dien_tu,
+                    'chua_xuat_so_dia_chinh_dien_tu', d.chua_xuat_so_dia_chinh_dien_tu,
+                    'dong_bo_3_khoi', d.dong_bo_3_khoi,
+                    'khong_dong_bo_3_khoi', d.khong_dong_bo_3_khoi,
+                    'chi_co_du_lieu_thuoc_tinh', d.chi_co_du_lieu_thuoc_tinh,
+                    'khop_csdlqg_dan_cu', d.khop_csdlqg_dan_cu,
+                    'chua_khop_csdlqg_dan_cu', d.chua_khop_csdlqg_dan_cu,
+                    'khong_xac_dinh_csdlqg_dan_cu', d.khong_xac_dinh_csdlqg_dan_cu,
+                    'van_hanh_24_7', d.van_hanh_24_7,
+                    'khong_van_hanh_24_7', d.khong_van_hanh_24_7,
+                    'phan_loai_ke_hoach_2959', d.phan_loai_ke_hoach_2959
+                ) end
+            )
+        ) as feature
+        from public.thua_dat t
+        left join public.dong_bo_du_lieu d
+            on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+        where t.geom && ST_MakeEnvelope(p_west, p_south, p_east, p_north, 4326)
+          and (p_ma_xa is null or t.ma_xa = p_ma_xa)
+          and (
+              p_nhom is null
+              or (
+                  p_nhom = 'DEFAULT'
+                  and coalesce(upper(trim(d.phan_loai_ke_hoach_2959)), '') not in ('NHÓM 1', 'NHÓM 2')
+              )
+              or upper(trim(d.phan_loai_ke_hoach_2959)) = p_nhom
+          )
+        order by t.geom <-> ST_SetSRID(ST_MakePoint(p_center_lng, p_center_lat), 4326)
+        limit p_limit offset p_offset
+    ) features;
+$$;
+
+grant execute on function public.get_parcels_in_view(
+    double precision, double precision, double precision, double precision,
+    double precision, double precision, integer, integer, text, double precision, text
+) to anon, authenticated;
+
+-- =========================================================
 -- BỘ LỌC TRA CỨU: mã xã (bắt buộc) + nhóm + số tờ + số thửa
 -- Dùng cho /api/parcels/xa-list và /api/parcels/search ở backend.
 -- Khác get_parcels_in_view: không lọc theo khung bản đồ, luôn yêu cầu

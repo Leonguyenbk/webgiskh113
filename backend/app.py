@@ -279,6 +279,10 @@ def parcels_count():
 
     ma_xa = request.args.get("ma_xa", "").strip()
 
+    nhom = request.args.get("nhom", "").strip().upper()
+    if nhom and nhom not in ALLOWED_NHOM:
+        return jsonify({"error": "Giá trị nhóm không hợp lệ"}), 400
+
     result, error_response = call_rpc(
         "count_parcels_in_view",
         {
@@ -287,6 +291,7 @@ def parcels_count():
             "p_east": values["east"],
             "p_north": values["north"],
             "p_ma_xa": ma_xa or None,
+            "p_nhom": nhom or None,
         },
         timeout=20,
     )
@@ -337,6 +342,10 @@ def parcels():
 
     ma_xa = request.args.get("ma_xa", "").strip()
 
+    nhom = request.args.get("nhom", "").strip().upper()
+    if nhom and nhom not in ALLOWED_NHOM:
+        return jsonify({"error": "Giá trị nhóm không hợp lệ"}), 400
+
     result, error_response = call_rpc(
         "get_parcels_in_view",
         {
@@ -350,6 +359,7 @@ def parcels():
             "p_offset": page_offset,
             "p_ma_xa": ma_xa or None,
             "p_simplify": simplify_for_zoom(zoom),
+            "p_nhom": nhom or None,
         },
         timeout=45,
     )

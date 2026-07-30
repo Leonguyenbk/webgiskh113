@@ -273,7 +273,7 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
       onData(null);
       onMeta({ loaded: 0 });
 
-      const { lat, lng } = request;
+      const { lat, lng, nhom } = request;
 
       try {
         let chosenBounds = boundsForRadius(
@@ -296,6 +296,7 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
             center_lng: String(lng),
             center_lat: String(lat),
           });
+          if (nhom) countParams.set("nhom", nhom);
 
           const countResponse = await fetch(
             `${API_URL}/api/parcels/count?${countParams.toString()}`,
@@ -325,6 +326,7 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
           offset: "0",
           zoom: String(NEAR_ME_ZOOM),
         });
+        if (nhom) params.set("nhom", nhom);
 
         const response = await fetch(
           `${API_URL}/api/parcels?${params.toString()}`,
@@ -570,8 +572,8 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
     setQuery("");
     setSubmittedFilters(null);
     setFiltersOpen(false);
-    setNearMeRequest({ ...myPosition, tick: Date.now() });
-  }, [myPosition]);
+    setNearMeRequest({ ...myPosition, nhom, tick: Date.now() });
+  }, [myPosition, nhom]);
 
   const handleResetFilters = useCallback(() => {
     setMaXa("");
@@ -759,11 +761,29 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
           {!filtersOpen && nearMeRequest && (
             <div className="filterSummary">
               <span className="tag">📍 Quanh vị trí của bạn</span>
+              {nearMeRequest.nhom && (
+                <span className="tag">
+                  {GROUP_LABELS[nearMeRequest.nhom] || nearMeRequest.nhom}
+                </span>
+              )}
             </div>
           )}
 
           {filtersOpen && (
             <>
+              <label htmlFor="filterNhom">Nhóm (áp dụng cho cả 2 cách tìm bên dưới)</label>
+              <select
+                id="filterNhom"
+                className="filterSelect"
+                value={nhom}
+                onChange={(event) => setNhom(event.target.value)}
+              >
+                <option value="">Tất cả nhóm</option>
+                <option value="NHÓM 1">Nhóm 1</option>
+                <option value="NHÓM 2">Nhóm 2</option>
+                <option value="DEFAULT">Chưa phân loại</option>
+              </select>
+
               <button
                 type="button"
                 className="nearMeButton"
@@ -824,19 +844,6 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
                   </div>
                 )}
               </div>
-
-              <label htmlFor="filterNhom">Nhóm</label>
-              <select
-                id="filterNhom"
-                className="filterSelect"
-                value={nhom}
-                onChange={(event) => setNhom(event.target.value)}
-              >
-                <option value="">Tất cả nhóm</option>
-                <option value="NHÓM 1">Nhóm 1</option>
-                <option value="NHÓM 2">Nhóm 2</option>
-                <option value="DEFAULT">Chưa phân loại</option>
-              </select>
 
               <div className="filterRow">
                 <div>
