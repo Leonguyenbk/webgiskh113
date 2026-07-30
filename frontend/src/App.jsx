@@ -168,7 +168,7 @@ function SearchParcelsLoader({ filters, onData, onLoading, onError, onMeta }) {
       onData(null);
 
       const baseParams = { ma_xa: filters.maXa };
-      if (filters.nhom) baseParams.nhom = filters.nhom;
+      if (filters.nhom?.length) baseParams.nhom = filters.nhom.join(",");
       if (filters.soTo) baseParams.so_to = filters.soTo;
       if (filters.soThua) baseParams.so_thua = filters.soThua;
 
@@ -274,6 +274,7 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
       onMeta({ loaded: 0 });
 
       const { lat, lng, nhom } = request;
+      const nhomParam = nhom?.length ? nhom.join(",") : "";
 
       try {
         let chosenBounds = boundsForRadius(
@@ -296,7 +297,7 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
             center_lng: String(lng),
             center_lat: String(lat),
           });
-          if (nhom) countParams.set("nhom", nhom);
+          if (nhomParam) countParams.set("nhom", nhomParam);
 
           const countResponse = await fetch(
             `${API_URL}/api/parcels/count?${countParams.toString()}`,
@@ -326,7 +327,7 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
           offset: "0",
           zoom: String(NEAR_ME_ZOOM),
         });
-        if (nhom) params.set("nhom", nhom);
+        if (nhomParam) params.set("nhom", nhomParam);
 
         const response = await fetch(
           `${API_URL}/api/parcels?${params.toString()}`,
@@ -498,7 +499,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
   const [maXa, setMaXa] = useState("");
   const [xaQuery, setXaQuery] = useState("");
   const [xaDropdownOpen, setXaDropdownOpen] = useState(false);
-  const [nhom, setNhom] = useState("");
+  const [nhom, setNhom] = useState([]);
   const [soTo, setSoTo] = useState("");
   const [soThua, setSoThua] = useState("");
   const [submittedFilters, setSubmittedFilters] = useState(null);
@@ -545,6 +546,14 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
     setXaDropdownOpen(false);
   }, []);
 
+  const handleToggleNhom = useCallback((code) => {
+    setNhom((current) =>
+      current.includes(code)
+        ? current.filter((value) => value !== code)
+        : [...current, code],
+    );
+  }, []);
+
   const handleData = useCallback((result) => setData(result), []);
   const handleLoading = useCallback((value) => setLoading(value), []);
   const handleError = useCallback((message) => setError(message), []);
@@ -579,7 +588,7 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
     setMaXa("");
     setXaQuery("");
     setXaDropdownOpen(false);
-    setNhom("");
+    setNhom([]);
     setSoTo("");
     setSoThua("");
     setSubmittedFilters(null);
@@ -744,11 +753,11 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
               <span className="tag">
                 {xaNameByCode[submittedFilters.maXa] || submittedFilters.maXa}
               </span>
-              {submittedFilters.nhom && (
-                <span className="tag">
-                  {GROUP_LABELS[submittedFilters.nhom] || submittedFilters.nhom}
+              {submittedFilters.nhom?.map((code) => (
+                <span key={code} className="tag">
+                  {GROUP_LABELS[code] || code}
                 </span>
-              )}
+              ))}
               {submittedFilters.soTo && (
                 <span className="tag">Tờ {submittedFilters.soTo}</span>
               )}
@@ -761,28 +770,29 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
           {!filtersOpen && nearMeRequest && (
             <div className="filterSummary">
               <span className="tag">📍 Quanh vị trí của bạn</span>
-              {nearMeRequest.nhom && (
-                <span className="tag">
-                  {GROUP_LABELS[nearMeRequest.nhom] || nearMeRequest.nhom}
+              {nearMeRequest.nhom?.map((code) => (
+                <span key={code} className="tag">
+                  {GROUP_LABELS[code] || code}
                 </span>
-              )}
+              ))}
             </div>
           )}
 
           {filtersOpen && (
             <>
-              <label htmlFor="filterNhom">Nhóm (áp dụng cho cả 2 cách tìm bên dưới)</label>
-              <select
-                id="filterNhom"
-                className="filterSelect"
-                value={nhom}
-                onChange={(event) => setNhom(event.target.value)}
-              >
-                <option value="">Tất cả nhóm</option>
-                <option value="NHÓM 1">Nhóm 1</option>
-                <option value="NHÓM 2">Nhóm 2</option>
-                <option value="DEFAULT">Chưa phân loại</option>
-              </select>
+              <label>Nhóm (áp dụng cho cả 2 cách tìm bên dưới, có thể chọn nhiều)</label>
+              <div className="nhomCheckboxes">
+                {Object.keys(GROUP_LABELS).map((code) => (
+                  <label key={code} className="nhomCheckbox">
+                    <input
+                      type="checkbox"
+                      checked={nhom.includes(code)}
+                      onChange={() => handleToggleNhom(code)}
+                    />
+                    {GROUP_LABELS[code]}
+                  </label>
+                ))}
+              </div>
 
               <button
                 type="button"

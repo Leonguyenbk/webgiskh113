@@ -75,6 +75,9 @@ create policy "Cho phép đọc đồng bộ dữ liệu"
 drop function if exists public.count_parcels_in_view(
     double precision, double precision, double precision, double precision, text
 );
+drop function if exists public.count_parcels_in_view(
+    double precision, double precision, double precision, double precision, text, text
+);
 
 create or replace function public.count_parcels_in_view(
     p_west double precision,
@@ -82,7 +85,7 @@ create or replace function public.count_parcels_in_view(
     p_east double precision,
     p_north double precision,
     p_ma_xa text default null,
-    p_nhom text default null
+    p_nhom text[] default null
 )
 returns integer
 language sql
@@ -95,22 +98,28 @@ as $$
     where t.geom && ST_MakeEnvelope(p_west, p_south, p_east, p_north, 4326)
       and (p_ma_xa is null or t.ma_xa = p_ma_xa)
       and (
-          p_nhom is null
+          p_nhom is null or array_length(p_nhom, 1) is null
           or (
-              p_nhom = 'DEFAULT'
-              and coalesce(upper(trim(d.phan_loai_ke_hoach_2959)), '') not in ('NHÓM 1', 'NHÓM 2')
+              'DEFAULT' = any(p_nhom)
+              and (d.id is null or coalesce(trim(d.phan_loai_ke_hoach_2959), '') = '')
           )
-          or upper(trim(d.phan_loai_ke_hoach_2959)) = p_nhom
+          or upper(trim(d.phan_loai_ke_hoach_2959)) in (
+              select upper(trim(x)) from unnest(p_nhom) as x
+          )
       );
 $$;
 
 grant execute on function public.count_parcels_in_view(
-    double precision, double precision, double precision, double precision, text, text
+    double precision, double precision, double precision, double precision, text, text[]
 ) to anon, authenticated;
 
 drop function if exists public.get_parcels_in_view(
     double precision, double precision, double precision, double precision,
     double precision, double precision, integer, integer, text, double precision
+);
+drop function if exists public.get_parcels_in_view(
+    double precision, double precision, double precision, double precision,
+    double precision, double precision, integer, integer, text, double precision, text
 );
 
 create or replace function public.get_parcels_in_view(
@@ -124,7 +133,7 @@ create or replace function public.get_parcels_in_view(
     p_offset integer default 0,
     p_ma_xa text default null,
     p_simplify double precision default 0,
-    p_nhom text default null
+    p_nhom text[] default null
 )
 returns jsonb
 language sql
@@ -173,12 +182,14 @@ as $$
         where t.geom && ST_MakeEnvelope(p_west, p_south, p_east, p_north, 4326)
           and (p_ma_xa is null or t.ma_xa = p_ma_xa)
           and (
-              p_nhom is null
+              p_nhom is null or array_length(p_nhom, 1) is null
               or (
-                  p_nhom = 'DEFAULT'
-                  and coalesce(upper(trim(d.phan_loai_ke_hoach_2959)), '') not in ('NHÓM 1', 'NHÓM 2')
+                  'DEFAULT' = any(p_nhom)
+                  and (d.id is null or coalesce(trim(d.phan_loai_ke_hoach_2959), '') = '')
               )
-              or upper(trim(d.phan_loai_ke_hoach_2959)) = p_nhom
+              or upper(trim(d.phan_loai_ke_hoach_2959)) in (
+                  select upper(trim(x)) from unnest(p_nhom) as x
+              )
           )
         order by t.geom <-> ST_SetSRID(ST_MakePoint(p_center_lng, p_center_lat), 4326)
         limit p_limit offset p_offset
@@ -187,7 +198,7 @@ $$;
 
 grant execute on function public.get_parcels_in_view(
     double precision, double precision, double precision, double precision,
-    double precision, double precision, integer, integer, text, double precision, text
+    double precision, double precision, integer, integer, text, double precision, text[]
 ) to anon, authenticated;
 
 -- =========================================================
@@ -223,9 +234,13 @@ $$;
 
 grant execute on function public.list_xa_phuong() to anon, authenticated;
 
+drop function if exists public.search_parcels(
+    text, text, integer, integer, integer, integer, double precision
+);
+
 create or replace function public.search_parcels(
     p_ma_xa text,
-    p_nhom text default null,
+    p_nhom text[] default null,
     p_so_to integer default null,
     p_so_thua integer default null,
     p_limit integer default 1000,
@@ -280,12 +295,14 @@ as $$
           and (p_so_to is null or t.so_to = p_so_to)
           and (p_so_thua is null or t.so_thua = p_so_thua)
           and (
-              p_nhom is null
+              p_nhom is null or array_length(p_nhom, 1) is null
               or (
-                  p_nhom = 'DEFAULT'
-                  and coalesce(upper(trim(d.phan_loai_ke_hoach_2959)), '') not in ('NHÓM 1', 'NHÓM 2')
+                  'DEFAULT' = any(p_nhom)
+                  and (d.id is null or coalesce(trim(d.phan_loai_ke_hoach_2959), '') = '')
               )
-              or upper(trim(d.phan_loai_ke_hoach_2959)) = p_nhom
+              or upper(trim(d.phan_loai_ke_hoach_2959)) in (
+                  select upper(trim(x)) from unnest(p_nhom) as x
+              )
           )
         order by t.so_to, t.so_thua
         limit p_limit offset p_offset
@@ -293,6 +310,6 @@ as $$
 $$;
 
 grant execute on function public.search_parcels(
-    text, text, integer, integer, integer, integer, double precision
+    text, text[], integer, integer, integer, integer, double precision
 ) to anon, authenticated;
 

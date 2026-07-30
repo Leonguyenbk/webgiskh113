@@ -278,10 +278,7 @@ def parcels_count():
         return error_response
 
     ma_xa = request.args.get("ma_xa", "").strip()
-
-    nhom = request.args.get("nhom", "").strip().upper()
-    if nhom and nhom not in ALLOWED_NHOM:
-        return jsonify({"error": "Giá trị nhóm không hợp lệ"}), 400
+    nhom_list = read_nhom_list()
 
     result, error_response = call_rpc(
         "count_parcels_in_view",
@@ -291,7 +288,7 @@ def parcels_count():
             "p_east": values["east"],
             "p_north": values["north"],
             "p_ma_xa": ma_xa or None,
-            "p_nhom": nhom or None,
+            "p_nhom": nhom_list or None,
         },
         timeout=20,
     )
@@ -341,10 +338,7 @@ def parcels():
         return error_response
 
     ma_xa = request.args.get("ma_xa", "").strip()
-
-    nhom = request.args.get("nhom", "").strip().upper()
-    if nhom and nhom not in ALLOWED_NHOM:
-        return jsonify({"error": "Giá trị nhóm không hợp lệ"}), 400
+    nhom_list = read_nhom_list()
 
     result, error_response = call_rpc(
         "get_parcels_in_view",
@@ -359,7 +353,7 @@ def parcels():
             "p_offset": page_offset,
             "p_ma_xa": ma_xa or None,
             "p_simplify": simplify_for_zoom(zoom),
-            "p_nhom": nhom or None,
+            "p_nhom": nhom_list or None,
         },
         timeout=45,
     )
@@ -382,7 +376,16 @@ def parcels():
 # để tránh quét toàn tỉnh.
 # =========================================================
 
-ALLOWED_NHOM = {"NHÓM 1", "NHÓM 2", "DEFAULT"}
+def read_nhom_list() -> list[str]:
+    # Trả về danh sách nhóm cần lọc (rỗng nghĩa là không lọc). "DEFAULT" là
+    # giá trị đặc biệt cho "chưa phân loại", còn lại là nguyên văn giá trị
+    # phan_loai_ke_hoach_2959 — không giới hạn trước danh sách nhóm hợp lệ,
+    # để sau này thêm nhóm mới (Nhóm 3, 4...) không cần sửa code backend.
+    raw = request.args.get("nhom", "").strip()
+    if not raw:
+        return []
+    values = [item.strip().upper() for item in raw.split(",")]
+    return [value for value in values if value]
 
 
 def read_optional_int(name: str):
@@ -419,9 +422,7 @@ def parcels_search():
     if not ma_xa:
         return jsonify({"error": "Thiếu mã xã"}), 400
 
-    nhom = request.args.get("nhom", "").strip().upper()
-    if nhom and nhom not in ALLOWED_NHOM:
-        return jsonify({"error": "Giá trị nhóm không hợp lệ"}), 400
+    nhom_list = read_nhom_list()
 
     so_to, error_response = read_optional_int("so_to")
     if error_response:
@@ -444,7 +445,7 @@ def parcels_search():
         "search_parcels",
         {
             "p_ma_xa": ma_xa,
-            "p_nhom": nhom or None,
+            "p_nhom": nhom_list or None,
             "p_so_to": so_to,
             "p_so_thua": so_thua,
             "p_limit": requested_limit,

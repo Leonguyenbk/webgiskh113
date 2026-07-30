@@ -336,6 +336,28 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   line-height: 1.5;
 }
 
+.nhomCheckboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #b9ccc8;
+  border-radius: 10px;
+  background: white;
+}
+
+.nhomCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #173f3c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nhomCheckbox input { margin: 0; }
+
 .nearMeButton {
   width: 100%;
   margin-bottom: 4px;
