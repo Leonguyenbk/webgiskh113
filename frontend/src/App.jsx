@@ -19,7 +19,12 @@ import {
   TileLayer,
   ZoomControl,
   useMap,
+  useMapEvent,
 } from "react-leaflet";
+
+// Tên phải khớp name= của LayersControl.Overlay bên dưới — dùng để nhận
+// diện sự kiện overlayadd/overlayremove khi đồng bộ trạng thái bật/tắt.
+const DIACHINH_LAYER_NAME = "Địa chính (MBTiles)";
 
 // CircleMarker (canvas) đè cả bản đồ ở pane của nó, chặn click vào thửa đất
 // bên dưới. L.Marker chỉ chiếm đúng vùng icon nhỏ nên không có vấn đề đó.
@@ -173,6 +178,20 @@ function DiaChinhFitButton({ bounds }) {
       🗺️ Vùng địa chính
     </button>
   );
+}
+
+// Checkbox trong LayersControl là UI của Leaflet, không phải React — nếu
+// người dùng tự bấm tắt/bật bằng tay, state `diaChinhVisible` ở App cần
+// được cập nhật theo để không bị lệch với những gì đang thật sự hiển thị
+// trên bản đồ (mỗi lần tra cứu sau đó vẫn ép bật lại bình thường).
+function DiaChinhVisibilitySync({ onChange }) {
+  useMapEvent("overlayadd", (event) => {
+    if (event.name === DIACHINH_LAYER_NAME) onChange(true);
+  });
+  useMapEvent("overlayremove", (event) => {
+    if (event.name === DIACHINH_LAYER_NAME) onChange(false);
+  });
+  return null;
 }
 
 // =========================================================
@@ -523,8 +542,10 @@ export default function App({
   const [nearMeRequest, setNearMeRequest] = useState(null);
 
   // Lớp phủ địa chính (MBTiles) — chỉ lấy bounds để có nút "đến vùng địa
-  // chính"; không báo lỗi nếu thiếu, đây là lớp bổ sung tùy chọn.
+  // chính"; không báo lỗi nếu thiếu, đây là lớp bổ sung tùy chọn. Tự bật
+  // lớp này mỗi khi tra cứu (theo mã xã hoặc quanh vị trí) ra kết quả.
   const [diaChinhBounds, setDiaChinhBounds] = useState(null);
+  const [diaChinhVisible, setDiaChinhVisible] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -629,6 +650,7 @@ export default function App({
       soThua: soThua.trim(),
     });
     setFiltersOpen(false);
+    setDiaChinhVisible(true);
   }, [maXa, nhom, soTo, soThua]);
 
   const handleNearMe = useCallback(() => {
@@ -639,6 +661,7 @@ export default function App({
     setSubmittedFilters(null);
     setFiltersOpen(false);
     setNearMeRequest({ ...myPosition, nhom, tick: Date.now() });
+    setDiaChinhVisible(true);
   }, [myPosition, nhom]);
 
   const handleResetFilters = useCallback(() => {
@@ -1163,7 +1186,10 @@ export default function App({
                 />
               </LayersControl.BaseLayer>
 
-              <LayersControl.Overlay name="Địa chính (MBTiles)">
+              <LayersControl.Overlay
+                checked={diaChinhVisible}
+                name={DIACHINH_LAYER_NAME}
+              >
                 <TileLayer
                   url={`${API_URL}/api/tiles/diachinh/{z}/{x}/{y}.png`}
                   opacity={0.8}
@@ -1183,6 +1209,7 @@ export default function App({
             </LayersControl>
 
             <DiaChinhFitButton bounds={diaChinhBounds} />
+            <DiaChinhVisibilitySync onChange={setDiaChinhVisible} />
 
             <FitBounds focusFeature={selectedFeature} focusTick={focusTick} />
           </MapContainer>
