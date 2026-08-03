@@ -502,7 +502,12 @@ function CurrentLocation({ onLocated, onPosition }) {
   );
 }
 
-export default function App({ onNavigateTools, onNavigateImport, onNavigateSync }) {
+export default function App({
+  onNavigateTools,
+  onNavigateImport,
+  onNavigateSync,
+  onNavigateMbtiles,
+}) {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
@@ -778,6 +783,16 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
           }}
         >
           ⇪ Nhập đồng bộ
+        </a>
+        <a
+          className="backLink"
+          href="/mbtiles"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigateMbtiles?.();
+          }}
+        >
+          ⇪ Quản lý MBTiles
         </a>
       </header>
 

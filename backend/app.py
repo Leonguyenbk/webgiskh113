@@ -9,6 +9,7 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 
 import gml_reader
 from sync_reader import parse_sync_file
@@ -685,6 +686,98 @@ def diachinh_tile(z: int, x: int, y: int):
         mimetype=mimetype,
         headers={"Cache-Control": "public, max-age=604800, immutable"},
     )
+
+
+def validate_mbtiles_structure(path: Path) -> str | None:
+    # Kiểm tra sơ bộ trước khi chấp nhận file, tránh 1 file .mbtiles hỏng/
+    # không đúng chuẩn làm gãy endpoint tile đang phục vụ người dùng khác.
+    try:
+        conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+    except sqlite3.OperationalError:
+        return "Không mở được file bằng sqlite3"
+
+    try:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "tiles" not in tables or "metadata" not in tables:
+            return "File không có đủ bảng 'tiles' và 'metadata' theo chuẩn MBTiles"
+    except sqlite3.DatabaseError:
+        return "File không phải SQLite/MBTiles hợp lệ"
+    finally:
+        conn.close()
+
+    return None
+
+
+@app.get("/api/mbtiles")
+def list_mbtiles():
+    if not MBTILES_DATA_DIR.is_dir():
+        return jsonify({"items": []})
+
+    active_path = find_mbtiles_path()
+    items = [
+        {
+            "filename": path.name,
+            "size_bytes": path.stat().st_size,
+            "active": path == active_path,
+        }
+        for path in sorted(MBTILES_DATA_DIR.glob("*.mbtiles"))
+    ]
+
+    return jsonify({"items": items})
+
+
+@app.post("/api/mbtiles")
+def upload_mbtiles():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Thiếu file .mbtiles"}), 400
+
+    filename = secure_filename(uploaded.filename)
+    if not filename.lower().endswith(".mbtiles"):
+        return jsonify({"error": "Chỉ chấp nhận file .mbtiles"}), 400
+
+    MBTILES_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    target = MBTILES_DATA_DIR / filename
+    tmp_target = target.with_name(target.name + ".uploading")
+
+    uploaded.save(tmp_target)
+
+    error = validate_mbtiles_structure(tmp_target)
+    if error:
+        tmp_target.unlink(missing_ok=True)
+        return jsonify({"error": error}), 400
+
+    tmp_target.replace(target)
+
+    return jsonify(
+        {"ok": True, "filename": filename, "size_bytes": target.stat().st_size}
+    )
+
+
+@app.delete("/api/mbtiles/<path:filename>")
+def delete_mbtiles(filename: str):
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    safe_name = secure_filename(filename)
+    if safe_name != filename or not safe_name.lower().endswith(".mbtiles"):
+        return jsonify({"error": "Tên file không hợp lệ"}), 400
+
+    target = MBTILES_DATA_DIR / safe_name
+    if not target.is_file():
+        return jsonify({"error": "Không tìm thấy file"}), 404
+
+    target.unlink()
+
+    return jsonify({"ok": True})
 
 
 @app.get("/api/tiles/<int:z>/<int:x>/<int:y>")

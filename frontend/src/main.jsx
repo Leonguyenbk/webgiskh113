@@ -6,6 +6,7 @@ import App from "./App.jsx";
 import ToolsPage from "./ToolsPage.jsx";
 import ImportGmlPage from "./ImportGmlPage.jsx";
 import ImportSyncPage from "./ImportSyncPage.jsx";
+import ManageMbtilesPage from "./ManageMbtilesPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -30,11 +31,15 @@ function Root() {
   if (path.startsWith("/import-dong-bo")) {
     return <ImportSyncPage onNavigateHome={() => navigate("/")} />;
   }
+  if (path.startsWith("/mbtiles")) {
+    return <ManageMbtilesPage onNavigateHome={() => navigate("/")} />;
+  }
   return (
     <App
       onNavigateTools={() => navigate("/tools")}
       onNavigateImport={() => navigate("/import-gml")}
       onNavigateSync={() => navigate("/import-dong-bo")}
+      onNavigateMbtiles={() => navigate("/mbtiles")}
     />
   );
 }
