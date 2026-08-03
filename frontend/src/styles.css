@@ -172,6 +172,31 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   font-size: 12px;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
 }
+.diaChinhButton {
+  position: absolute;
+  right: 10px;
+  bottom: 190px;
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 8px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+}
+
+.diaChinhButton:hover {
+  background: #f1f5f9;
+}
+
 .myLocationDot {
   display: block;
   width: 18px;
@@ -262,6 +287,7 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .locateButton { top: 68px; }
   .locateButton span { display: none; }
   .locationError { top: 108px; }
+  .diaChinhButton { top: 112px; bottom: auto; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
 }
 

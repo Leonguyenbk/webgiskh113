@@ -155,6 +155,26 @@ function FitBounds({ focusFeature, focusTick }) {
   return null;
 }
 
+// Nút đưa bản đồ tới phạm vi lớp phủ địa chính (MBTiles), lấy từ
+// /api/tiles/diachinh/metadata. Không hiện nếu chưa có bounds (ví dụ chưa
+// có file .mbtiles trong backend/data).
+function DiaChinhFitButton({ bounds }) {
+  const map = useMap();
+
+  if (!bounds) return null;
+
+  return (
+    <button
+      type="button"
+      className="diaChinhButton"
+      onClick={() => map.fitBounds(bounds, { padding: [40, 40] })}
+      title="Đưa bản đồ tới phạm vi lớp địa chính"
+    >
+      🗺️ Vùng địa chính
+    </button>
+  );
+}
+
 // =========================================================
 // TRA CỨU THEO BỘ LỌC
 //
@@ -496,6 +516,34 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
   // mở trang), nhưng chỉ thật sự tải thửa đất khi người dùng bấm nút.
   const [myPosition, setMyPosition] = useState(null);
   const [nearMeRequest, setNearMeRequest] = useState(null);
+
+  // Lớp phủ địa chính (MBTiles) — chỉ lấy bounds để có nút "đến vùng địa
+  // chính"; không báo lỗi nếu thiếu, đây là lớp bổ sung tùy chọn.
+  const [diaChinhBounds, setDiaChinhBounds] = useState(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`${API_URL}/api/tiles/diachinh/metadata`, {
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result) => {
+        if (!result?.bounds) return;
+
+        const parts = result.bounds.split(",").map(Number);
+        if (parts.length !== 4 || parts.some(Number.isNaN)) return;
+
+        const [west, south, east, north] = parts;
+        setDiaChinhBounds([
+          [south, west],
+          [north, east],
+        ]);
+      })
+      .catch(() => {});
+
+    return () => controller.abort();
+  }, []);
 
   // Bộ lọc tra cứu: mã xã (bắt buộc), nhóm, số tờ, số thửa.
   const [xaOptions, setXaOptions] = useState([]);
@@ -1100,6 +1148,15 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
                 />
               </LayersControl.BaseLayer>
 
+              <LayersControl.Overlay name="Địa chính (MBTiles)">
+                <TileLayer
+                  url={`${API_URL}/api/tiles/diachinh/{z}/{x}/{y}.png`}
+                  opacity={0.8}
+                  zIndex={5}
+                  attribution="Địa chính"
+                />
+              </LayersControl.Overlay>
+
               <LayersControl.Overlay checked name="Thửa đất">
                 <GeoJSON
                   ref={layerRef}
@@ -1109,6 +1166,8 @@ export default function App({ onNavigateTools, onNavigateImport, onNavigateSync 
                 />
               </LayersControl.Overlay>
             </LayersControl>
+
+            <DiaChinhFitButton bounds={diaChinhBounds} />
 
             <FitBounds focusFeature={selectedFeature} focusTick={focusTick} />
           </MapContainer>

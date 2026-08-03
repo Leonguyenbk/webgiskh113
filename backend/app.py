@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
@@ -28,6 +30,18 @@ VIETBANDO_TILE_URL = os.getenv(
     "https://images.vietbando.com/ImageLoader/GetImage.ashx"
     "?Ver=2016&LayerIds=VBD&Y={y}&X={x}&Level={z}",
 )
+
+# Thư mục chứa file .mbtiles lớp địa chính. Không hardcode tên file — tự dò
+# file .mbtiles đầu tiên trong backend/data khi có request, nên đổi tên/thay
+# file không cần sửa code.
+MBTILES_DATA_DIR = Path(__file__).resolve().parent / "data"
+
+MBTILES_MIME_TYPES = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+}
 
 # Trần cứng số thửa mỗi lô. Vượt mức này Supabase dễ chạm statement_timeout
 # khi phải sinh GeoJSON cho quá nhiều hình học trong một câu lệnh.
@@ -577,6 +591,100 @@ def import_dong_bo():
         return jsonify({"error": detail, "total": len(rows)}), 502
 
     return jsonify({"ok": True, "total": len(rows), "imported": imported})
+
+
+# =========================================================
+# LỚP PHỦ RASTER ĐỊA CHÍNH (MBTiles)
+# Đọc trực tiếp file .mbtiles trong backend/data bằng sqlite3, không qua
+# server tile riêng. Mỗi request tự mở/đóng connection (read-only).
+# =========================================================
+
+
+def find_mbtiles_path() -> Path | None:
+    if not MBTILES_DATA_DIR.is_dir():
+        return None
+    matches = sorted(MBTILES_DATA_DIR.glob("*.mbtiles"))
+    return matches[0] if matches else None
+
+
+def open_mbtiles_readonly(path: Path) -> sqlite3.Connection:
+    # uri=True + mode=ro: mở read-only, không tạo/khóa ghi lên file.
+    return sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+
+
+def read_mbtiles_metadata(conn: sqlite3.Connection) -> dict[str, str]:
+    cursor = conn.execute("SELECT name, value FROM metadata")
+    return dict(cursor.fetchall())
+
+
+@app.get("/api/tiles/diachinh/metadata")
+def diachinh_metadata():
+    path = find_mbtiles_path()
+    if path is None:
+        return jsonify({"error": "Không tìm thấy file .mbtiles trong backend/data"}), 404
+
+    conn = open_mbtiles_readonly(path)
+    try:
+        meta = read_mbtiles_metadata(conn)
+    finally:
+        conn.close()
+
+    bounds = meta.get("bounds")
+    center = meta.get("center")
+
+    if not center and bounds:
+        try:
+            west, south, east, north = (float(value) for value in bounds.split(","))
+            center = f"{(west + east) / 2},{(south + north) / 2}"
+        except ValueError:
+            center = None
+
+    return jsonify(
+        {
+            "bounds": bounds,
+            "center": center,
+            "minzoom": meta.get("minzoom"),
+            "maxzoom": meta.get("maxzoom"),
+            "format": meta.get("format", "png"),
+        }
+    )
+
+
+@app.get("/api/tiles/diachinh/<int:z>/<int:x>/<int:y>.png")
+def diachinh_tile(z: int, x: int, y: int):
+    path = find_mbtiles_path()
+    if path is None:
+        return jsonify({"error": "Không tìm thấy file .mbtiles trong backend/data"}), 404
+
+    # MapLibre/Leaflet gọi tile theo trục XYZ (y tăng dần từ trên xuống),
+    # còn MBTiles lưu theo TMS (y tăng dần từ dưới lên) nên phải đảo trục y.
+    tms_y = (1 << z) - 1 - y
+
+    conn = open_mbtiles_readonly(path)
+    try:
+        cursor = conn.execute(
+            "SELECT tile_data FROM tiles "
+            "WHERE zoom_level = ? AND tile_column = ? AND tile_row = ? LIMIT 1",
+            (z, x, tms_y),
+        )
+        row = cursor.fetchone()
+
+        if row is None:
+            return jsonify({"error": "Không có tile"}), 404
+
+        meta = read_mbtiles_metadata(conn)
+    finally:
+        conn.close()
+
+    tile_format = (meta.get("format") or "png").lower()
+    mimetype = MBTILES_MIME_TYPES.get(tile_format, "image/png")
+
+    return Response(
+        row[0],
+        status=200,
+        mimetype=mimetype,
+        headers={"Cache-Control": "public, max-age=604800, immutable"},
+    )
 
 
 @app.get("/api/tiles/<int:z>/<int:x>/<int:y>")
