@@ -158,6 +158,15 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   background: #f1f5f9;
 }
 
+.findHereButton {
+  bottom: 244px;         /* nằm trên nút "Vùng địa chính" */
+}
+
+.locateButton:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 .locationError {
   position: absolute;
   right: 10px;
@@ -288,6 +297,7 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .locateButton span { display: none; }
   .locationError { top: 108px; }
   .diaChinhButton { top: 112px; bottom: auto; }
+  .findHereButton { top: 156px; bottom: auto; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
 }
 

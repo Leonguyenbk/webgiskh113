@@ -65,12 +65,10 @@ const NEAR_ME_RADII_METERS = [500, 1000, 2000, 4000, 8000, 16000];
 const NEAR_ME_TARGET = 1000;
 const NEAR_ME_ZOOM = 17;
 
-// Sau khi "định vị", mỗi lần người dùng zoom/kéo bản đồ sang khu vực mới thì
-// tải bổ sung tối đa VIEWPORT_EXTRA_TARGET thửa quanh khung nhìn hiện tại,
-// gộp thêm vào dữ liệu đã có (không thay thế). Debounce để không bắn liên
-// tiếp nhiều request khi người dùng đang thao tác zoom/pan dồn dập.
-const VIEWPORT_EXTRA_TARGET = 2000;
-const VIEWPORT_EXTRA_DEBOUNCE_MS = 400;
+// Nút "Tìm thửa quanh đây": người dùng tự bấm sau khi zoom/kéo tới khu vực
+// muốn xem, thay vì tự động tải theo từng lần di chuyển bản đồ (gây lag khi
+// zoom/pan liên tục). Kết quả THAY THẾ dữ liệu đang có, không gộp thêm.
+const VIEWPORT_SEARCH_TARGET = 2000;
 
 function metersToDegrees(meters, latDeg) {
   const dLat = meters / 111320;
@@ -427,82 +425,79 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
 }
 
 // =========================================================
-// TẢI BỔ SUNG THEO KHUNG NHÌN KHI ZOOM/KÉO BẢN ĐỒ
+// NÚT "TÌM THỬA QUANH ĐÂY"
 //
-// Chỉ hoạt động sau khi đã có một lần "định vị" (near me). Mỗi khi khung
-// nhìn đổi (zoom hoặc kéo bản đồ), tải thêm tối đa VIEWPORT_EXTRA_TARGET
-// thửa quanh khung nhìn hiện tại và gộp vào dữ liệu đã có, thay vì thay thế.
+// Zoom/kéo bản đồ tới khu vực muốn xem rồi bấm nút này: tải tối đa
+// VIEWPORT_SEARCH_TARGET thửa quanh khung nhìn hiện tại, THAY THẾ toàn bộ
+// dữ liệu đang hiển thị (các thửa ngoài khung nhìn mới bị bỏ đi).
 // =========================================================
 
-function ViewportExtraLoader({ active, nhom, onAddData, onLoading, onError }) {
+function FindHereButton({ nhom, onBeforeSearch, onData, onLoading, onError, onMeta }) {
   const map = useMap();
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!active) return undefined;
+  const handleClick = useCallback(async () => {
+    onBeforeSearch?.();
+    setBusy(true);
+    onLoading(true);
+    onError("");
+    onData(null);
+    onMeta({ loaded: 0 });
 
-    const controller = new AbortController();
-    let timeoutId = null;
+    const bounds = map.getBounds();
+    const center = map.getCenter();
+    const nhomParam = nhom?.length ? nhom.join(",") : "";
 
-    const fetchViewport = async () => {
-      const bounds = map.getBounds();
-      const center = map.getCenter();
-      const nhomParam = nhom?.length ? nhom.join(",") : "";
+    const params = new URLSearchParams({
+      west: String(bounds.getWest()),
+      south: String(bounds.getSouth()),
+      east: String(bounds.getEast()),
+      north: String(bounds.getNorth()),
+      center_lng: String(center.lng),
+      center_lat: String(center.lat),
+      limit: String(VIEWPORT_SEARCH_TARGET),
+      offset: "0",
+      zoom: String(map.getZoom()),
+    });
+    if (nhomParam) params.set("nhom", nhomParam);
 
-      const params = new URLSearchParams({
-        west: String(bounds.getWest()),
-        south: String(bounds.getSouth()),
-        east: String(bounds.getEast()),
-        north: String(bounds.getNorth()),
-        center_lng: String(center.lng),
-        center_lat: String(center.lat),
-        limit: String(VIEWPORT_EXTRA_TARGET),
-        offset: "0",
-        zoom: String(map.getZoom()),
-      });
-      if (nhomParam) params.set("nhom", nhomParam);
+    try {
+      const response = await fetch(`${API_URL}/api/parcels?${params.toString()}`);
+      const result = await response.json();
 
-      onLoading(true);
-      onError("");
-
-      try {
-        const response = await fetch(
-          `${API_URL}/api/parcels?${params.toString()}`,
-          { signal: controller.signal },
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Không tải được thửa đất quanh khu vực bản đồ",
         );
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result.error || "Không tải được thửa đất quanh khu vực bản đồ",
-          );
-        }
-
-        onAddData(result?.features || []);
-      } catch (error) {
-        if (error.name !== "AbortError") onError(error.message);
-      } finally {
-        if (!controller.signal.aborted) onLoading(false);
       }
-    };
 
-    const handleMoveEnd = () => {
-      if (timeoutId) window.clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(fetchViewport, VIEWPORT_EXTRA_DEBOUNCE_MS);
-    };
+      const features = result?.features || [];
+      onData({ type: "FeatureCollection", features });
+      onMeta({ loaded: features.length });
+    } catch (error) {
+      onError(error.message);
+    } finally {
+      setBusy(false);
+      onLoading(false);
+    }
+  }, [map, nhom, onBeforeSearch, onData, onLoading, onError, onMeta]);
 
-    // Không tự bắn ngay lúc bật: NearMeLoader còn đang tự fitBounds tới khu
-    // vực định vị, khung nhìn lúc này chưa đúng. Đợi sự kiện moveend do
-    // fitBounds đó phát ra (hoặc lần zoom/kéo kế tiếp của người dùng).
-    map.on("moveend", handleMoveEnd);
-
-    return () => {
-      map.off("moveend", handleMoveEnd);
-      if (timeoutId) window.clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, [active, map, nhom, onAddData, onLoading, onError]);
-
-  return null;
+  return (
+    <button
+      type="button"
+      className="locateButton findHereButton"
+      onClick={handleClick}
+      disabled={busy}
+      title={`Tìm ${VIEWPORT_SEARCH_TARGET.toLocaleString("vi-VN")} thửa quanh khu vực bản đồ đang xem`}
+    >
+      🔍{" "}
+      <span>
+        {busy
+          ? "Đang tìm…"
+          : `Tìm ${VIEWPORT_SEARCH_TARGET.toLocaleString("vi-VN")} thửa quanh đây`}
+      </span>
+    </button>
+  );
 }
 
 function EmptyValue({ children }) {
@@ -621,11 +616,6 @@ export default function App({
   const [meta, setMeta] = useState({ loaded: 0 });
   const [focusTick, setFocusTick] = useState(0);
   const layerRef = useRef(null);
-  const dataRef = useRef(null);
-
-  useEffect(() => {
-    dataRef.current = data;
-  }, [data]);
 
   // "Quanh vị trí của tôi": biết vị trí GPS ngay khi có (kể cả tự động lúc
   // mở trang), nhưng chỉ thật sự tải thửa đất khi người dùng bấm nút.
@@ -673,6 +663,10 @@ export default function App({
   const [soThua, setSoThua] = useState("");
   const [submittedFilters, setSubmittedFilters] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
+
+  // Đánh dấu lần tìm gần nhất là bấm nút "Tìm thửa quanh đây" (theo khung
+  // nhìn bản đồ), để phân biệt với tra cứu theo mã xã / định vị GPS.
+  const [viewportSearchActive, setViewportSearchActive] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -728,37 +722,13 @@ export default function App({
   const handleError = useCallback((message) => setError(message), []);
   const handleMeta = useCallback((value) => setMeta(value), []);
 
-  // Gộp thửa tải bổ sung theo khung nhìn (ViewportExtraLoader) vào dữ liệu
-  // đã có, bỏ qua thửa trùng — dùng dataRef thay vì setData(prev => ...) để
-  // meta.loaded luôn khớp ngay cả khi nhiều lần gọi dồn dập.
-  const handleAddData = useCallback((features) => {
-    const prev = dataRef.current;
-    const collected = prev ? [...prev.features] : [];
-    const seen = new Set(collected.map(featureKey));
-    let added = 0;
-
-    features.forEach((feature) => {
-      const key = featureKey(feature);
-      if (seen.has(key)) return;
-      seen.add(key);
-      collected.push(feature);
-      added += 1;
-    });
-
-    if (added === 0) return;
-
-    const merged = { type: "FeatureCollection", features: collected };
-    dataRef.current = merged;
-    setData(merged);
-    setMeta({ loaded: collected.length });
-  }, []);
-
   const handleSearch = useCallback(() => {
     if (!maXa) return;
 
     setSelected(null);
     setQuery("");
     setNearMeRequest(null);
+    setViewportSearchActive(false);
     setSubmittedFilters({
       maXa,
       nhom,
@@ -775,10 +745,23 @@ export default function App({
     setSelected(null);
     setQuery("");
     setSubmittedFilters(null);
+    setViewportSearchActive(false);
     setFiltersOpen(false);
     setNearMeRequest({ ...myPosition, nhom, tick: Date.now() });
     setDiaChinhVisible(true);
   }, [myPosition, nhom]);
+
+  // Gọi trước khi FindHereButton bắt đầu tải, để dọn các trạng thái tra cứu
+  // khác (mã xã / định vị GPS) và đánh dấu chế độ hiện tại là "quanh đây".
+  const handleFindHereStart = useCallback(() => {
+    setSelected(null);
+    setQuery("");
+    setSubmittedFilters(null);
+    setNearMeRequest(null);
+    setViewportSearchActive(true);
+    setFiltersOpen(false);
+    setDiaChinhVisible(true);
+  }, []);
 
   const handleResetFilters = useCallback(() => {
     setMaXa("");
@@ -789,6 +772,7 @@ export default function App({
     setSoThua("");
     setSubmittedFilters(null);
     setNearMeRequest(null);
+    setViewportSearchActive(false);
     setFiltersOpen(true);
     setSelected(null);
     setQuery("");
@@ -873,7 +857,9 @@ export default function App({
 
   const shownCount = filtered?.features?.length ?? 0;
   const isFiltering = query.trim().length > 0;
-  const hasActiveQuery = Boolean(submittedFilters || nearMeRequest);
+  const hasActiveQuery = Boolean(
+    submittedFilters || nearMeRequest || viewportSearchActive,
+  );
 
   return (
     <main className="shell">
@@ -977,6 +963,17 @@ export default function App({
             <div className="filterSummary">
               <span className="tag">📍 Quanh vị trí của bạn</span>
               {nearMeRequest.nhom?.map((code) => (
+                <span key={code} className="tag">
+                  {GROUP_LABELS[code] || code}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {!filtersOpen && viewportSearchActive && (
+            <div className="filterSummary">
+              <span className="tag">🔍 Quanh khu vực bản đồ</span>
+              {nhom.map((code) => (
                 <span key={code} className="tag">
                   {GROUP_LABELS[code] || code}
                 </span>
@@ -1146,7 +1143,9 @@ export default function App({
                 <span>
                   {submittedFilters
                     ? "Hãy đổi mã xã, nhóm, số tờ hoặc số thửa rồi tra cứu lại."
-                    : "Không có thửa đất nào quanh vị trí của bạn."}
+                    : viewportSearchActive
+                      ? "Không có thửa đất nào quanh khu vực bản đồ đang xem."
+                      : "Không có thửa đất nào quanh vị trí của bạn."}
                 </span>
               </div>
             )}
@@ -1248,12 +1247,13 @@ export default function App({
               onMeta={handleMeta}
             />
 
-            <ViewportExtraLoader
-              active={Boolean(nearMeRequest)}
-              nhom={nearMeRequest?.nhom}
-              onAddData={handleAddData}
+            <FindHereButton
+              nhom={nhom}
+              onBeforeSearch={handleFindHereStart}
+              onData={handleData}
               onLoading={handleLoading}
               onError={handleError}
+              onMeta={handleMeta}
             />
 
             <CurrentLocation onPosition={setMyPosition} />
