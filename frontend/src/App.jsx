@@ -65,6 +65,13 @@ const NEAR_ME_RADII_METERS = [500, 1000, 2000, 4000, 8000, 16000];
 const NEAR_ME_TARGET = 1000;
 const NEAR_ME_ZOOM = 17;
 
+// Sau khi "định vị", mỗi lần người dùng zoom/kéo bản đồ sang khu vực mới thì
+// tải bổ sung tối đa VIEWPORT_EXTRA_TARGET thửa quanh khung nhìn hiện tại,
+// gộp thêm vào dữ liệu đã có (không thay thế). Debounce để không bắn liên
+// tiếp nhiều request khi người dùng đang thao tác zoom/pan dồn dập.
+const VIEWPORT_EXTRA_TARGET = 2000;
+const VIEWPORT_EXTRA_DEBOUNCE_MS = 400;
+
 function metersToDegrees(meters, latDeg) {
   const dLat = meters / 111320;
   const dLng = meters / (111320 * Math.max(Math.cos((latDeg * Math.PI) / 180), 0.1));
@@ -419,6 +426,85 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
   return null;
 }
 
+// =========================================================
+// TẢI BỔ SUNG THEO KHUNG NHÌN KHI ZOOM/KÉO BẢN ĐỒ
+//
+// Chỉ hoạt động sau khi đã có một lần "định vị" (near me). Mỗi khi khung
+// nhìn đổi (zoom hoặc kéo bản đồ), tải thêm tối đa VIEWPORT_EXTRA_TARGET
+// thửa quanh khung nhìn hiện tại và gộp vào dữ liệu đã có, thay vì thay thế.
+// =========================================================
+
+function ViewportExtraLoader({ active, nhom, onAddData, onLoading, onError }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!active) return undefined;
+
+    const controller = new AbortController();
+    let timeoutId = null;
+
+    const fetchViewport = async () => {
+      const bounds = map.getBounds();
+      const center = map.getCenter();
+      const nhomParam = nhom?.length ? nhom.join(",") : "";
+
+      const params = new URLSearchParams({
+        west: String(bounds.getWest()),
+        south: String(bounds.getSouth()),
+        east: String(bounds.getEast()),
+        north: String(bounds.getNorth()),
+        center_lng: String(center.lng),
+        center_lat: String(center.lat),
+        limit: String(VIEWPORT_EXTRA_TARGET),
+        offset: "0",
+        zoom: String(map.getZoom()),
+      });
+      if (nhomParam) params.set("nhom", nhomParam);
+
+      onLoading(true);
+      onError("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/parcels?${params.toString()}`,
+          { signal: controller.signal },
+        );
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Không tải được thửa đất quanh khu vực bản đồ",
+          );
+        }
+
+        onAddData(result?.features || []);
+      } catch (error) {
+        if (error.name !== "AbortError") onError(error.message);
+      } finally {
+        if (!controller.signal.aborted) onLoading(false);
+      }
+    };
+
+    const handleMoveEnd = () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(fetchViewport, VIEWPORT_EXTRA_DEBOUNCE_MS);
+    };
+
+    // Không tự bắn ngay lúc bật: NearMeLoader còn đang tự fitBounds tới khu
+    // vực định vị, khung nhìn lúc này chưa đúng. Đợi sự kiện moveend do
+    // fitBounds đó phát ra (hoặc lần zoom/kéo kế tiếp của người dùng).
+    map.on("moveend", handleMoveEnd);
+
+    return () => {
+      map.off("moveend", handleMoveEnd);
+      if (timeoutId) window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [active, map, nhom, onAddData, onLoading, onError]);
+
+  return null;
+}
+
 function EmptyValue({ children }) {
   return children ? children : <span className="empty">Chưa có</span>;
 }
@@ -535,6 +621,11 @@ export default function App({
   const [meta, setMeta] = useState({ loaded: 0 });
   const [focusTick, setFocusTick] = useState(0);
   const layerRef = useRef(null);
+  const dataRef = useRef(null);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   // "Quanh vị trí của tôi": biết vị trí GPS ngay khi có (kể cả tự động lúc
   // mở trang), nhưng chỉ thật sự tải thửa đất khi người dùng bấm nút.
@@ -636,6 +727,31 @@ export default function App({
   const handleLoading = useCallback((value) => setLoading(value), []);
   const handleError = useCallback((message) => setError(message), []);
   const handleMeta = useCallback((value) => setMeta(value), []);
+
+  // Gộp thửa tải bổ sung theo khung nhìn (ViewportExtraLoader) vào dữ liệu
+  // đã có, bỏ qua thửa trùng — dùng dataRef thay vì setData(prev => ...) để
+  // meta.loaded luôn khớp ngay cả khi nhiều lần gọi dồn dập.
+  const handleAddData = useCallback((features) => {
+    const prev = dataRef.current;
+    const collected = prev ? [...prev.features] : [];
+    const seen = new Set(collected.map(featureKey));
+    let added = 0;
+
+    features.forEach((feature) => {
+      const key = featureKey(feature);
+      if (seen.has(key)) return;
+      seen.add(key);
+      collected.push(feature);
+      added += 1;
+    });
+
+    if (added === 0) return;
+
+    const merged = { type: "FeatureCollection", features: collected };
+    dataRef.current = merged;
+    setData(merged);
+    setMeta({ loaded: collected.length });
+  }, []);
 
   const handleSearch = useCallback(() => {
     if (!maXa) return;
@@ -1130,6 +1246,14 @@ export default function App({
               onLoading={handleLoading}
               onError={handleError}
               onMeta={handleMeta}
+            />
+
+            <ViewportExtraLoader
+              active={Boolean(nearMeRequest)}
+              nhom={nearMeRequest?.nhom}
+              onAddData={handleAddData}
+              onLoading={handleLoading}
+              onError={handleError}
             />
 
             <CurrentLocation onPosition={setMyPosition} />
