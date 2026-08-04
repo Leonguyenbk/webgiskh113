@@ -158,10 +158,6 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   background: #f1f5f9;
 }
 
-.findHereButton {
-  bottom: 244px;         /* nằm trên nút "Vùng địa chính" */
-}
-
 .locateButton:disabled {
   opacity: 0.65;
   cursor: default;
@@ -181,29 +177,41 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   font-size: 12px;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
 }
-.diaChinhButton {
-  position: absolute;
-  right: 10px;
-  bottom: 190px;
-  z-index: 1000;
 
-  display: flex;
+/* Nút "Tìm thửa quanh đây" và "Vùng địa chính" ở header (topbar). */
+.headerMapButton {
+  margin-left: 18px;
+  padding: 9px 16px;
+  border: 1px solid #ffffff40;
+  border-radius: 10px;
+  color: white;
+  background: #ffffff1a;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-
-  padding: 8px 12px;
-  border: 1px solid rgba(15, 23, 42, 0.15);
-  border-radius: 8px;
-  background: #ffffff;
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
 }
 
-.diaChinhButton:hover {
-  background: #f1f5f9;
+.headerMapButton:hover:not(:disabled) {
+  background: #ffffff33;
+}
+
+.headerMapButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.headerMapButton.primary {
+  border-color: transparent;
+  background: #d9f99d;
+  color: #0f5a55;
+}
+
+.headerMapButton.primary:hover:not(:disabled) {
+  background: #c8f07a;
 }
 
 .myLocationDot {
@@ -287,6 +295,8 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .topbar h1 { font-size: 16px; }
   .topbar p { display: none; }
   .backLink { margin-left: 10px; padding: 7px 10px; font-size: 11px; }
+  .headerMapButton { margin-left: 10px; padding: 7px 10px; font-size: 11px; }
+  .headerMapButton span { display: none; }
   .toolsGrid { padding: 16px; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: 42% 58%; }
   .sidebar { order: 2; padding: 14px; border-right: 0; border-top: 1px solid #cfddda; }
@@ -296,8 +306,6 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .locateButton { top: 68px; }
   .locateButton span { display: none; }
   .locationError { top: 108px; }
-  .diaChinhButton { top: 112px; bottom: auto; }
-  .findHereButton { top: 156px; bottom: auto; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
 }
 

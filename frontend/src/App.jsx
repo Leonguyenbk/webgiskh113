@@ -167,22 +167,34 @@ function FitBounds({ focusFeature, focusTick }) {
 
 // Nút đưa bản đồ tới phạm vi lớp phủ địa chính (MBTiles), lấy từ
 // /api/tiles/diachinh/metadata. Không hiện nếu chưa có bounds (ví dụ chưa
-// có file .mbtiles trong backend/data).
-function DiaChinhFitButton({ bounds }) {
-  const map = useMap();
-
+// có file .mbtiles trong backend/data). Đặt ở header nên nhận `map` qua
+// prop thay vì useMap() — không còn là con của MapContainer.
+function DiaChinhFitButton({ map, bounds }) {
   if (!bounds) return null;
 
   return (
     <button
       type="button"
-      className="diaChinhButton"
-      onClick={() => map.fitBounds(bounds, { padding: [40, 40] })}
+      className="headerMapButton"
+      onClick={() => map?.fitBounds(bounds, { padding: [40, 40] })}
+      disabled={!map}
       title="Đưa bản đồ tới phạm vi lớp địa chính"
     >
       🗺️ Vùng địa chính
     </button>
   );
+}
+
+// Bắt lấy instance bản đồ Leaflet để các nút ở header (ngoài MapContainer)
+// vẫn điều khiển được bản đồ.
+function MapInstanceCapture({ onReady }) {
+  const map = useMap();
+
+  useEffect(() => {
+    onReady(map);
+  }, [map, onReady]);
+
+  return null;
 }
 
 // Checkbox trong LayersControl là UI của Leaflet, không phải React — nếu
@@ -429,14 +441,17 @@ function NearMeLoader({ request, onData, onLoading, onError, onMeta }) {
 //
 // Zoom/kéo bản đồ tới khu vực muốn xem rồi bấm nút này: tải tối đa
 // VIEWPORT_SEARCH_TARGET thửa quanh khung nhìn hiện tại, THAY THẾ toàn bộ
-// dữ liệu đang hiển thị (các thửa ngoài khung nhìn mới bị bỏ đi).
+// dữ liệu đang hiển thị (các thửa ngoài khung nhìn mới bị bỏ đi). Đặt ở
+// header nên nhận `map` qua prop thay vì useMap() — không còn là con của
+// MapContainer.
 // =========================================================
 
-function FindHereButton({ nhom, onBeforeSearch, onData, onLoading, onError, onMeta }) {
-  const map = useMap();
+function FindHereButton({ map, nhom, onBeforeSearch, onData, onLoading, onError, onMeta }) {
   const [busy, setBusy] = useState(false);
 
   const handleClick = useCallback(async () => {
+    if (!map) return;
+
     onBeforeSearch?.();
     setBusy(true);
     onLoading(true);
@@ -485,9 +500,9 @@ function FindHereButton({ nhom, onBeforeSearch, onData, onLoading, onError, onMe
   return (
     <button
       type="button"
-      className="locateButton findHereButton"
+      className="headerMapButton primary"
       onClick={handleClick}
-      disabled={busy}
+      disabled={busy || !map}
       title={`Tìm ${VIEWPORT_SEARCH_TARGET.toLocaleString("vi-VN")} thửa quanh khu vực bản đồ đang xem`}
     >
       🔍{" "}
@@ -616,6 +631,10 @@ export default function App({
   const [meta, setMeta] = useState({ loaded: 0 });
   const [focusTick, setFocusTick] = useState(0);
   const layerRef = useRef(null);
+
+  // Instance bản đồ Leaflet, để các nút ở header (ngoài MapContainer) vẫn
+  // gọi được map.getBounds()/fitBounds()...
+  const [mapInstance, setMapInstance] = useState(null);
 
   // "Quanh vị trí của tôi": biết vị trí GPS ngay khi có (kể cả tự động lúc
   // mở trang), nhưng chỉ thật sự tải thửa đất khi người dùng bấm nút.
@@ -879,6 +898,19 @@ export default function App({
                 : "thửa hiển thị"}
           </span>
         </div>
+
+        <FindHereButton
+          map={mapInstance}
+          nhom={nhom}
+          onBeforeSearch={handleFindHereStart}
+          onData={handleData}
+          onLoading={handleLoading}
+          onError={handleError}
+          onMeta={handleMeta}
+        />
+
+        <DiaChinhFitButton map={mapInstance} bounds={diaChinhBounds} />
+
         <a
           className="backLink"
           href="/tools"
@@ -1247,14 +1279,7 @@ export default function App({
               onMeta={handleMeta}
             />
 
-            <FindHereButton
-              nhom={nhom}
-              onBeforeSearch={handleFindHereStart}
-              onData={handleData}
-              onLoading={handleLoading}
-              onError={handleError}
-              onMeta={handleMeta}
-            />
+            <MapInstanceCapture onReady={setMapInstance} />
 
             <CurrentLocation onPosition={setMyPosition} />
 
@@ -1332,7 +1357,6 @@ export default function App({
               </LayersControl.Overlay>
             </LayersControl>
 
-            <DiaChinhFitButton bounds={diaChinhBounds} />
             <DiaChinhVisibilitySync onChange={setDiaChinhVisible} />
 
             <FitBounds focusFeature={selectedFeature} focusTick={focusTick} />
