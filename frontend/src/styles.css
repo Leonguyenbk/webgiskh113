@@ -308,10 +308,13 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   /* Chừa khoảng trống phía trên để không bị thanh địa chỉ/tìm kiếm của
      trình duyệt di động che mất; mỗi nút xuống một hàng riêng thay vì
      dồn sát góc. */
-  .map .leaflet-top.leaflet-right { top: 54px; }
+  /* Leaflet tự cộng thêm margin-top 10px cho control bên trong
+     .leaflet-top, nên trừ sẵn 10px ở đây để nút chọn lớp nền ngang
+     hàng với nút ẩn/hiện (top: 20px). */
+  .map .leaflet-top.leaflet-right { top: 10px; }
 
   .locateButton {
-    top: 106px;
+    top: 74px;
     width: 40px;
     height: 40px;
     padding: 0;
@@ -320,13 +323,13 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
     font-size: 16px;
   }
   .locateButton span { display: none; }
-  .locationError { top: 156px; }
+  .locationError { top: 124px; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
 
   .uiToggleButton {
     display: flex;
     position: absolute;
-    top: 54px;
+    top: 20px;
     left: 10px;
     z-index: 1200;
     align-items: center;
@@ -343,9 +346,13 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 
   /* Ẩn header + sidebar để xem trọn bản đồ trên điện thoại. Không ẩn
      parcelDrawer: chọn thửa lúc đang ẩn UI vẫn phải thấy thông tin thửa
-     đó, không cần hiện lại cả header + bộ lọc. */
+     đó, không cần hiện lại cả header + bộ lọc. Ẩn chú giải + zoom +
+     attribution cho sạch, nhưng giữ lại nút chọn lớp nền (leaflet-top),
+     cùng với nút ẩn/hiện và nút vị trí, để vẫn bấm được. */
   .shell.uiHidden .topbar { display: none; }
   .shell.uiHidden .sidebar { display: none; }
+  .shell.uiHidden .landLegend { display: none; }
+  .shell.uiHidden .leaflet-bottom { display: none; }
   .shell.uiHidden .workspace { grid-template-rows: 1fr; }
 }
 

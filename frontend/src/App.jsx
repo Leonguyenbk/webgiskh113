@@ -90,7 +90,7 @@ const GROUP_COLORS = {
 const GROUP_LABELS = {
   "NHÓM 1": "Nhóm 1",
   "NHÓM 2": "Nhóm 2",
-  DEFAULT: "Chưa phân loại / chưa có dữ liệu đồng bộ",
+  DEFAULT: "Chưa phân loại",
 };
 
 function getGroupKey(phanLoai = "") {
@@ -898,7 +898,7 @@ export default function App({
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
-          <h1>Bản đồ thửa đất</h1>
+          <h1>Bản đồ phân loại thửa đất</h1>
           <p>VN-2000 Đắk Lắk · Dữ liệu Supabase</p>
         </div>
         <div className="count">
@@ -1387,7 +1387,7 @@ export default function App({
           <div className="mapHint">Bấm vào ranh thửa để xem thông tin</div>
 
           <div className="landLegend">
-            <strong>Phân loại KH 2959/KH-BNNMT-BCA</strong>
+            <strong>Ghi chú</strong>
 
             {Object.entries(GROUP_LABELS).map(([code, label]) => (
               <div key={code}>
