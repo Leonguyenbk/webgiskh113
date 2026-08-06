@@ -305,9 +305,17 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .mapWrap { order: 1; }
   .sectionTitle { margin-top: 15px; }
   .mapHint { display: none; }
-  .locateButton { top: 68px; }
+  .locateButton {
+    top: 68px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    font-size: 16px;
+  }
   .locateButton span { display: none; }
-  .locationError { top: 108px; }
+  .locationError { top: 118px; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
 
   .uiToggleButton {
@@ -328,11 +336,12 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
   }
 
-  /* Ẩn header + sidebar để xem trọn bản đồ trên điện thoại. */
+  /* Ẩn header + sidebar để xem trọn bản đồ trên điện thoại. Không ẩn
+     parcelDrawer: chọn thửa lúc đang ẩn UI vẫn phải thấy thông tin thửa
+     đó, không cần hiện lại cả header + bộ lọc. */
   .shell.uiHidden .topbar { display: none; }
   .shell.uiHidden .sidebar { display: none; }
   .shell.uiHidden .workspace { grid-template-rows: 1fr; }
-  .shell.uiHidden .parcelDrawer { display: none; }
 }
 
 .filterHeader {
