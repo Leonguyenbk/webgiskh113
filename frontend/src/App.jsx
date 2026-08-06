@@ -636,6 +636,19 @@ export default function App({
   // gọi được map.getBounds()/fitBounds()...
   const [mapInstance, setMapInstance] = useState(null);
 
+  // Ẩn header + sidebar trên điện thoại để xem trọn bản đồ (chỉ có tác
+  // dụng ở màn hình hẹp, xem styles.css @media max-width: 760px).
+  const [uiHidden, setUiHidden] = useState(false);
+
+  // Leaflet cache kích thước container, không tự phát hiện đổi kích thước
+  // do CSS (ẩn header/sidebar) — phải tự gọi invalidateSize() sau khi
+  // layout ổn định, nếu không nửa bản đồ mới lộ ra sẽ trống trơn.
+  useEffect(() => {
+    if (!mapInstance) return;
+    const frame = window.requestAnimationFrame(() => mapInstance.invalidateSize());
+    return () => window.cancelAnimationFrame(frame);
+  }, [uiHidden, mapInstance]);
+
   // "Quanh vị trí của tôi": biết vị trí GPS ngay khi có (kể cả tự động lúc
   // mở trang), nhưng chỉ thật sự tải thửa đất khi người dùng bấm nút.
   const [myPosition, setMyPosition] = useState(null);
@@ -881,7 +894,7 @@ export default function App({
   );
 
   return (
-    <main className="shell">
+    <main className={`shell${uiHidden ? " uiHidden" : ""}`}>
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
@@ -1255,6 +1268,15 @@ export default function App({
         </aside>
 
         <div className="mapWrap">
+          <button
+            type="button"
+            className="uiToggleButton"
+            onClick={() => setUiHidden((value) => !value)}
+            title={uiHidden ? "Hiện thanh công cụ" : "Ẩn thanh công cụ"}
+          >
+            {uiHidden ? "☰" : "✕"}
+          </button>
+
           <MapContainer
             center={[12.67, 108.05]}
             zoom={15}

@@ -289,6 +289,8 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .importButton:hover { background: #0b5f59; }
 .importButton:disabled { background: #9db8b4; cursor: not-allowed; }
 
+.uiToggleButton { display: none; }
+
 @media (max-width: 760px) {
   .topbar { height: 66px; flex-basis: 66px; padding: 0 13px; }
   .brandMark { width: 40px; height: 40px; border-radius: 12px; }
@@ -307,6 +309,30 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .locateButton span { display: none; }
   .locationError { top: 108px; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
+
+  .uiToggleButton {
+    display: flex;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1200;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 16px;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Ẩn header + sidebar để xem trọn bản đồ trên điện thoại. */
+  .shell.uiHidden .topbar { display: none; }
+  .shell.uiHidden .sidebar { display: none; }
+  .shell.uiHidden .workspace { grid-template-rows: 1fr; }
+  .shell.uiHidden .parcelDrawer { display: none; }
 }
 
 .filterHeader {
