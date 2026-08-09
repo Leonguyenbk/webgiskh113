@@ -635,6 +635,9 @@ export default function App({ onNavigateTools }) {
   // dụng ở màn hình hẹp, xem styles.css @media max-width: 760px).
   const [uiHidden, setUiHidden] = useState(false);
 
+  // Độ mờ (fillOpacity) lớp phủ thửa đất — kéo slider 0-100%, mặc định 70%.
+  const [parcelOpacity, setParcelOpacity] = useState(0.7);
+
   // Leaflet cache kích thước container, không tự phát hiện đổi kích thước
   // do CSS (ẩn header/sidebar) — phải tự gọi invalidateSize() sau khi
   // layout ổn định, nếu không nửa bản đồ mới lộ ra sẽ trống trơn.
@@ -850,10 +853,14 @@ export default function App({ onNavigateTools }) {
         fillColor: isSelected
           ? "#2563eb"
           : getGroupColor(feature.properties?.dong_bo?.phan_loai_ke_hoach_2959),
-        fillOpacity: isSelected ? 0.75 : 0.55,
+        // Slider "Độ mờ thửa đất" điều khiển lớp chưa chọn; thửa đang
+        // chọn luôn đậm hơn một chút (+0.2) để vẫn nổi bật, tối đa 1.
+        fillOpacity: isSelected
+          ? Math.min(1, parcelOpacity + 0.2)
+          : parcelOpacity,
       };
     },
-    [selected],
+    [selected, parcelOpacity],
   );
 
   const onEachFeature = useCallback(
@@ -880,7 +887,19 @@ export default function App({ onNavigateTools }) {
       layer.addData(filtered);
       layer.setStyle(style);
     }
-  }, [filtered, style]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ tạo lại
+    // layer khi đổi dữ liệu; đổi style một mình (kéo slider độ mờ, chọn
+    // thửa) đã có effect setStyle() riêng bên dưới, không cần clear+addData
+    // lại toàn bộ (tốn, giật khi kéo slider).
+  }, [filtered]);
+
+  // Áp style riêng (không clear+addData) mỗi khi style đổi — mượt hơn khi
+  // kéo slider độ mờ hoặc đổi thửa đang chọn.
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    layer.setStyle(style);
+  }, [style]);
 
   const shownCount = filtered?.features?.length ?? 0;
   const isFiltering = query.trim().length > 0;
@@ -1360,6 +1379,23 @@ export default function App({ onNavigateTools }) {
                 <label>{label}</label>
               </div>
             ))}
+
+            <div className="opacitySlider">
+              <label htmlFor="parcelOpacity">
+                Độ mờ thửa đất
+                <span>{Math.round(parcelOpacity * 100)}%</span>
+              </label>
+              <input
+                id="parcelOpacity"
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round(parcelOpacity * 100)}
+                onChange={(event) =>
+                  setParcelOpacity(Number(event.target.value) / 100)
+                }
+              />
+            </div>
           </div>
 
           {selected && (

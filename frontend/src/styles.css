@@ -237,6 +237,36 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   border: 1px solid #475569; border-radius: 3px;
 }
 .landLegend label { color: #334155; }
+
+.landLegend .opacitySlider {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding-top: 9px;
+  border-top: 1px dashed #cbd5e1;
+}
+.landLegend .opacitySlider label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #334155;
+  font-weight: 600;
+}
+.landLegend .opacitySlider span {
+  flex: none;
+  width: auto;
+  height: auto;
+  border: 0;
+  color: #64748b;
+  font-weight: 500;
+}
+.landLegend .opacitySlider input[type="range"] {
+  width: 100%;
+  accent-color: #0f766e;
+}
+
 .leaflet-control-layers, .leaflet-bar { border: 0 !important; box-shadow: 0 5px 18px #153d3730 !important; }
 .leaflet-control-layers { border-radius: 10px !important; font-family: inherit; font-size: 12px; }
 .leaflet-bar a { color: #0f5f59 !important; }
