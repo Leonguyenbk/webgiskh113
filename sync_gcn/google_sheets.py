@@ -5,7 +5,13 @@ from typing import Any
 import gspread
 from google.oauth2.service_account import Credentials
 
-from config import COLUMNS, GOOGLE_CREDENTIALS_FILE, SHEET_RANGE, WORKSHEET_NAME
+from config import (
+    COLUMNS,
+    GOOGLE_CREDENTIALS_FILE,
+    SHEET_RANGE,
+    SHEET_START_ROW,
+    WORKSHEET_NAME,
+)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -36,7 +42,7 @@ def _pad_row(row: list[Any]) -> list[Any]:
 
 
 def read_sheet_rows(sheet_url: str) -> list[dict[str, Any]]:
-    """Đọc "Trang tính1"!B3:BE và trả về list dict theo COLUMNS.
+    """Đọc "Trang tính1"!{SHEET_RANGE} và trả về list dict theo COLUMNS.
 
     Mỗi dict có thêm khoá "_dong_sheet" (số dòng thật trên Google Sheet,
     dùng để lưu vào cột dong_sheet). Bỏ qua dòng trống hoàn toàn, không
@@ -53,7 +59,7 @@ def read_sheet_rows(sheet_url: str) -> list[dict[str, Any]]:
     raw_rows = worksheet.get(SHEET_RANGE)
 
     records: list[dict[str, Any]] = []
-    for sheet_row_number, row in enumerate(raw_rows, start=3):
+    for sheet_row_number, row in enumerate(raw_rows, start=SHEET_START_ROW):
         if not row or _row_is_blank(row):
             continue
 

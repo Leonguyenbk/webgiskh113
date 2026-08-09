@@ -14,9 +14,12 @@ create table if not exists public.du_lieu_gcn (
   synced_at timestamptz,
   created_at timestamptz not null default now(),
 
-  -- 56 trường lấy nguyên văn từ Google Sheet ("Trang tính1"!B3:BE, theo
-  -- đúng thứ tự cột B..BE). Giữ kiểu text ở bản đầu để không mất số 0
-  -- đầu ở CCCD/mã định danh/số giấy tờ và tránh sai lệch định dạng.
+  -- 57 trường lấy nguyên văn từ Google Sheet ("Trang tính1"!B4:BF, theo
+  -- đúng thứ tự cột B..BF — dữ liệu thật bắt đầu từ dòng 4, không phải
+  -- dòng 3 như dự kiến ban đầu, và sheet có 57 cột chứ không phải 56 vì
+  -- có thêm cột "Ngày sinh người sử dụng hiện tại"). Giữ kiểu text ở
+  -- bản đầu để không mất số 0 đầu ở CCCD/mã định danh/số giấy tờ và
+  -- tránh sai lệch định dạng.
   madvhc text,
   sophathanhgcn text,
   ngaycapgcn text,
@@ -31,6 +34,7 @@ create table if not exists public.du_lieu_gcn (
   phapnhantrengcn text,
   vaitrophapnhan text,
   tenchusudunghientai text,
+  ngaysinh_chusudunghientai text,
   sodinhdanh_chusudunghientai text,
   diachi_chusudunghientai text,
   lydothaydoi text,
@@ -74,6 +78,10 @@ create table if not exists public.du_lieu_gcn (
   guild text,
   phanloai text
 );
+
+-- An toàn chạy lại nếu bảng đã tồn tại từ trước (lúc chưa có cột này):
+alter table public.du_lieu_gcn
+  add column if not exists ngaysinh_chusudunghientai text;
 
 create index if not exists idx_du_lieu_gcn_ma_nguon
   on public.du_lieu_gcn (ma_nguon);

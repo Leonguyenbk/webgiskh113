@@ -354,6 +354,14 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .shell.uiHidden .landLegend { display: none; }
   .shell.uiHidden .leaflet-bottom { display: none; }
   .shell.uiHidden .workspace { grid-template-rows: 1fr; }
+
+  /* Khi ẩn topbar (66px), .mapWrap trồi lên sát mép trên cùng màn hình
+     nên nút ẩn/hiện và nút chọn lớp nền — vốn định vị top theo mapWrap —
+     bị đẩy lên theo, dễ bị thanh địa chỉ của trình duyệt che mất. Bù lại
+     đúng khoảng topbar đã mất để 2 nút này giữ nguyên khoảng cách an
+     toàn với mép trên, và vẫn ngang hàng nhau. */
+  .shell.uiHidden .uiToggleButton { top: 54px; }
+  .shell.uiHidden .map .leaflet-top.leaflet-right { top: 44px; }
 }
 
 .filterHeader {
