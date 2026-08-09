@@ -4,7 +4,13 @@ from typing import Any
 
 from supabase import Client, create_client
 
-from config import BATCH_SIZE, SUPABASE_SERVICE_KEY, SUPABASE_URL, TABLE_NAME
+from config import (
+    BATCH_SIZE,
+    NGUON_GCN_TABLE,
+    SUPABASE_SERVICE_KEY,
+    SUPABASE_URL,
+    TABLE_NAME,
+)
 
 _client: Client | None = None
 
@@ -14,6 +20,24 @@ def get_client() -> Client:
     if _client is None:
         _client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     return _client
+
+
+def list_active_sources() -> list[dict[str, Any]]:
+    """Đọc danh sách nguồn đang kích hoạt từ bảng public.nguon_gcn.
+
+    Bảng này được quản lý qua trang "Nhập đường link" trên WebGIS (backend
+    Flask, endpoint /api/nguon-gcn) — thêm/sửa/xóa nguồn ở đó, không sửa
+    trực tiếp trong Supabase trừ khi cần thao tác thủ công.
+    """
+    client = get_client()
+    response = (
+        client.table(NGUON_GCN_TABLE)
+        .select("ma_nguon,ten_nguon,url,kich_hoat")
+        .eq("kich_hoat", True)
+        .order("ma_nguon")
+        .execute()
+    )
+    return response.data or []
 
 
 def replace_source(ma_nguon: str, rows: list[dict[str, Any]]) -> int:

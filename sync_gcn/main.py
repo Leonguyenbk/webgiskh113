@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-import openpyxl
-
 import google_sheets
 import supabase_sync
-from config import SHEET_LIST_FILE
-
-REQUIRED_COLUMNS = ("ma_nguon", "ten_nguon", "url", "kich_hoat")
 
 
 @dataclass
@@ -21,45 +15,22 @@ class SheetSource:
 
 
 def load_sources() -> list[SheetSource]:
-    if not SHEET_LIST_FILE.exists():
-        sys.exit(f"Không tìm thấy {SHEET_LIST_FILE}")
+    """Đọc danh sách nguồn đang kích hoạt từ bảng public.nguon_gcn.
 
-    workbook = openpyxl.load_workbook(SHEET_LIST_FILE, read_only=True, data_only=True)
-    sheet = workbook.active
-
-    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
-    header = [str(value or "").strip().lower() for value in header_row]
-
-    missing = [name for name in REQUIRED_COLUMNS if name not in header]
-    if missing:
-        sys.exit(f"{SHEET_LIST_FILE.name} thiếu cột bắt buộc: {', '.join(missing)}")
-
-    col_index = {name: header.index(name) for name in REQUIRED_COLUMNS}
-
-    sources: list[SheetSource] = []
-    seen: set[str] = set()
-
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        if row is None or all(value is None for value in row):
-            continue
-
-        ma_nguon = str(row[col_index["ma_nguon"]] or "").strip()
-        ten_nguon = str(row[col_index["ten_nguon"]] or "").strip()
-        url = str(row[col_index["url"]] or "").strip()
-        kich_hoat = row[col_index["kich_hoat"]]
-
-        if not ma_nguon or not url:
-            continue
-        if str(kich_hoat).strip() not in ("1", "1.0"):
-            continue
-
-        if ma_nguon in seen:
-            sys.exit(f"ma_nguon trùng lặp trong {SHEET_LIST_FILE.name}: {ma_nguon}")
-        seen.add(ma_nguon)
-
-        sources.append(SheetSource(ma_nguon=ma_nguon, ten_nguon=ten_nguon, url=url))
-
-    return sources
+    Nguồn được quản lý qua trang "Nhập đường link" trên WebGIS (không
+    còn đọc từ file Excel local). ma_nguon là primary key của bảng nên
+    Postgres tự đảm bảo duy nhất — không cần kiểm tra trùng ở đây.
+    """
+    rows = supabase_sync.list_active_sources()
+    return [
+        SheetSource(
+            ma_nguon=str(row["ma_nguon"]),
+            ten_nguon=str(row.get("ten_nguon") or ""),
+            url=str(row.get("url") or ""),
+        )
+        for row in rows
+        if row.get("url")
+    ]
 
 
 def sync_source(source: SheetSource) -> int:
@@ -87,7 +58,7 @@ def sync_source(source: SheetSource) -> int:
 def main() -> None:
     sources = load_sources()
     if not sources:
-        print(f"Không có nguồn nào kích hoạt (kich_hoat = 1) trong {SHEET_LIST_FILE.name}")
+        print("Không có nguồn nào kích hoạt trong bảng nguon_gcn (xem trang \"Nhập đường link\")")
         return
 
     results: list[tuple[SheetSource, bool, int, str]] = []

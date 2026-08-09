@@ -313,3 +313,21 @@ grant execute on function public.search_parcels(
     text, text[], integer, integer, integer, integer, double precision
 ) to anon, authenticated;
 
+-- Danh sách nguồn Google Sheet cho công cụ đồng bộ GCN (sync_gcn/).
+-- Quản lý qua trang "Nhập đường link" trên web (backend dùng Service
+-- Role Key), sync_gcn/main.py đọc bảng này thay vì file Excel local.
+create table if not exists public.nguon_gcn (
+    ma_nguon text primary key,
+    ten_nguon text not null default '',
+    url text not null,
+    kich_hoat boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+alter table public.nguon_gcn enable row level security;
+
+-- Không tạo policy nào: chỉ Service Role Key (backend Flask) đọc/ghi
+-- được bảng này, anon/authenticated không truy cập trực tiếp qua
+-- PostgREST vì đây là dữ liệu cấu hình quản trị.
+

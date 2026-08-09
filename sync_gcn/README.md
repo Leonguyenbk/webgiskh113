@@ -51,22 +51,24 @@ Settings → API (mục "service_role"). File `.env` đã có trong
 
 ## 5. Khai báo danh sách Google Sheet
 
-File `danh_sach_sheet.xlsx` (đã có sẵn dữ liệu mẫu) gồm 4 cột:
+Danh sách nguồn (`ma_nguon`, `ten_nguon`, `url`, `kich_hoat`) lưu trong
+bảng `public.nguon_gcn` trên Supabase — **không còn dùng file Excel
+local nữa**. Quản lý bảng này qua trang **"Nhập đường link"** trên
+WebGIS (menu Công cụ → Nhập đường link), thêm/sửa/xóa nguồn ngay trên
+web, không cần sửa code Python hay redeploy.
 
-| ma_nguon | ten_nguon | url                                    | kich_hoat |
-|----------|-----------|-----------------------------------------|-----------|
-| 001      | Nguon 1   | https://docs.google.com/spreadsheets/... | 1         |
-| 002      | Nguon 2   | https://docs.google.com/spreadsheets/... | 0         |
+- `ma_nguon`: mã định danh nguồn, **phải duy nhất** (bảng dùng
+  `ma_nguon` làm primary key nên Postgres tự chặn trùng).
+- `url`: link Google Sheet đầy đủ (đã share Viewer cho service
+  account).
+- `kich_hoat`: chỉ nguồn đang bật mới được `main.py` đồng bộ.
 
-- `ma_nguon`: mã định danh nguồn, **phải duy nhất** (chương trình sẽ
-  dừng nếu trùng).
-- `url`: link Google Sheet đầy đủ (đã share Viewer cho service account).
-- `kich_hoat`: `1` mới được đồng bộ, mọi giá trị khác bị bỏ qua.
+Mỗi Google Sheet phải có worksheet tên đúng `Trang tính1`, dữ liệu 56
+cột theo đúng thứ tự đã map trong `config.py`, bắt đầu từ ô `B3`.
 
-Muốn thêm nguồn mới: chỉ cần thêm một dòng vào file Excel này, không
-cần sửa code Python. Mỗi Google Sheet phải có worksheet tên đúng
-`Trang tính1`, dữ liệu 56 cột theo đúng thứ tự đã map trong
-`config.py`, bắt đầu từ ô `B3`.
+Muốn thao tác thủ công (SQL) thay vì qua web, chạy trực tiếp trên bảng
+`public.nguon_gcn` trong Supabase SQL Editor — xem cấu trúc bảng trong
+`supabase/schema.sql` ở thư mục gốc dự án.
 
 ## 6. Chạy đồng bộ
 

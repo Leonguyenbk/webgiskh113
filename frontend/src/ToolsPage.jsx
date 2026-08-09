@@ -17,14 +17,43 @@ const TOOLS = [
   },
 ];
 
-export default function ToolsPage({ onNavigateHome }) {
+export default function ToolsPage({
+  onNavigateHome,
+  onNavigateImport,
+  onNavigateSync,
+  onNavigateMbtiles,
+  onNavigateGcnLinks,
+}) {
+  const ADMIN_TOOLS = [
+    {
+      name: "⇪ Nhập GML",
+      description: "Nhập file GML thửa đất vào Supabase (bảng thua_dat).",
+      onNavigate: onNavigateImport,
+    },
+    {
+      name: "⇪ Nhập đồng bộ",
+      description: "Nhập file CSV/Excel dữ liệu đồng bộ (bảng dong_bo_du_lieu).",
+      onNavigate: onNavigateSync,
+    },
+    {
+      name: "⇪ Quản lý MBTiles",
+      description: "Tải lên/xóa file .mbtiles lớp phủ raster địa chính.",
+      onNavigate: onNavigateMbtiles,
+    },
+    {
+      name: "⇪ Nhập đường link",
+      description: "Quản lý danh sách link Google Sheet cho công cụ đồng bộ GCN.",
+      onNavigate: onNavigateGcnLinks,
+    },
+  ];
+
   return (
     <main className="toolsShell">
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
-          <h1>Tải công cụ</h1>
-          <p>Danh sách tools và link Google Drive</p>
+          <h1>Công cụ</h1>
+          <p>Tải công cụ ngoài và các trang nhập/quản lý dữ liệu</p>
         </div>
         <a
           className="backLink"
@@ -39,6 +68,23 @@ export default function ToolsPage({ onNavigateHome }) {
       </header>
 
       <section className="toolsGrid">
+        {ADMIN_TOOLS.map((tool) => (
+          <article className="toolCard" key={tool.name}>
+            <h2>{tool.name}</h2>
+            <p>{tool.description}</p>
+            <a
+              className="downloadButton"
+              href="#"
+              onClick={(event) => {
+                event.preventDefault();
+                tool.onNavigate?.();
+              }}
+            >
+              Mở
+            </a>
+          </article>
+        ))}
+
         {TOOLS.map((tool) => (
           <article className="toolCard" key={tool.name}>
             <h2>{tool.name}</h2>

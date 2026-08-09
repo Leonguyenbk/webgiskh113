@@ -7,6 +7,7 @@ import ToolsPage from "./ToolsPage.jsx";
 import ImportGmlPage from "./ImportGmlPage.jsx";
 import ImportSyncPage from "./ImportSyncPage.jsx";
 import ManageMbtilesPage from "./ManageMbtilesPage.jsx";
+import ManageGcnLinksPage from "./ManageGcnLinksPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -23,7 +24,15 @@ function Root() {
   };
 
   if (path.startsWith("/tools")) {
-    return <ToolsPage onNavigateHome={() => navigate("/")} />;
+    return (
+      <ToolsPage
+        onNavigateHome={() => navigate("/")}
+        onNavigateImport={() => navigate("/import-gml")}
+        onNavigateSync={() => navigate("/import-dong-bo")}
+        onNavigateMbtiles={() => navigate("/mbtiles")}
+        onNavigateGcnLinks={() => navigate("/nguon-gcn")}
+      />
+    );
   }
   if (path.startsWith("/import-gml")) {
     return <ImportGmlPage onNavigateHome={() => navigate("/")} />;
@@ -34,14 +43,10 @@ function Root() {
   if (path.startsWith("/mbtiles")) {
     return <ManageMbtilesPage onNavigateHome={() => navigate("/")} />;
   }
-  return (
-    <App
-      onNavigateTools={() => navigate("/tools")}
-      onNavigateImport={() => navigate("/import-gml")}
-      onNavigateSync={() => navigate("/import-dong-bo")}
-      onNavigateMbtiles={() => navigate("/mbtiles")}
-    />
-  );
+  if (path.startsWith("/nguon-gcn")) {
+    return <ManageGcnLinksPage onNavigateHome={() => navigate("/")} />;
+  }
+  return <App onNavigateTools={() => navigate("/tools")} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(

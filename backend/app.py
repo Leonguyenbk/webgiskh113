@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -776,6 +777,178 @@ def delete_mbtiles(filename: str):
         return jsonify({"error": "Không tìm thấy file"}), 404
 
     target.unlink()
+
+    return jsonify({"ok": True})
+
+
+# =========================================================
+# NGUỒN GOOGLE SHEET CHO ĐỒNG BỘ GCN (public.nguon_gcn)
+# CRUD qua PostgREST bằng Service Role Key. sync_gcn/main.py đọc bảng
+# này (thay vì file Excel local) để biết cần đồng bộ những Google Sheet
+# nào — trang "Nhập đường link" chỉ quản lý danh sách, không tự chạy
+# đồng bộ.
+# =========================================================
+
+NGUON_GCN_TABLE = "nguon_gcn"
+
+
+@app.get("/api/nguon-gcn")
+def list_nguon_gcn():
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = supabase_headers()
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    try:
+        response = requests.get(
+            f"{base_url}/rest/v1/{NGUON_GCN_TABLE}",
+            headers=headers,
+            params={"select": "*", "order": "ma_nguon.asc"},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    if not response.ok:
+        return jsonify({"error": response.text}), response.status_code
+
+    return jsonify({"items": response.json()})
+
+
+@app.post("/api/nguon-gcn")
+def create_nguon_gcn():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    body = request.get_json(silent=True) or {}
+    ma_nguon = str(body.get("ma_nguon", "")).strip()
+    ten_nguon = str(body.get("ten_nguon", "")).strip()
+    url = str(body.get("url", "")).strip()
+    kich_hoat = bool(body.get("kich_hoat", True))
+
+    if not ma_nguon or not url:
+        return jsonify({"error": "Thiếu ma_nguon hoặc url"}), 400
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = {
+            **supabase_headers(),
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    payload = {
+        "ma_nguon": ma_nguon,
+        "ten_nguon": ten_nguon,
+        "url": url,
+        "kich_hoat": kich_hoat,
+    }
+
+    try:
+        response = requests.post(
+            f"{base_url}/rest/v1/{NGUON_GCN_TABLE}",
+            headers=headers,
+            json=payload,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    if not response.ok:
+        return jsonify({"error": response.text}), response.status_code
+
+    items = response.json()
+    return jsonify({"ok": True, "item": items[0] if items else payload})
+
+
+@app.patch("/api/nguon-gcn/<path:ma_nguon>")
+def update_nguon_gcn(ma_nguon: str):
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    body = request.get_json(silent=True) or {}
+    updates: dict = {}
+    if "ten_nguon" in body:
+        updates["ten_nguon"] = str(body["ten_nguon"]).strip()
+    if "url" in body:
+        updates["url"] = str(body["url"]).strip()
+    if "kich_hoat" in body:
+        updates["kich_hoat"] = bool(body["kich_hoat"])
+
+    if not updates:
+        return jsonify({"error": "Không có trường nào để cập nhật"}), 400
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = {
+            **supabase_headers(),
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    try:
+        response = requests.patch(
+            f"{base_url}/rest/v1/{NGUON_GCN_TABLE}",
+            headers=headers,
+            params={"ma_nguon": f"eq.{ma_nguon}"},
+            json=updates,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    if not response.ok:
+        return jsonify({"error": response.text}), response.status_code
+
+    items = response.json()
+    if not items:
+        return jsonify({"error": "Không tìm thấy nguồn"}), 404
+
+    return jsonify({"ok": True, "item": items[0]})
+
+
+@app.delete("/api/nguon-gcn/<path:ma_nguon>")
+def delete_nguon_gcn(ma_nguon: str):
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = supabase_headers()
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    try:
+        response = requests.delete(
+            f"{base_url}/rest/v1/{NGUON_GCN_TABLE}",
+            headers=headers,
+            params={"ma_nguon": f"eq.{ma_nguon}"},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    if not response.ok:
+        return jsonify({"error": response.text}), response.status_code
 
     return jsonify({"ok": True})
 
