@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -23,6 +23,9 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
   const [editError, setEditError] = useState("");
 
   const [busyMaNguon, setBusyMaNguon] = useState("");
+
+  const [syncingMaNguon, setSyncingMaNguon] = useState("");
+  const [syncResults, setSyncResults] = useState({});
 
   const loadList = useCallback(() => {
     setLoadingList(true);
@@ -142,6 +145,35 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
     }
   };
 
+  const handleSync = async (item) => {
+    setSyncingMaNguon(item.ma_nguon);
+    setSyncResults((prev) => ({ ...prev, [item.ma_nguon]: null }));
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/nguon-gcn/${encodeURIComponent(item.ma_nguon)}/sync`,
+        { method: "POST", headers: authHeaders() },
+      );
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Đồng bộ thất bại");
+
+      setSyncResults((prev) => ({
+        ...prev,
+        [item.ma_nguon]: {
+          ok: true,
+          message: `Đã nhập ${body.imported.toLocaleString("vi-VN")} dòng lúc ${new Date().toLocaleTimeString("vi-VN")}`,
+        },
+      }));
+    } catch (err) {
+      setSyncResults((prev) => ({
+        ...prev,
+        [item.ma_nguon]: { ok: false, message: err.message },
+      }));
+    } finally {
+      setSyncingMaNguon("");
+    }
+  };
+
   const handleDelete = async (item) => {
     if (!window.confirm(`Xóa nguồn "${item.ma_nguon} - ${item.ten_nguon}"? Không thể hoàn tác.`)) {
       return;
@@ -250,10 +282,12 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
           )}
 
           <p className="importHint">
-            Trang này chỉ quản lý danh sách link — muốn đọc dữ liệu vào
-            Supabase phải chạy <code>python main.py</code> trong
-            <code> sync_gcn/</code> (thủ công hoặc theo lịch), xem
-            hướng dẫn trong <code>sync_gcn/README.md</code>.
+            Bấm <strong>Đồng bộ</strong> ở từng nguồn bên dưới để đọc lại
+            Google Sheet và cập nhật ngay vào Supabase. Ngoài ra hệ thống tự
+            động đồng bộ tất cả nguồn đang kích hoạt mỗi 30 phút (GitHub
+            Actions). Vẫn có thể chạy <code>python main.py</code> trong
+            <code> sync_gcn/</code> nếu muốn đồng bộ từ máy cá nhân, xem
+            <code> sync_gcn/README.md</code>.
           </p>
         </form>
 
@@ -324,37 +358,60 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
                   );
                 }
 
+                const isSyncing = syncingMaNguon === item.ma_nguon;
+                const syncResult = syncResults[item.ma_nguon];
+
                 return (
-                  <div key={item.ma_nguon} className="parcelListItem">
-                    <span
-                      className="parcelListDot"
-                      style={{
-                        backgroundColor: item.kich_hoat ? "#22c55e" : "#94a3b8",
-                        cursor: "pointer",
-                      }}
-                      title={item.kich_hoat ? "Đang kích hoạt — bấm để tắt" : "Đang tắt — bấm để bật"}
-                      onClick={() => !isBusy && toggleKichHoat(item)}
-                    />
-                    <span className="parcelListLabel" title={item.url}>
-                      [{item.ma_nguon}] {item.ten_nguon || "(chưa đặt tên)"}
-                    </span>
-                    <button
-                      type="button"
-                      className="resetButton"
-                      disabled={isBusy}
-                      onClick={() => startEdit(item)}
-                    >
-                      Sửa
-                    </button>
-                    <button
-                      type="button"
-                      className="resetButton"
-                      disabled={isBusy}
-                      onClick={() => handleDelete(item)}
-                    >
-                      {isBusy ? "…" : "Xóa"}
-                    </button>
-                  </div>
+                  <Fragment key={item.ma_nguon}>
+                    <div className="parcelListItem">
+                      <span
+                        className="parcelListDot"
+                        style={{
+                          backgroundColor: item.kich_hoat ? "#22c55e" : "#94a3b8",
+                          cursor: "pointer",
+                        }}
+                        title={item.kich_hoat ? "Đang kích hoạt — bấm để tắt" : "Đang tắt — bấm để bật"}
+                        onClick={() => !isBusy && toggleKichHoat(item)}
+                      />
+                      <span className="parcelListLabel" title={item.url}>
+                        [{item.ma_nguon}] {item.ten_nguon || "(chưa đặt tên)"}
+                      </span>
+                      <button
+                        type="button"
+                        className="searchButton"
+                        disabled={isBusy || isSyncing}
+                        onClick={() => handleSync(item)}
+                        title="Đọc lại Google Sheet và cập nhật dữ liệu GCN"
+                      >
+                        {isSyncing ? "Đang đồng bộ…" : "Đồng bộ"}
+                      </button>
+                      <button
+                        type="button"
+                        className="resetButton"
+                        disabled={isBusy}
+                        onClick={() => startEdit(item)}
+                      >
+                        Sửa
+                      </button>
+                      <button
+                        type="button"
+                        className="resetButton"
+                        disabled={isBusy}
+                        onClick={() => handleDelete(item)}
+                      >
+                        {isBusy ? "…" : "Xóa"}
+                      </button>
+                    </div>
+
+                    {syncResult && (
+                      <div
+                        className="notice"
+                        style={syncResult.ok ? undefined : { color: "#991b1b" }}
+                      >
+                        [{item.ma_nguon}] {syncResult.message}
+                      </div>
+                    )}
+                  </Fragment>
                 );
               })}
             </div>

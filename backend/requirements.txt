@@ -6,3 +6,5 @@ requests==2.32.5
 pyproj==3.7.2
 openpyxl==3.1.5
 flask-compress
+gspread==6.1.4
+google-auth==2.35.0

@@ -1,0 +1,28 @@
+name: Đồng bộ dữ liệu GCN
+
+# Gọi định kỳ /api/nguon-gcn/sync-all trên backend (Render) để tự cập nhật
+# dữ liệu GCN từ các Google Sheet đang kích hoạt trong bảng nguon_gcn — thay
+# cho việc phải tự chạy sync_gcn/main.py thủ công trên máy.
+#
+# Cần khai báo 2 secret trong GitHub repo (Settings → Secrets and variables
+# → Actions → New repository secret):
+#   BACKEND_URL   URL backend Render, ví dụ https://webgis-thua-dat-api.onrender.com
+#   IMPORT_TOKEN  phải khớp đúng biến IMPORT_TOKEN đã đặt trên Render
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gọi API đồng bộ GCN
+        run: |
+          curl --fail-with-body --max-time 280 --retry 2 --retry-delay 10 \
+            -X POST "${BACKEND_URL%/}/api/nguon-gcn/sync-all" \
+            -H "X-Import-Token: $IMPORT_TOKEN"
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}

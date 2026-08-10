@@ -14,3 +14,7 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: "*"
+      - key: IMPORT_TOKEN
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false

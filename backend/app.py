@@ -12,6 +12,7 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+import gcn_sync
 import gml_reader
 from sync_reader import parse_sync_file
 
@@ -951,6 +952,111 @@ def delete_nguon_gcn(ma_nguon: str):
         return jsonify({"error": response.text}), response.status_code
 
     return jsonify({"ok": True})
+
+
+# =========================================================
+# ĐỒNG BỘ DỮ LIỆU GCN TỪ GOOGLE SHEET (public.du_lieu_gcn)
+# Chạy ngay trên backend (thay vì chỉ chạy local qua sync_gcn/main.py) để
+# trang "Nhập đường link" có nút Đồng bộ, và để GitHub Actions gọi định kỳ
+# (xem .github/workflows/sync-gcn.yml). Cần biến môi trường
+# GOOGLE_SERVICE_ACCOUNT_JSON trên Render — xem sync_gcn/README.md.
+# =========================================================
+
+
+def fetch_nguon_gcn_row(base_url: str, headers: dict, ma_nguon: str) -> dict | None:
+    response = requests.get(
+        f"{base_url}/rest/v1/{NGUON_GCN_TABLE}",
+        headers=headers,
+        params={"select": "*", "ma_nguon": f"eq.{ma_nguon}"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    items = response.json()
+    return items[0] if items else None
+
+
+@app.post("/api/nguon-gcn/<path:ma_nguon>/sync")
+def sync_one_nguon_gcn(ma_nguon: str):
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = supabase_headers()
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    try:
+        source = fetch_nguon_gcn_row(base_url, headers, ma_nguon)
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    if not source:
+        return jsonify({"error": "Không tìm thấy nguồn"}), 404
+    if not source.get("url"):
+        return jsonify({"error": "Nguồn chưa có URL"}), 400
+
+    try:
+        imported = gcn_sync.sync_source(
+            base_url, headers, ma_nguon, source.get("ten_nguon") or "", source["url"]
+        )
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+    except Exception as exc:  # noqa: BLE001 - lỗi đọc Sheet (sai URL/chưa share/sai tên trang tính...) phải báo rõ
+        app.logger.exception("Đồng bộ GCN lỗi: ma_nguon=%s", ma_nguon)
+        return jsonify({"error": f"Đồng bộ thất bại: {exc}"}), 502
+
+    return jsonify({"ok": True, "ma_nguon": ma_nguon, "imported": imported})
+
+
+@app.post("/api/nguon-gcn/sync-all")
+def sync_all_nguon_gcn():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = supabase_headers()
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    try:
+        response = requests.get(
+            f"{base_url}/rest/v1/{NGUON_GCN_TABLE}",
+            headers=headers,
+            params={"select": "*", "kich_hoat": "eq.true", "order": "ma_nguon.asc"},
+            timeout=15,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    sources = response.json()
+    results = []
+
+    for source in sources:
+        ma_nguon = source.get("ma_nguon")
+        url = source.get("url")
+        if not ma_nguon or not url:
+            continue
+
+        try:
+            imported = gcn_sync.sync_source(
+                base_url, headers, ma_nguon, source.get("ten_nguon") or "", url
+            )
+        except Exception as exc:  # noqa: BLE001 - 1 nguồn lỗi không được chặn các nguồn khác
+            app.logger.exception("Đồng bộ GCN lỗi: ma_nguon=%s", ma_nguon)
+            results.append({"ma_nguon": ma_nguon, "ok": False, "error": str(exc)})
+        else:
+            results.append({"ma_nguon": ma_nguon, "ok": True, "imported": imported})
+
+    return jsonify({"ok": True, "results": results})
 
 
 @app.get("/api/tiles/<int:z>/<int:x>/<int:y>")
