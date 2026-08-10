@@ -170,7 +170,10 @@ export default function GcnDashboardPage({ onNavigateHome }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Thống kê thu thập dữ liệu</h1>
-          <p>Tỉ lệ thửa đất đã nhập biểu GCN theo từng xã/phường</p>
+          <p>
+            Tỉ lệ đã nhập biểu GCN trong nhóm thửa chưa tạo lập dữ liệu
+            (ngoài Nhóm 1, Nhóm 2), theo từng xã/phường
+          </p>
         </div>
         <a
           className="backLink"
@@ -198,7 +201,7 @@ export default function GcnDashboardPage({ onNavigateHome }) {
           <>
             <div className="statTiles">
               <div className="statTile">
-                <span>Tổng số thửa (toàn bộ)</span>
+                <span>Thửa chưa tạo lập dữ liệu (ngoài Nhóm 1/2)</span>
                 <strong>{formatSo(totals.tong)}</strong>
               </div>
               <div className="statTile">
@@ -288,9 +291,9 @@ export default function GcnDashboardPage({ onNavigateHome }) {
                     <div className="notice">
                       <strong>{selected.ten_xa}</strong>
                       <span>
-                        Tổng {formatSo(selected.tong_so_thua)} thửa đất — dự
-                        án tập trung thu thập dữ liệu cho các thửa chưa có
-                        dữ liệu, nên tỉ lệ trên phản ánh tiến độ thu thập.
+                        {formatSo(selected.tong_so_thua)} thửa chưa thuộc
+                        Nhóm 1/Nhóm 2 (chưa tạo lập dữ liệu) — tỉ lệ trên là
+                        số thửa trong nhóm này đã được nhập biểu GCN.
                       </span>
                     </div>
                   </>
@@ -305,7 +308,7 @@ export default function GcnDashboardPage({ onNavigateHome }) {
                     <thead>
                       <tr>
                         <th>Xã / phường</th>
-                        <th>Tổng số thửa</th>
+                        <th>Chưa tạo lập DL</th>
                         <th>Đã nhập biểu</th>
                         <th>Tỉ lệ</th>
                       </tr>

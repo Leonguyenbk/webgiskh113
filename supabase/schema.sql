@@ -354,12 +354,16 @@ alter table public.nguon_gcn enable row level security;
 
 -- =========================================================
 -- THỐNG KÊ THU THẬP DỮ LIỆU GCN THEO XÃ/PHƯỜNG
--- Dùng cho trang dashboard (GcnDashboardPage.jsx) — số thửa đã "nhập
--- biểu" (có dữ liệu GCN, đối chiếu qua khóa madvhc_soto_sothua, giống
--- co_gcn trong get_parcels_in_view/search_parcels) trên tổng số thửa,
--- theo từng xã. Gộp theo khóa DISTINCT trước khi LEFT JOIN (thay vì
--- EXISTS tương quan từng dòng như get_parcels_in_view) vì hàm này quét
--- toàn bộ thua_dat chứ không giới hạn theo khung bản đồ/limit.
+-- Dùng cho trang dashboard (GcnDashboardPage.jsx). Dự án chỉ tập trung
+-- thu thập dữ liệu cho các thửa CHƯA thuộc Nhóm 1/Nhóm 2 (KH 2959) —
+-- những thửa đã ở Nhóm 1/2 coi như đã có dữ liệu từ trước, không tính
+-- vào mẫu số. Trong nhóm "chưa tạo lập dữ liệu" đó, đếm xem bao nhiêu
+-- thửa đã "nhập biểu" (có dữ liệu GCN, đối chiếu qua khóa
+-- madvhc_soto_sothua, giống co_gcn trong get_parcels_in_view/
+-- search_parcels), theo từng xã. Gộp theo khóa DISTINCT trước khi LEFT
+-- JOIN (thay vì EXISTS tương quan từng dòng như get_parcels_in_view) vì
+-- hàm này quét toàn bộ thua_dat chứ không giới hạn theo khung bản đồ/
+-- limit.
 -- =========================================================
 
 create or replace function public.gcn_thu_thap_theo_xa()
@@ -383,8 +387,11 @@ as $$
         count(*)::bigint as tong_so_thua,
         count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu
     from public.thua_dat t
+    left join public.dong_bo_du_lieu d
+        on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
     left join gcn_keys k
         on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+    where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
     group by t.ma_xa
     order by t.ma_xa;
 $$;
