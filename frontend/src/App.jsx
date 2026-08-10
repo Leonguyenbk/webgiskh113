@@ -98,7 +98,7 @@ const GROUP_LABELS = {
 // chỉ khi thửa CHƯA thuộc Nhóm 1/Nhóm 2, vì màu nhóm quan trọng hơn và
 // không được ghi đè.
 const GCN_COLOR = "#2563eb";
-const GCN_LABEL = "Đã có dữ liệu GCN";
+const GCN_LABEL = "Thửa đất đã nhập biểu";
 
 function getGroupKey(phanLoai = "") {
   const normalized = phanLoai.trim().toUpperCase();
@@ -1384,16 +1384,21 @@ export default function App({ onNavigateTools }) {
           <div className="landLegend">
             <strong>Ghi chú</strong>
 
-            {Object.entries(GROUP_LABELS).map(([code, label]) => (
+            {["NHÓM 1", "NHÓM 2"].map((code) => (
               <div key={code}>
                 <span style={{ backgroundColor: GROUP_COLORS[code] }} />
-                <label>{label}</label>
+                <label>{GROUP_LABELS[code]}</label>
               </div>
             ))}
 
             <div>
               <span style={{ backgroundColor: GCN_COLOR }} />
               <label>{GCN_LABEL}</label>
+            </div>
+
+            <div>
+              <span style={{ backgroundColor: GROUP_COLORS.DEFAULT }} />
+              <label>{GROUP_LABELS.DEFAULT}</label>
             </div>
 
             <div className="opacitySlider">
@@ -1504,7 +1509,7 @@ export default function App({ onNavigateTools }) {
                             : "#e2e8f0",
                         }}
                       >
-                        {selected.co_gcn ? GCN_LABEL : "Chưa có dữ liệu GCN"}
+                        {selected.co_gcn ? GCN_LABEL : "Thửa đất chưa nhập biểu"}
                       </span>
                     </dd>
                   </div>
