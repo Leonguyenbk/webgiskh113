@@ -19,12 +19,12 @@ GOOGLE_SHEETS_SCOPES = [
 ]
 
 WORKSHEET_NAME = "Trang tính1"
-SHEET_RANGE = "B4:BF"
+SHEET_RANGE = "B4:BE"
 SHEET_START_ROW = 4
 DU_LIEU_GCN_TABLE = "du_lieu_gcn"
 BATCH_SIZE = 500
 
-# Thứ tự PHẢI khớp chính xác cột B..BF trên Google Sheet (57 cột). Trùng với
+# Thứ tự PHẢI khớp chính xác cột B..BE trên Google Sheet (56 cột). Trùng với
 # COLUMNS trong sync_gcn/config.py — hai bản tách riêng vì Render chỉ deploy
 # thư mục backend/, không kéo theo sync_gcn/. Đổi cấu trúc Sheet thì phải sửa
 # đồng thời cả hai file.
@@ -43,7 +43,6 @@ COLUMNS = [
     "phapnhantrengcn",
     "vaitrophapnhan",
     "tenchusudunghientai",
-    "ngaysinh_chusudunghientai",
     "sodinhdanh_chusudunghientai",
     "diachi_chusudunghientai",
     "lydothaydoi",

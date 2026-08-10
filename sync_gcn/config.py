@@ -16,11 +16,9 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 WORKSHEET_NAME = "Trang tính1"
 # Dòng 1-3 là tiêu đề/tiêu đề phụ (đã kiểm tra thực tế trên sheet), dữ
-# liệu thật bắt đầu từ dòng 4. Cột B..BF = 57 cột (không phải 56 như
-# giả định ban đầu — sheet thật có thêm cột "Ngày sinh người sử dụng
-# hiện tại" mà danh sách 56 trường gốc bỏ sót, đẩy "Phân loại" ra tới
-# cột BF).
-SHEET_RANGE = "B4:BF"
+# liệu thật bắt đầu từ dòng 4. Cột B..BE = 56 cột. Sheet gốc không có
+# cột "Ngày sinh người sử dụng hiện tại" (đã bỏ khỏi COLUMNS bên dưới).
+SHEET_RANGE = "B4:BE"
 SHEET_START_ROW = 4
 TABLE_NAME = "du_lieu_gcn"
 # Danh sách nguồn (ma_nguon/ten_nguon/url/kich_hoat) quản lý qua trang
@@ -28,7 +26,7 @@ TABLE_NAME = "du_lieu_gcn"
 NGUON_GCN_TABLE = "nguon_gcn"
 BATCH_SIZE = 500
 
-# Thứ tự phải khớp chính xác với các cột B..BF trên Google Sheet (57 cột,
+# Thứ tự phải khớp chính xác với các cột B..BE trên Google Sheet (56 cột,
 # map cứng theo vị trí — không dựa vào tiêu đề Sheet).
 COLUMNS = [
     "madvhc",
@@ -45,7 +43,6 @@ COLUMNS = [
     "phapnhantrengcn",
     "vaitrophapnhan",
     "tenchusudunghientai",
-    "ngaysinh_chusudunghientai",
     "sodinhdanh_chusudunghientai",
     "diachi_chusudunghientai",
     "lydothaydoi",
@@ -90,5 +87,5 @@ COLUMNS = [
     "phanloai",
 ]
 
-if len(COLUMNS) != 57:
-    sys.exit(f"COLUMNS phải có đúng 57 phần tử, hiện có {len(COLUMNS)}")
+if len(COLUMNS) != 56:
+    sys.exit(f"COLUMNS phải có đúng 56 phần tử, hiện có {len(COLUMNS)}")

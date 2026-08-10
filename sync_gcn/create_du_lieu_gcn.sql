@@ -40,12 +40,10 @@ create table if not exists public.du_lieu_gcn (
   synced_at timestamptz,
   created_at timestamptz not null default now(),
 
-  -- 57 trường lấy nguyên văn từ Google Sheet ("Trang tính1"!B4:BF, theo
-  -- đúng thứ tự cột B..BF — dữ liệu thật bắt đầu từ dòng 4, không phải
-  -- dòng 3 như dự kiến ban đầu, và sheet có 57 cột chứ không phải 56 vì
-  -- có thêm cột "Ngày sinh người sử dụng hiện tại"). Giữ kiểu text ở
-  -- bản đầu để không mất số 0 đầu ở CCCD/mã định danh/số giấy tờ và
-  -- tránh sai lệch định dạng.
+  -- 56 trường lấy nguyên văn từ Google Sheet ("Trang tính1"!B4:BE, theo
+  -- đúng thứ tự cột B..BE — dữ liệu thật bắt đầu từ dòng 4, không phải
+  -- dòng 3 như dự kiến ban đầu). Giữ kiểu text ở bản đầu để không mất số
+  -- 0 đầu ở CCCD/mã định danh/số giấy tờ và tránh sai lệch định dạng.
   madvhc text,
   sophathanhgcn text,
   ngaycapgcn text,
@@ -60,7 +58,6 @@ create table if not exists public.du_lieu_gcn (
   phapnhantrengcn text,
   vaitrophapnhan text,
   tenchusudunghientai text,
-  ngaysinh_chusudunghientai text,
   sodinhdanh_chusudunghientai text,
   diachi_chusudunghientai text,
   lydothaydoi text,
@@ -105,9 +102,10 @@ create table if not exists public.du_lieu_gcn (
   phanloai text
 );
 
--- An toàn chạy lại nếu bảng đã tồn tại từ trước (lúc chưa có cột này):
+-- Dữ liệu gốc không có "Ngày sinh người sử dụng hiện tại" — xóa cột này nếu
+-- bảng đã tồn tại từ trước (an toàn chạy lại nhiều lần).
 alter table public.du_lieu_gcn
-  add column if not exists ngaysinh_chusudunghientai text;
+  drop column if exists ngaysinh_chusudunghientai;
 
 -- Khóa ghép madvhc + số tờ + số thửa (đã chuẩn hóa) để đối chiếu 1-1 với
 -- (ma_xa, so_to, so_thua) bên bảng thua_dat — dùng kiểm tra thửa nào đã
