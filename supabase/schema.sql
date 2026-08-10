@@ -138,6 +138,8 @@ create or replace function public.get_parcels_in_view(
 returns jsonb
 language sql
 stable
+security definer
+set search_path = public, extensions
 as $$
     select jsonb_build_object(
         'type', 'FeatureCollection',
@@ -173,7 +175,18 @@ as $$
                     'van_hanh_24_7', d.van_hanh_24_7,
                     'khong_van_hanh_24_7', d.khong_van_hanh_24_7,
                     'phan_loai_ke_hoach_2959', d.phan_loai_ke_hoach_2959
-                ) end
+                ) end,
+                -- Thửa đã có dữ liệu GCN (bảng public.du_lieu_gcn, đối chiếu qua
+                -- khóa madvhc_soto_sothua — xem sync_gcn/create_du_lieu_gcn.sql).
+                -- Hàm chạy security definer để bỏ qua RLS của du_lieu_gcn (chỉ
+                -- service role đọc trực tiếp được) mà vẫn chỉ lộ ra 1 cờ boolean,
+                -- không lộ dữ liệu cá nhân trong bảng đó.
+                'co_gcn', exists (
+                    select 1
+                    from public.du_lieu_gcn g
+                    where g.madvhc_soto_sothua
+                        = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+                )
             )
         ) as feature
         from public.thua_dat t
@@ -250,6 +263,8 @@ create or replace function public.search_parcels(
 returns jsonb
 language sql
 stable
+security definer
+set search_path = public, extensions
 as $$
     select jsonb_build_object(
         'type', 'FeatureCollection',
@@ -285,7 +300,13 @@ as $$
                     'van_hanh_24_7', d.van_hanh_24_7,
                     'khong_van_hanh_24_7', d.khong_van_hanh_24_7,
                     'phan_loai_ke_hoach_2959', d.phan_loai_ke_hoach_2959
-                ) end
+                ) end,
+                'co_gcn', exists (
+                    select 1
+                    from public.du_lieu_gcn g
+                    where g.madvhc_soto_sothua
+                        = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+                )
             )
         ) as feature
         from public.thua_dat t

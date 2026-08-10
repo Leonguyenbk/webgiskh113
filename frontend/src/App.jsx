@@ -93,6 +93,13 @@ const GROUP_LABELS = {
   DEFAULT: "Chưa phân loại",
 };
 
+// Thửa đã có dữ liệu GCN (properties.co_gcn, xem get_parcels_in_view/
+// search_parcels trong supabase/schema.sql) được tô xanh dương — nhưng
+// chỉ khi thửa CHƯA thuộc Nhóm 1/Nhóm 2, vì màu nhóm quan trọng hơn và
+// không được ghi đè.
+const GCN_COLOR = "#2563eb";
+const GCN_LABEL = "Đã có dữ liệu GCN";
+
 function getGroupKey(phanLoai = "") {
   const normalized = phanLoai.trim().toUpperCase();
   return GROUP_COLORS[normalized] ? normalized : "DEFAULT";
@@ -100,6 +107,14 @@ function getGroupKey(phanLoai = "") {
 
 function getGroupColor(phanLoai = "") {
   return GROUP_COLORS[getGroupKey(phanLoai)];
+}
+
+function getParcelFillColor(properties = {}) {
+  const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
+  if (groupKey === "DEFAULT" && properties.co_gcn) {
+    return GCN_COLOR;
+  }
+  return GROUP_COLORS[groupKey];
 }
 
 const MISSING_INFO_RULES = [
@@ -852,7 +867,7 @@ export default function App({ onNavigateTools }) {
         weight: isSelected ? 4 : 1.5,
         fillColor: isSelected
           ? "#2563eb"
-          : getGroupColor(feature.properties?.dong_bo?.phan_loai_ke_hoach_2959),
+          : getParcelFillColor(feature.properties),
         // Slider "Độ mờ thửa đất" điều khiển lớp chưa chọn; thửa đang
         // chọn luôn đậm hơn một chút (+0.2) để vẫn nổi bật, tối đa 1.
         fillOpacity: isSelected
@@ -1230,11 +1245,7 @@ export default function App({ onNavigateTools }) {
                       >
                         <span
                           className="parcelListDot"
-                          style={{
-                            backgroundColor: getGroupColor(
-                              p.dong_bo?.phan_loai_ke_hoach_2959,
-                            ),
-                          }}
+                          style={{ backgroundColor: getParcelFillColor(p) }}
                         />
                         <span className="parcelListLabel">
                           Tờ {p.so_to} · Thửa {p.so_thua}
@@ -1380,6 +1391,11 @@ export default function App({ onNavigateTools }) {
               </div>
             ))}
 
+            <div>
+              <span style={{ backgroundColor: GCN_COLOR }} />
+              <label>{GCN_LABEL}</label>
+            </div>
+
             <div className="opacitySlider">
               <label htmlFor="parcelOpacity">
                 Độ mờ thửa đất
@@ -1472,6 +1488,23 @@ export default function App({ onNavigateTools }) {
                               selected.dong_bo?.phan_loai_ke_hoach_2959,
                             )
                           ]}
+                      </span>
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt>Dữ liệu GCN</dt>
+                    <dd>
+                      <span
+                        className="tag"
+                        style={{
+                          color: selected.co_gcn ? "white" : "#334155",
+                          backgroundColor: selected.co_gcn
+                            ? GCN_COLOR
+                            : "#e2e8f0",
+                        }}
+                      >
+                        {selected.co_gcn ? GCN_LABEL : "Chưa có dữ liệu GCN"}
                       </span>
                     </dd>
                   </div>
