@@ -335,16 +335,13 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   .mapWrap { order: 1; }
   .sectionTitle { margin-top: 15px; }
   .mapHint { display: none; }
-  /* Chừa khoảng trống phía trên để không bị thanh địa chỉ/tìm kiếm của
-     trình duyệt di động che mất; mỗi nút xuống một hàng riêng thay vì
-     dồn sát góc. */
   /* Leaflet tự cộng thêm margin-top 10px cho control bên trong
      .leaflet-top, nên trừ sẵn 10px ở đây để nút chọn lớp nền ngang
      hàng với nút ẩn/hiện (top: 20px). */
   .map .leaflet-top.leaflet-right { top: 10px; }
 
   .locateButton {
-    top: 74px;
+    bottom: 130px;         /* cao hơn để tránh thanh công cụ trình duyệt di động */
     width: 40px;
     height: 40px;
     padding: 0;
@@ -353,7 +350,7 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
     font-size: 16px;
   }
   .locateButton span { display: none; }
-  .locationError { top: 124px; }
+  .locationError { bottom: 178px; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
 
   .uiToggleButton {
