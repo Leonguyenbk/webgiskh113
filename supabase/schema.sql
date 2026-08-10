@@ -352,3 +352,42 @@ alter table public.nguon_gcn enable row level security;
 -- được bảng này, anon/authenticated không truy cập trực tiếp qua
 -- PostgREST vì đây là dữ liệu cấu hình quản trị.
 
+-- =========================================================
+-- THỐNG KÊ THU THẬP DỮ LIỆU GCN THEO XÃ/PHƯỜNG
+-- Dùng cho trang dashboard (GcnDashboardPage.jsx) — số thửa đã "nhập
+-- biểu" (có dữ liệu GCN, đối chiếu qua khóa madvhc_soto_sothua, giống
+-- co_gcn trong get_parcels_in_view/search_parcels) trên tổng số thửa,
+-- theo từng xã. Gộp theo khóa DISTINCT trước khi LEFT JOIN (thay vì
+-- EXISTS tương quan từng dòng như get_parcels_in_view) vì hàm này quét
+-- toàn bộ thua_dat chứ không giới hạn theo khung bản đồ/limit.
+-- =========================================================
+
+create or replace function public.gcn_thu_thap_theo_xa()
+returns table (
+    ma_xa text,
+    tong_so_thua bigint,
+    da_nhap_bieu bigint
+)
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    with gcn_keys as (
+        select distinct g.madvhc_soto_sothua
+        from public.du_lieu_gcn g
+        where g.madvhc_soto_sothua is not null
+    )
+    select
+        t.ma_xa,
+        count(*)::bigint as tong_so_thua,
+        count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu
+    from public.thua_dat t
+    left join gcn_keys k
+        on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+    group by t.ma_xa
+    order by t.ma_xa;
+$$;
+
+grant execute on function public.gcn_thu_thap_theo_xa() to anon, authenticated;
+

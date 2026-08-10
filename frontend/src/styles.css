@@ -319,6 +319,94 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .importButton:hover { background: #0b5f59; }
 .importButton:disabled { background: #9db8b4; cursor: not-allowed; }
 
+.dashboardWrap { flex: 1; padding: 28px 32px 40px; overflow: auto; }
+
+.statTiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.statTile {
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: white;
+  border: 1px solid #d4e1de;
+  box-shadow: 0 8px 22px #234e4818;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.statTile span { font-size: 12px; color: #6a817e; }
+.statTile strong { font-size: 26px; color: #102a2b; }
+
+.dashboardGrid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.dashboardGrid .importCard { max-width: none; }
+
+.donutWrap { display: grid; place-items: center; padding: 12px 0 4px; }
+
+.donutLegend { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 2px; }
+.donutLegend > div { display: flex; align-items: center; gap: 8px; }
+.donutLegend span {
+  flex: 0 0 14px; width: 14px; height: 14px; border-radius: 4px;
+}
+.donutLegend label { flex: 1; font-size: 12px; color: #334155; }
+.donutLegend strong { font-size: 13px; color: #102a2b; }
+
+.statsTableCard { max-width: none; }
+
+.statsTableWrap { overflow-x: auto; }
+
+.statsTable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.statsTable th {
+  text-align: left; padding: 9px 10px;
+  color: #6a817e; font-size: 11px; font-weight: 700;
+  border-bottom: 1px solid #d8e5e2;
+  white-space: nowrap;
+}
+.statsTable td {
+  padding: 9px 10px;
+  border-bottom: 1px dashed #e2ece9;
+  color: #173f3c;
+  white-space: nowrap;
+}
+.statsTable tbody tr { cursor: pointer; }
+.statsTable tbody tr:hover { background: #f1f7f5; }
+.statsTable tbody tr.active { background: #dbefeb; }
+
+.statsTableBar { display: flex; align-items: center; gap: 8px; }
+.statsTableBarTrack {
+  position: relative;
+  width: 110px; height: 10px;
+  border-radius: 5px;
+  background: #eef2f1;
+  overflow: hidden;
+}
+.statsTableBarFill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: #2563eb;
+  border-radius: 5px;
+}
+.statsTableBar span {
+  flex: 0 0 34px;
+  font-size: 11px; font-weight: 700;
+  color: #173f3c;
+}
+
+@media (max-width: 900px) {
+  .dashboardGrid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .dashboardWrap { padding: 16px; }
+}
+
 .uiToggleButton { display: none; }
 
 @media (max-width: 760px) {

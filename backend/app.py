@@ -433,6 +433,38 @@ def parcels_xa_list():
     return jsonify({"items": items})
 
 
+# =========================================================
+# THỐNG KÊ THU THẬP DỮ LIỆU GCN THEO XÃ (cho trang dashboard)
+# =========================================================
+
+
+@app.get("/api/gcn-stats")
+def gcn_stats():
+    result, error_response = call_rpc("gcn_thu_thap_theo_xa", {}, timeout=30)
+
+    if error_response:
+        return error_response
+
+    rows = result if isinstance(result, list) else []
+    items = []
+    for row in rows:
+        ma_xa = row.get("ma_xa")
+        if not ma_xa:
+            continue
+        tong = int(row.get("tong_so_thua") or 0)
+        da_nhap = int(row.get("da_nhap_bieu") or 0)
+        items.append(
+            {
+                "ma_xa": ma_xa,
+                "tong_so_thua": tong,
+                "da_nhap_bieu": da_nhap,
+                "chua_nhap_bieu": max(tong - da_nhap, 0),
+            }
+        )
+
+    return jsonify({"items": items})
+
+
 @app.get("/api/parcels/search")
 def parcels_search():
     ma_xa = request.args.get("ma_xa", "").strip()

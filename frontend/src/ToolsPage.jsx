@@ -23,6 +23,7 @@ export default function ToolsPage({
   onNavigateSync,
   onNavigateMbtiles,
   onNavigateGcnLinks,
+  onNavigateGcnDashboard,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -44,6 +45,11 @@ export default function ToolsPage({
       name: "⇪ Nhập đường link",
       description: "Quản lý danh sách link Google Sheet cho công cụ đồng bộ GCN.",
       onNavigate: onNavigateGcnLinks,
+    },
+    {
+      name: "📊 Thống kê thu thập",
+      description: "Tỉ lệ thửa đất đã nhập biểu GCN theo từng xã/phường.",
+      onNavigate: onNavigateGcnDashboard,
     },
   ];
 

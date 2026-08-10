@@ -8,6 +8,7 @@ import ImportGmlPage from "./ImportGmlPage.jsx";
 import ImportSyncPage from "./ImportSyncPage.jsx";
 import ManageMbtilesPage from "./ManageMbtilesPage.jsx";
 import ManageGcnLinksPage from "./ManageGcnLinksPage.jsx";
+import GcnDashboardPage from "./GcnDashboardPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -31,6 +32,7 @@ function Root() {
         onNavigateSync={() => navigate("/import-dong-bo")}
         onNavigateMbtiles={() => navigate("/mbtiles")}
         onNavigateGcnLinks={() => navigate("/nguon-gcn")}
+        onNavigateGcnDashboard={() => navigate("/thong-ke-gcn")}
       />
     );
   }
@@ -45,6 +47,9 @@ function Root() {
   }
   if (path.startsWith("/nguon-gcn")) {
     return <ManageGcnLinksPage onNavigateHome={() => navigate("/")} />;
+  }
+  if (path.startsWith("/thong-ke-gcn")) {
+    return <GcnDashboardPage onNavigateHome={() => navigate("/")} />;
   }
   return <App onNavigateTools={() => navigate("/tools")} />;
 }
