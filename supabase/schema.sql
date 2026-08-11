@@ -398,3 +398,76 @@ $$;
 
 grant execute on function public.gcn_thu_thap_theo_xa() to anon, authenticated;
 
+-- =========================================================
+-- CẬP NHẬT TRẠNG THÁI TỪ MPLIS (trang "Cập nhật MPLIS", backend
+-- mplis_sync.py) — batch UPSERT public.dong_bo_du_lieu theo khóa
+-- ma_xa+so_to+so_thua: đã có thì UPDATE các trường trạng thái, chưa có
+-- thì INSERT mới (id/created_at để mặc định database tự sinh). Trả về
+-- danh sách khóa đã ghi kèm cờ was_insert để backend đếm riêng
+-- "đã cập nhật" / "đã thêm mới".
+--
+-- Dùng insert ... on conflict do update — an toàn vì bảng đã có unique
+-- constraint đúng trên bộ khóa này (dong_bo_du_lieu_ma_xa_so_to_so_thua_key,
+-- đã kiểm tra tồn tại sẵn, không tự tạo mới) và caller (mplis_sync.py)
+-- tự loại trùng khóa trong cùng 1 lô trước khi gọi — 1 câu lệnh
+-- insert...on conflict không thể update cùng 1 dòng 2 lần, nếu lô đưa
+-- vào có khóa trùng thì cả lô sẽ lỗi.
+--
+-- Index tra cứu theo (ma_xa, so_to, so_thua) đã có sẵn
+-- (dong_bo_du_lieu_tra_cuu_idx).
+--
+-- Hàm ghi dữ liệu nên KHÔNG cấp quyền cho anon/authenticated (khác các
+-- hàm đọc phía trên) — chỉ Service Role Key (backend) gọi được.
+-- =========================================================
+
+create or replace function public.batch_upsert_dong_bo_du_lieu(p_rows jsonb)
+returns table (ma_xa text, so_to integer, so_thua integer, was_insert boolean)
+language plpgsql
+as $$
+begin
+    return query
+    insert into public.dong_bo_du_lieu as d (
+        ma_xa, so_to, so_thua,
+        da_xuat_so_dia_chinh_dien_tu, chua_xuat_so_dia_chinh_dien_tu,
+        dong_bo_3_khoi, khong_dong_bo_3_khoi,
+        chi_co_du_lieu_thuoc_tinh,
+        khop_csdlqg_dan_cu, chua_khop_csdlqg_dan_cu, khong_xac_dinh_csdlqg_dan_cu,
+        van_hanh_24_7, khong_van_hanh_24_7,
+        phan_loai_ke_hoach_2959
+    )
+    select
+        i.value->>'ma_xa',
+        (i.value->>'so_to')::integer,
+        (i.value->>'so_thua')::integer,
+        (i.value->>'da_xuat_so_dia_chinh_dien_tu')::boolean,
+        (i.value->>'chua_xuat_so_dia_chinh_dien_tu')::boolean,
+        (i.value->>'dong_bo_3_khoi')::boolean,
+        (i.value->>'khong_dong_bo_3_khoi')::boolean,
+        (i.value->>'chi_co_du_lieu_thuoc_tinh')::boolean,
+        (i.value->>'khop_csdlqg_dan_cu')::boolean,
+        (i.value->>'chua_khop_csdlqg_dan_cu')::boolean,
+        (i.value->>'khong_xac_dinh_csdlqg_dan_cu')::boolean,
+        (i.value->>'van_hanh_24_7')::boolean,
+        (i.value->>'khong_van_hanh_24_7')::boolean,
+        i.value->>'phan_loai_ke_hoach_2959'
+    from jsonb_array_elements(p_rows) as i(value)
+    on conflict (ma_xa, so_to, so_thua) do update set
+        da_xuat_so_dia_chinh_dien_tu = excluded.da_xuat_so_dia_chinh_dien_tu,
+        chua_xuat_so_dia_chinh_dien_tu = excluded.chua_xuat_so_dia_chinh_dien_tu,
+        dong_bo_3_khoi = excluded.dong_bo_3_khoi,
+        khong_dong_bo_3_khoi = excluded.khong_dong_bo_3_khoi,
+        chi_co_du_lieu_thuoc_tinh = excluded.chi_co_du_lieu_thuoc_tinh,
+        khop_csdlqg_dan_cu = excluded.khop_csdlqg_dan_cu,
+        chua_khop_csdlqg_dan_cu = excluded.chua_khop_csdlqg_dan_cu,
+        khong_xac_dinh_csdlqg_dan_cu = excluded.khong_xac_dinh_csdlqg_dan_cu,
+        van_hanh_24_7 = excluded.van_hanh_24_7,
+        khong_van_hanh_24_7 = excluded.khong_van_hanh_24_7,
+        phan_loai_ke_hoach_2959 = excluded.phan_loai_ke_hoach_2959,
+        updated_at = now()
+    returning d.ma_xa, d.so_to, d.so_thua, (xmax = 0) as was_insert;
+end;
+$$;
+
+revoke all on function public.batch_upsert_dong_bo_du_lieu(jsonb) from public;
+grant execute on function public.batch_upsert_dong_bo_du_lieu(jsonb) to service_role;
+

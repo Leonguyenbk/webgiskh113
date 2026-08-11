@@ -326,6 +326,105 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .importButton:hover { background: #0b5f59; }
 .importButton:disabled { background: #9db8b4; cursor: not-allowed; }
 
+/* Trang "Cập nhật MPLIS". */
+.mplisCard { max-width: 480px; }
+
+.mplisTextarea {
+  height: auto;
+  min-height: 64px;
+  padding: 10px 12px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.mplisMasked { -webkit-text-security: disc; }
+
+.importCard label.mplisCookieLabel,
+label[for="mplisCookie"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mplisToggleVisible {
+  padding: 3px 10px;
+  border: 1px solid #b9ccc8;
+  border-radius: 7px;
+  color: #0f766e;
+  background: white;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: none;
+}
+.mplisToggleVisible:hover { background: #f1f7f5; }
+
+.mplisProgressTrack {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  background: #eef2f1;
+  overflow: hidden;
+}
+.mplisProgressFill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, #0f766e, #14b8a6);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+.mplisProgressPercent {
+  align-self: flex-end;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.mplisStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+.mplisStats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #f1f7f5;
+}
+.mplisStats span { font-size: 10px; color: #6a817e; }
+.mplisStats strong { font-size: 16px; color: #102a2b; }
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #0f172acc;
+  backdrop-filter: blur(2px);
+}
+.modalCard {
+  width: 100%;
+  max-width: 420px;
+  padding: 24px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 20px 50px #0f172a55;
+}
+.modalCard h2 { margin: 0 0 12px; font-size: 17px; color: #102a2b; }
+.modalCard p { margin: 0 0 10px; font-size: 13px; color: #345b57; line-height: 1.5; }
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 /* Trang "Nhập đường link": danh sách nguồn cần rộng hơn form để hiện
    trọn link Google Sheet, không bị cắt ngắn như .parcelListItem. */
 .gcnLinksListCard { max-width: 640px; }

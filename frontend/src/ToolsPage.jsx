@@ -24,6 +24,7 @@ export default function ToolsPage({
   onNavigateMbtiles,
   onNavigateGcnLinks,
   onNavigateGcnDashboard,
+  onNavigateMplisSync,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -50,6 +51,11 @@ export default function ToolsPage({
       name: "📊 Thống kê thu thập",
       description: "Tỉ lệ thửa đất đã nhập biểu GCN theo từng xã/phường.",
       onNavigate: onNavigateGcnDashboard,
+    },
+    {
+      name: "🔄 Cập nhật MPLIS",
+      description: "Lấy trạng thái thửa đất từ MPLIS, cập nhật vào dong_bo_du_lieu (1 thửa hoặc cả xã).",
+      onNavigate: onNavigateMplisSync,
     },
   ];
 

@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 
 import gcn_sync
 import gml_reader
+import mplis_sync
 from sync_reader import parse_sync_file
 
 
@@ -1196,6 +1197,91 @@ def vietbando_tile(z: int, x: int, y: int):
             "error": "Không kết nối được máy chủ Vietbando",
             "detail": str(exc),
         }), 502
+
+
+# =========================================================
+# CẬP NHẬT TRẠNG THÁI TỪ MPLIS (public.dong_bo_du_lieu)
+# Trang quản trị "Cập nhật MPLIS" — người dùng tự nhập Cookie/token phiên
+# MPLIS của họ mỗi lần dùng, backend chỉ giữ trong bộ nhớ cho đúng thời
+# gian xử lý request/job, KHÔNG bao giờ log hay lưu lại (xem mplis_sync.py).
+# Cùng dùng IMPORT_TOKEN/check_import_token() như các endpoint nhập liệu
+# khác trong file này — đây là cơ chế "khu vực quản trị" hiện có của dự án.
+# =========================================================
+
+
+def _validate_mplis_mode(ma_xa: str, so_to: str, so_thua: str) -> tuple[str | None, str | None]:
+    """Trả (mode, None) nếu hợp lệ — mode là 'single' hoặc 'ward' — hoặc
+    (None, thông báo lỗi) nếu không hợp lệ."""
+    if not ma_xa:
+        return None, "Chưa nhập mã xã."
+    if bool(so_to) != bool(so_thua):
+        return None, "Phải nhập cả Số tờ và Số thửa hoặc để trống cả hai."
+    return ("single" if so_to else "ward"), None
+
+
+@app.post("/api/admin/cap-nhat-phan-loai")
+def cap_nhat_phan_loai_mplis():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    body = request.get_json(silent=True) or {}
+    ma_xa = str(body.get("ma_xa", "")).strip()
+    so_to = str(body.get("so_to", "")).strip()
+    so_thua = str(body.get("so_thua", "")).strip()
+    token = str(body.get("request_verification_token", "")).strip()
+    cookie = str(body.get("cookie", "")).strip()
+
+    mode, error = _validate_mplis_mode(ma_xa, so_to, so_thua)
+    if error:
+        return jsonify({"error": error}), 400
+    if not token:
+        return jsonify({"error": "Chưa nhập Request Verification Token."}), 400
+    if not cookie:
+        return jsonify({"error": "Chưa nhập Cookie MPLIS."}), 400
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+    try:
+        headers = supabase_headers()
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    if mode == "single":
+        try:
+            result = mplis_sync.update_single_parcel(
+                ma_xa, so_to, so_thua, token, cookie, base_url, headers
+            )
+        except mplis_sync.MplisSessionError as exc:
+            return jsonify({"error": str(exc)}), 401
+        except mplis_sync.MplisRequestError as exc:
+            return jsonify({"error": f"Không kết nối được MPLIS: {exc}"}), 502
+        except Exception:  # noqa: BLE001 - không được để lộ chi tiết lỗi thật cho người dùng
+            app.logger.exception(
+                "Cập nhật 1 thửa MPLIS lỗi: ma_xa=%s so_to=%s so_thua=%s", ma_xa, so_to, so_thua
+            )
+            return jsonify({"error": "Có lỗi không xác định khi cập nhật."}), 500
+
+        return jsonify({"mode": "single", **result})
+
+    # mode == "ward"
+    job = mplis_sync.try_start_ward_job(ma_xa, so_to, so_thua, token, cookie, base_url, headers)
+    if job is None:
+        return jsonify({"error": "Đang có một tiến trình cập nhật khác đang chạy."}), 409
+
+    return jsonify({"mode": "ward", "job_id": job.job_id, "status": job.status})
+
+
+@app.get("/api/admin/cap-nhat-phan-loai/<job_id>")
+def cap_nhat_phan_loai_mplis_status(job_id: str):
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    job = mplis_sync.get_job(job_id)
+    if job is None:
+        return jsonify({"error": "Không tìm thấy job"}), 404
+
+    return jsonify(job.snapshot())
 
 
 if __name__ == "__main__":
