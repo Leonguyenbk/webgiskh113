@@ -291,7 +291,7 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
           </p>
         </form>
 
-        <div className="importCard">
+        <div className="importCard gcnLinksListCard">
           <label>Danh sách nguồn</label>
 
           {loadingList && <div className="notice">Đang tải danh sách…</div>}
@@ -308,18 +308,14 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
           )}
 
           {items.length > 0 && (
-            <div className="parcelList">
+            <div className="gcnLinkList">
               {items.map((item) => {
                 const isEditing = editingMaNguon === item.ma_nguon;
                 const isBusy = busyMaNguon === item.ma_nguon;
 
                 if (isEditing) {
                   return (
-                    <div
-                      key={item.ma_nguon}
-                      className="parcelListItem"
-                      style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}
-                    >
+                    <div key={item.ma_nguon} className="gcnLinkItem gcnLinkItemEditing">
                       <strong>{item.ma_nguon}</strong>
                       <input
                         className="filterInput"
@@ -363,44 +359,58 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
 
                 return (
                   <Fragment key={item.ma_nguon}>
-                    <div className="parcelListItem">
-                      <span
-                        className="parcelListDot"
-                        style={{
-                          backgroundColor: item.kich_hoat ? "#22c55e" : "#94a3b8",
-                          cursor: "pointer",
-                        }}
-                        title={item.kich_hoat ? "Đang kích hoạt — bấm để tắt" : "Đang tắt — bấm để bật"}
-                        onClick={() => !isBusy && toggleKichHoat(item)}
-                      />
-                      <span className="parcelListLabel" title={item.url}>
-                        [{item.ma_nguon}] {item.ten_nguon || "(chưa đặt tên)"}
-                      </span>
-                      <button
-                        type="button"
-                        className="searchButton"
-                        disabled={isBusy || isSyncing}
-                        onClick={() => handleSync(item)}
-                        title="Đọc lại Google Sheet và cập nhật dữ liệu GCN"
+                    <div className="gcnLinkItem">
+                      <div className="gcnLinkHeader">
+                        <span
+                          className="parcelListDot"
+                          style={{
+                            backgroundColor: item.kich_hoat ? "#22c55e" : "#94a3b8",
+                            cursor: "pointer",
+                          }}
+                          title={item.kich_hoat ? "Đang kích hoạt — bấm để tắt" : "Đang tắt — bấm để bật"}
+                          onClick={() => !isBusy && toggleKichHoat(item)}
+                        />
+                        <strong>
+                          [{item.ma_nguon}] {item.ten_nguon || "(chưa đặt tên)"}
+                        </strong>
+                      </div>
+
+                      <a
+                        className="gcnLinkUrl"
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        {isSyncing ? "Đang đồng bộ…" : "Đồng bộ"}
-                      </button>
-                      <button
-                        type="button"
-                        className="resetButton"
-                        disabled={isBusy}
-                        onClick={() => startEdit(item)}
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        className="resetButton"
-                        disabled={isBusy}
-                        onClick={() => handleDelete(item)}
-                      >
-                        {isBusy ? "…" : "Xóa"}
-                      </button>
+                        {item.url}
+                      </a>
+
+                      <div className="gcnLinkActions">
+                        <button
+                          type="button"
+                          className="searchButton"
+                          disabled={isBusy || isSyncing}
+                          onClick={() => handleSync(item)}
+                          title="Đọc lại Google Sheet và cập nhật dữ liệu GCN"
+                        >
+                          {isSyncing ? "Đang đồng bộ…" : "Đồng bộ"}
+                        </button>
+                        <button
+                          type="button"
+                          className="resetButton"
+                          disabled={isBusy}
+                          onClick={() => startEdit(item)}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          className="resetButton"
+                          disabled={isBusy}
+                          onClick={() => handleDelete(item)}
+                        >
+                          {isBusy ? "…" : "Xóa"}
+                        </button>
+                      </div>
                     </div>
 
                     {syncResult && (

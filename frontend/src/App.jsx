@@ -195,7 +195,7 @@ function DiaChinhFitButton({ map, bounds }) {
       disabled={!map}
       title="Đưa bản đồ tới phạm vi lớp địa chính"
     >
-      🗺️ Vùng địa chính
+      🗺️ <span>Vùng địa chính</span>
     </button>
   );
 }
@@ -926,7 +926,7 @@ export default function App({ onNavigateTools }) {
     <main className={`shell${uiHidden ? " uiHidden" : ""}`}>
       <header className="topbar">
         <div className="brandMark">GIS</div>
-        <div>
+        <div className="topbarTitle">
           <h1>Bản đồ phân loại thửa đất</h1>
           <p>VN-2000 Đắk Lắk · Dữ liệu Supabase</p>
         </div>
