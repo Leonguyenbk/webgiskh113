@@ -9,18 +9,36 @@ from typing import BinaryIO, Iterator
 from pyproj import Transformer
 
 
+# Một số nguồn xuất GML (VD ThuaDat.gml) khai báo xmlns:wfs/xmlns:app cục bộ
+# bằng chuỗi bất kỳ (VD xmlns:wfs="ThuaDat") thay vì URI chuẩn OGC/vietbando,
+# nên không thể match cố định theo NS bên dưới cho các thẻ wfs:/app:. Chỉ có
+# gml: (hình học) là luôn đúng URI chuẩn trong mọi file đã gặp.
 NS = {
     "wfs": "http://www.opengis.net/wfs/2.0",
     "gml": "http://www.opengis.net/gml/3.2",
     "app": "http://www.vietbando.com/gml/vlis",
 }
 
-MEMBER_TAG = f"{{{NS['wfs']}}}member"
+# Tên phần tử bọc 1 thửa đất — mỗi nguồn xuất GML đặt tên khác nhau
+# ("Thua_Dat" hay "ThuaDat" không dấu gạch dưới).
+PARCEL_LOCAL_NAMES = ("Thua_Dat", "ThuaDat")
 
 
-def _text(node: ET.Element, path: str, default: str = "") -> str:
-    item = node.find(path, NS)
-    return (item.text or "").strip() if item is not None else default
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _child(node: ET.Element, *names: str) -> ET.Element | None:
+    """Tìm con TRỰC TIẾP theo tên local, bỏ qua namespace."""
+    for child in node:
+        if _local_name(child.tag) in names:
+            return child
+    return None
+
+
+def _text(node: ET.Element, name: str, default: str = "") -> str:
+    child = _child(node, name)
+    return (child.text or "").strip() if child is not None else default
 
 
 def _ring(pos_list: str, transformer: Transformer) -> list[list[float]]:
@@ -36,26 +54,58 @@ def _ring(pos_list: str, transformer: Transformer) -> list[list[float]]:
     return result
 
 
+def _ring_from_linear_ring_parent(parent: ET.Element, transformer: Transformer) -> list[list[float]] | None:
+    ring = _child(parent, "LinearRing")
+    pos_list = _child(ring, "posList") if ring is not None else None
+    if pos_list is None or not (pos_list.text or "").strip():
+        return None
+    return _ring(pos_list.text or "", transformer)
+
+
+def _rings_from_polygon(polygon: ET.Element, transformer: Transformer) -> list[list[list[float]]] | None:
+    exterior = _child(polygon, "exterior")
+    ext_ring = _ring_from_linear_ring_parent(exterior, transformer) if exterior is not None else None
+    if ext_ring is None:
+        return None
+
+    rings = [ext_ring]
+    for child in polygon:
+        if _local_name(child.tag) != "interior":
+            continue
+        int_ring = _ring_from_linear_ring_parent(child, transformer)
+        if int_ring is not None:
+            rings.append(int_ring)
+    return rings
+
+
+def _geometry_rings(parcel: ET.Element, transformer: Transformer) -> list[list[list[float]]] | None:
+    geometry = _child(parcel, "Geometry")
+    if geometry is None:
+        return None
+
+    polygon = _child(geometry, "Polygon")
+    if polygon is not None:
+        return _rings_from_polygon(polygon, transformer)
+
+    # MultiPolygon (thửa có nhiều phần rời nhau) — cột geom trong Supabase
+    # đang khai báo kiểu Polygon đơn, chưa hỗ trợ lưu MultiPolygon nên bỏ
+    # qua thửa này thay vì chỉ lấy 1 phần (sẽ sai hình dạng thật). Số lượng
+    # thực tế rất ít (~15/55.654 thửa trong ThuaDat.gml).
+    return None
+
+
 def _feature_from_member(member: ET.Element, transformer: Transformer, index: int) -> dict | None:
-    parcel = member.find("app:Thua_Dat", NS)
+    parcel = _child(member, *PARCEL_LOCAL_NAMES)
     if parcel is None:
         return None
 
-    exterior = parcel.find(
-        "app:Geometry/gml:Polygon/gml:exterior/gml:LinearRing/gml:posList", NS
-    )
-    if exterior is None or not (exterior.text or "").strip():
+    rings = _geometry_rings(parcel, transformer)
+    if rings is None:
         return None
 
-    rings = [_ring(exterior.text or "", transformer)]
-    for interior in parcel.findall(
-        "app:Geometry/gml:Polygon/gml:interior/gml:LinearRing/gml:posList", NS
-    ):
-        rings.append(_ring(interior.text or "", transformer))
-
-    so_to = int(_text(parcel, "app:soHieuToBanDo", "0"))
-    so_thua = int(_text(parcel, "app:soThuTuThua", "0"))
-    dien_tich_raw = _text(parcel, "app:dienTich", "0")
+    so_to = int(_text(parcel, "soHieuToBanDo", "0") or "0")
+    so_thua = int(_text(parcel, "soThuTuThua", "0") or "0")
+    dien_tich_raw = _text(parcel, "dienTich", "0")
 
     return {
         "type": "Feature",
@@ -64,11 +114,12 @@ def _feature_from_member(member: ET.Element, transformer: Transformer, index: in
         "properties": {
             "so_to": so_to,
             "so_thua": so_thua,
-            "ma_xa": _text(parcel, "app:maXa"),
-            "muc_dich_su_dung": _text(parcel, "app:mucDichSuDung"),
+            "ma_xa": _text(parcel, "maXa"),
+            "ma_thua_dat": _text(parcel, "maThuaDat"),
+            "muc_dich_su_dung": _text(parcel, "mucDichSuDung"),
             "dien_tich": float(dien_tich_raw or 0),
-            "ten_chu": _text(parcel, "app:tenChu"),
-            "dia_chi": _text(parcel, "app:diaChi"),
+            "ten_chu": _text(parcel, "tenChu"),
+            "dia_chi": _text(parcel, "diaChi"),
         },
     }
 
@@ -85,7 +136,7 @@ def iter_features(source: BinaryIO) -> Iterator[dict]:
     _, root = next(context)
     index = 0
     for event, elem in context:
-        if event != "end" or elem.tag != MEMBER_TAG:
+        if event != "end" or _local_name(elem.tag) != "member":
             continue
         index += 1
         feature = _feature_from_member(elem, transformer, index)
@@ -135,4 +186,3 @@ def write_geojson(data: dict, path: str | Path) -> None:
         json.dumps(data, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
-

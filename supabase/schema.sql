@@ -5,6 +5,7 @@ create table if not exists public.thua_dat (
     ma_xa text not null,
     so_to integer not null,
     so_thua integer not null,
+    ma_thua_dat text,
     muc_dich_su_dung text,
     dien_tich double precision,
     ten_chu text,
@@ -14,6 +15,12 @@ create table if not exists public.thua_dat (
     updated_at timestamptz not null default now(),
     constraint thua_dat_ma_xa_so_to_so_thua_key unique (ma_xa, so_to, so_thua)
 );
+
+-- An toàn chạy lại nếu bảng đã tồn tại từ trước (lúc chưa có cột này) —
+-- mã thửa đất riêng của từng nguồn xuất GML (VD ThuaDat.gml: app:maThuaDat),
+-- không phải khóa tra cứu (vẫn dùng ma_xa+so_to+so_thua như cũ).
+alter table public.thua_dat
+    add column if not exists ma_thua_dat text;
 
 create index if not exists thua_dat_geom_gix
     on public.thua_dat using gist (geom);
@@ -420,12 +427,15 @@ grant execute on function public.gcn_thu_thap_theo_xa() to anon, authenticated;
 -- hàm đọc phía trên) — chỉ Service Role Key (backend) gọi được.
 -- =========================================================
 
+-- Dùng "language sql" (không phải plpgsql): RETURNS TABLE(ma_xa, so_to,
+-- so_thua, ...) trong plpgsql biến các tên đó thành biến cục bộ trùng tên
+-- với cột bảng, khiến "on conflict (ma_xa, so_to, so_thua)" bị Postgres
+-- báo "column reference is ambiguous" (lỗi 42702, đã gặp thực tế). Hàm SQL
+-- thuần không có kiểu biến này nên không bị lỗi.
 create or replace function public.batch_upsert_dong_bo_du_lieu(p_rows jsonb)
 returns table (ma_xa text, so_to integer, so_thua integer, was_insert boolean)
-language plpgsql
+language sql
 as $$
-begin
-    return query
     insert into public.dong_bo_du_lieu as d (
         ma_xa, so_to, so_thua,
         da_xuat_so_dia_chinh_dien_tu, chua_xuat_so_dia_chinh_dien_tu,
@@ -465,7 +475,6 @@ begin
         phan_loai_ke_hoach_2959 = excluded.phan_loai_ke_hoach_2959,
         updated_at = now()
     returning d.ma_xa, d.so_to, d.so_thua, (xmax = 0) as was_insert;
-end;
 $$;
 
 revoke all on function public.batch_upsert_dong_bo_du_lieu(jsonb) from public;
