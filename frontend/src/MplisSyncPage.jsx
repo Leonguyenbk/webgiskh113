@@ -56,7 +56,11 @@ export default function MplisSyncPage({ onNavigateHome }) {
   const [maXa, setMaXa] = useState("");
   const [soTo, setSoTo] = useState("");
   const [soThua, setSoThua] = useState("");
-  const [token, setToken] = useState("");
+  // Mã xác thực của chính trang quản trị này (IMPORT_TOKEN backend, header
+  // X-Import-Token) — KHÁC với Request Verification Token của MPLIS bên
+  // dưới, không được dùng lẫn.
+  const [authToken, setAuthToken] = useState("");
+  const [mplisToken, setMplisToken] = useState("");
   const [cookie, setCookie] = useState("");
   const [cookieVisible, setCookieVisible] = useState(false);
 
@@ -89,7 +93,7 @@ export default function MplisSyncPage({ onNavigateHome }) {
         try {
           const response = await fetch(
             `${API_URL}/api/admin/cap-nhat-phan-loai/${encodeURIComponent(jobId)}`,
-            { headers: token ? { "X-Import-Token": token } : {} },
+            { headers: authToken ? { "X-Import-Token": authToken } : {} },
           );
           const body = await response.json();
           if (!response.ok) throw new Error(body.error || "Không lấy được tiến độ job");
@@ -105,12 +109,12 @@ export default function MplisSyncPage({ onNavigateHome }) {
       tick();
       pollTimerRef.current = setInterval(tick, POLL_INTERVAL_MS);
     },
-    [stopPolling, token],
+    [stopPolling, authToken],
   );
 
   const authHeaders = () => ({
     "Content-Type": "application/json",
-    ...(token ? { "X-Import-Token": token } : {}),
+    ...(authToken ? { "X-Import-Token": authToken } : {}),
   });
 
   const startSingle = async () => {
@@ -126,7 +130,7 @@ export default function MplisSyncPage({ onNavigateHome }) {
           ma_xa: maXa.trim(),
           so_to: soTo.trim(),
           so_thua: soThua.trim(),
-          request_verification_token: token,
+          request_verification_token: mplisToken,
           cookie,
         }),
       });
@@ -155,7 +159,7 @@ export default function MplisSyncPage({ onNavigateHome }) {
           ma_xa: maXa.trim(),
           so_to: "",
           so_thua: "",
-          request_verification_token: token,
+          request_verification_token: mplisToken,
           cookie,
         }),
       });
@@ -183,7 +187,7 @@ export default function MplisSyncPage({ onNavigateHome }) {
       setFormError("Phải nhập cả Số tờ và Số thửa hoặc để trống cả hai.");
       return;
     }
-    if (!token.trim()) {
+    if (!mplisToken.trim()) {
       setFormError("Chưa nhập Request Verification Token.");
       return;
     }
@@ -223,6 +227,16 @@ export default function MplisSyncPage({ onNavigateHome }) {
 
       <section className="importWrap">
         <form className="importCard mplisCard" onSubmit={handleSubmit}>
+          <label htmlFor="mplisAuthToken">Mã xác thực</label>
+          <input
+            id="mplisAuthToken"
+            type="password"
+            value={authToken}
+            onChange={(event) => setAuthToken(event.target.value)}
+            placeholder="Nhập mã do quản trị viên cấp (nếu có)"
+            disabled={busy}
+          />
+
           <label htmlFor="mplisMaXa">Mã xã *</label>
           <input
             id="mplisMaXa"
@@ -281,8 +295,8 @@ export default function MplisSyncPage({ onNavigateHome }) {
           <textarea
             id="mplisToken"
             className="filterInput mplisTextarea"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
+            value={mplisToken}
+            onChange={(event) => setMplisToken(event.target.value)}
             placeholder="__requestverificationtoken lấy từ trình duyệt MPLIS"
             disabled={busy}
           />
