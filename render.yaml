@@ -2,9 +2,10 @@ services:
   - type: web
     name: webgis-thua-dat-api
     runtime: python
+    plan: starter
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 300
+    startCommand: gunicorn app:app --timeout 300 --workers 2 --threads 4 --worker-class gthread
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
