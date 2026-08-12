@@ -6,7 +6,6 @@ import App from "./App.jsx";
 import ToolsPage from "./ToolsPage.jsx";
 import ImportGmlPage from "./ImportGmlPage.jsx";
 import ImportSyncPage from "./ImportSyncPage.jsx";
-import ManageMbtilesPage from "./ManageMbtilesPage.jsx";
 import ManageGcnLinksPage from "./ManageGcnLinksPage.jsx";
 import GcnDashboardPage from "./GcnDashboardPage.jsx";
 import MplisSyncPage from "./MplisSyncPage.jsx";
@@ -31,7 +30,6 @@ function Root() {
         onNavigateHome={() => navigate("/")}
         onNavigateImport={() => navigate("/import-gml")}
         onNavigateSync={() => navigate("/import-dong-bo")}
-        onNavigateMbtiles={() => navigate("/mbtiles")}
         onNavigateGcnLinks={() => navigate("/nguon-gcn")}
         onNavigateGcnDashboard={() => navigate("/thong-ke-gcn")}
         onNavigateMplisSync={() => navigate("/cap-nhat-mplis")}
@@ -43,9 +41,6 @@ function Root() {
   }
   if (path.startsWith("/import-dong-bo")) {
     return <ImportSyncPage onNavigateHome={() => navigate("/")} />;
-  }
-  if (path.startsWith("/mbtiles")) {
-    return <ManageMbtilesPage onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/nguon-gcn")) {
     return <ManageGcnLinksPage onNavigateHome={() => navigate("/")} />;

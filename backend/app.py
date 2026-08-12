@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
-from werkzeug.utils import secure_filename
 
 import gcn_sync
 import gml_reader
@@ -34,18 +31,6 @@ VIETBANDO_TILE_URL = os.getenv(
     "https://images.vietbando.com/ImageLoader/GetImage.ashx"
     "?Ver=2016&LayerIds=VBD&Y={y}&X={x}&Level={z}",
 )
-
-# Thư mục chứa file .mbtiles lớp địa chính. Không hardcode tên file — tự dò
-# file .mbtiles đầu tiên trong backend/data khi có request, nên đổi tên/thay
-# file không cần sửa code.
-MBTILES_DATA_DIR = Path(__file__).resolve().parent / "data"
-
-MBTILES_MIME_TYPES = {
-    "png": "image/png",
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "webp": "image/webp",
-}
 
 # Trần cứng số thửa mỗi lô. Vượt mức này Supabase dễ chạm statement_timeout
 # khi phải sinh GeoJSON cho quá nhiều hình học trong một câu lệnh.
@@ -627,192 +612,6 @@ def import_dong_bo():
         return jsonify({"error": detail, "total": len(rows)}), 502
 
     return jsonify({"ok": True, "total": len(rows), "imported": imported})
-
-
-# =========================================================
-# LỚP PHỦ RASTER ĐỊA CHÍNH (MBTiles)
-# Đọc trực tiếp file .mbtiles trong backend/data bằng sqlite3, không qua
-# server tile riêng. Mỗi request tự mở/đóng connection (read-only).
-# =========================================================
-
-
-def find_mbtiles_path() -> Path | None:
-    if not MBTILES_DATA_DIR.is_dir():
-        return None
-    matches = sorted(MBTILES_DATA_DIR.glob("*.mbtiles"))
-    return matches[0] if matches else None
-
-
-def open_mbtiles_readonly(path: Path) -> sqlite3.Connection:
-    # uri=True + mode=ro: mở read-only, không tạo/khóa ghi lên file.
-    return sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
-
-
-def read_mbtiles_metadata(conn: sqlite3.Connection) -> dict[str, str]:
-    cursor = conn.execute("SELECT name, value FROM metadata")
-    return dict(cursor.fetchall())
-
-
-@app.get("/api/tiles/diachinh/metadata")
-def diachinh_metadata():
-    path = find_mbtiles_path()
-    if path is None:
-        return jsonify({"error": "Không tìm thấy file .mbtiles trong backend/data"}), 404
-
-    conn = open_mbtiles_readonly(path)
-    try:
-        meta = read_mbtiles_metadata(conn)
-    finally:
-        conn.close()
-
-    bounds = meta.get("bounds")
-    center = meta.get("center")
-
-    if not center and bounds:
-        try:
-            west, south, east, north = (float(value) for value in bounds.split(","))
-            center = f"{(west + east) / 2},{(south + north) / 2}"
-        except ValueError:
-            center = None
-
-    return jsonify(
-        {
-            "bounds": bounds,
-            "center": center,
-            "minzoom": meta.get("minzoom"),
-            "maxzoom": meta.get("maxzoom"),
-            "format": meta.get("format", "png"),
-        }
-    )
-
-
-@app.get("/api/tiles/diachinh/<int:z>/<int:x>/<int:y>.png")
-def diachinh_tile(z: int, x: int, y: int):
-    path = find_mbtiles_path()
-    if path is None:
-        return jsonify({"error": "Không tìm thấy file .mbtiles trong backend/data"}), 404
-
-    # MapLibre/Leaflet gọi tile theo trục XYZ (y tăng dần từ trên xuống),
-    # còn MBTiles lưu theo TMS (y tăng dần từ dưới lên) nên phải đảo trục y.
-    tms_y = (1 << z) - 1 - y
-
-    conn = open_mbtiles_readonly(path)
-    try:
-        cursor = conn.execute(
-            "SELECT tile_data FROM tiles "
-            "WHERE zoom_level = ? AND tile_column = ? AND tile_row = ? LIMIT 1",
-            (z, x, tms_y),
-        )
-        row = cursor.fetchone()
-
-        if row is None:
-            return jsonify({"error": "Không có tile"}), 404
-
-        meta = read_mbtiles_metadata(conn)
-    finally:
-        conn.close()
-
-    tile_format = (meta.get("format") or "png").lower()
-    mimetype = MBTILES_MIME_TYPES.get(tile_format, "image/png")
-
-    return Response(
-        row[0],
-        status=200,
-        mimetype=mimetype,
-        headers={"Cache-Control": "public, max-age=604800, immutable"},
-    )
-
-
-def validate_mbtiles_structure(path: Path) -> str | None:
-    # Kiểm tra sơ bộ trước khi chấp nhận file, tránh 1 file .mbtiles hỏng/
-    # không đúng chuẩn làm gãy endpoint tile đang phục vụ người dùng khác.
-    try:
-        conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
-    except sqlite3.OperationalError:
-        return "Không mở được file bằng sqlite3"
-
-    try:
-        tables = {
-            row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
-        }
-        if "tiles" not in tables or "metadata" not in tables:
-            return "File không có đủ bảng 'tiles' và 'metadata' theo chuẩn MBTiles"
-    except sqlite3.DatabaseError:
-        return "File không phải SQLite/MBTiles hợp lệ"
-    finally:
-        conn.close()
-
-    return None
-
-
-@app.get("/api/mbtiles")
-def list_mbtiles():
-    if not MBTILES_DATA_DIR.is_dir():
-        return jsonify({"items": []})
-
-    active_path = find_mbtiles_path()
-    items = [
-        {
-            "filename": path.name,
-            "size_bytes": path.stat().st_size,
-            "active": path == active_path,
-        }
-        for path in sorted(MBTILES_DATA_DIR.glob("*.mbtiles"))
-    ]
-
-    return jsonify({"items": items})
-
-
-@app.post("/api/mbtiles")
-def upload_mbtiles():
-    if not check_import_token():
-        return jsonify({"error": "Mã xác thực không đúng"}), 401
-
-    uploaded = request.files.get("file")
-    if not uploaded or not uploaded.filename:
-        return jsonify({"error": "Thiếu file .mbtiles"}), 400
-
-    filename = secure_filename(uploaded.filename)
-    if not filename.lower().endswith(".mbtiles"):
-        return jsonify({"error": "Chỉ chấp nhận file .mbtiles"}), 400
-
-    MBTILES_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    target = MBTILES_DATA_DIR / filename
-    tmp_target = target.with_name(target.name + ".uploading")
-
-    uploaded.save(tmp_target)
-
-    error = validate_mbtiles_structure(tmp_target)
-    if error:
-        tmp_target.unlink(missing_ok=True)
-        return jsonify({"error": error}), 400
-
-    tmp_target.replace(target)
-
-    return jsonify(
-        {"ok": True, "filename": filename, "size_bytes": target.stat().st_size}
-    )
-
-
-@app.delete("/api/mbtiles/<path:filename>")
-def delete_mbtiles(filename: str):
-    if not check_import_token():
-        return jsonify({"error": "Mã xác thực không đúng"}), 401
-
-    safe_name = secure_filename(filename)
-    if safe_name != filename or not safe_name.lower().endswith(".mbtiles"):
-        return jsonify({"error": "Tên file không hợp lệ"}), 400
-
-    target = MBTILES_DATA_DIR / safe_name
-    if not target.is_file():
-        return jsonify({"error": "Không tìm thấy file"}), 404
-
-    target.unlink()
-
-    return jsonify({"ok": True})
 
 
 # =========================================================

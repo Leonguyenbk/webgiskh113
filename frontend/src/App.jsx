@@ -19,12 +19,7 @@ import {
   TileLayer,
   ZoomControl,
   useMap,
-  useMapEvent,
 } from "react-leaflet";
-
-// Tên phải khớp name= của LayersControl.Overlay bên dưới — dùng để nhận
-// diện sự kiện overlayadd/overlayremove khi đồng bộ trạng thái bật/tắt.
-const DIACHINH_LAYER_NAME = "Địa chính (MBTiles)";
 
 // CircleMarker (canvas) đè cả bản đồ ở pane của nó, chặn click vào thửa đất
 // bên dưới. L.Marker chỉ chiếm đúng vùng icon nhỏ nên không có vấn đề đó.
@@ -180,26 +175,6 @@ function FitBounds({ focusFeature, focusTick }) {
   return null;
 }
 
-// Nút đưa bản đồ tới phạm vi lớp phủ địa chính (MBTiles), lấy từ
-// /api/tiles/diachinh/metadata. Không hiện nếu chưa có bounds (ví dụ chưa
-// có file .mbtiles trong backend/data). Đặt ở header nên nhận `map` qua
-// prop thay vì useMap() — không còn là con của MapContainer.
-function DiaChinhFitButton({ map, bounds }) {
-  if (!bounds) return null;
-
-  return (
-    <button
-      type="button"
-      className="headerMapButton"
-      onClick={() => map?.fitBounds(bounds, { padding: [40, 40] })}
-      disabled={!map}
-      title="Đưa bản đồ tới phạm vi lớp địa chính"
-    >
-      🗺️ <span>Vùng địa chính</span>
-    </button>
-  );
-}
-
 // Bắt lấy instance bản đồ Leaflet để các nút ở header (ngoài MapContainer)
 // vẫn điều khiển được bản đồ.
 function MapInstanceCapture({ onReady }) {
@@ -209,20 +184,6 @@ function MapInstanceCapture({ onReady }) {
     onReady(map);
   }, [map, onReady]);
 
-  return null;
-}
-
-// Checkbox trong LayersControl là UI của Leaflet, không phải React — nếu
-// người dùng tự bấm tắt/bật bằng tay, state `diaChinhVisible` ở App cần
-// được cập nhật theo để không bị lệch với những gì đang thật sự hiển thị
-// trên bản đồ (mỗi lần tra cứu sau đó vẫn ép bật lại bình thường).
-function DiaChinhVisibilitySync({ onChange }) {
-  useMapEvent("overlayadd", (event) => {
-    if (event.name === DIACHINH_LAYER_NAME) onChange(true);
-  });
-  useMapEvent("overlayremove", (event) => {
-    if (event.name === DIACHINH_LAYER_NAME) onChange(false);
-  });
   return null;
 }
 
@@ -667,36 +628,6 @@ export default function App({ onNavigateTools }) {
   const [myPosition, setMyPosition] = useState(null);
   const [nearMeRequest, setNearMeRequest] = useState(null);
 
-  // Lớp phủ địa chính (MBTiles) — chỉ lấy bounds để có nút "đến vùng địa
-  // chính"; không báo lỗi nếu thiếu, đây là lớp bổ sung tùy chọn. Tự bật
-  // lớp này mỗi khi tra cứu (theo mã xã hoặc quanh vị trí) ra kết quả.
-  const [diaChinhBounds, setDiaChinhBounds] = useState(null);
-  const [diaChinhVisible, setDiaChinhVisible] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    fetch(`${API_URL}/api/tiles/diachinh/metadata`, {
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((result) => {
-        if (!result?.bounds) return;
-
-        const parts = result.bounds.split(",").map(Number);
-        if (parts.length !== 4 || parts.some(Number.isNaN)) return;
-
-        const [west, south, east, north] = parts;
-        setDiaChinhBounds([
-          [south, west],
-          [north, east],
-        ]);
-      })
-      .catch(() => {});
-
-    return () => controller.abort();
-  }, []);
-
   // Bộ lọc tra cứu: mã xã (bắt buộc), nhóm, số tờ, số thửa.
   const [xaOptions, setXaOptions] = useState([]);
   const [xaError, setXaError] = useState("");
@@ -781,7 +712,6 @@ export default function App({ onNavigateTools }) {
       soThua: soThua.trim(),
     });
     setFiltersOpen(false);
-    setDiaChinhVisible(true);
   }, [maXa, nhom, soTo, soThua]);
 
   const handleNearMe = useCallback(() => {
@@ -793,7 +723,6 @@ export default function App({ onNavigateTools }) {
     setViewportSearchActive(false);
     setFiltersOpen(false);
     setNearMeRequest({ ...myPosition, nhom, tick: Date.now() });
-    setDiaChinhVisible(true);
   }, [myPosition, nhom]);
 
   // Gọi trước khi FindHereButton bắt đầu tải, để dọn các trạng thái tra cứu
@@ -805,7 +734,6 @@ export default function App({ onNavigateTools }) {
     setNearMeRequest(null);
     setViewportSearchActive(true);
     setFiltersOpen(false);
-    setDiaChinhVisible(true);
   }, []);
 
   const handleResetFilters = useCallback(() => {
@@ -950,8 +878,6 @@ export default function App({ onNavigateTools }) {
           onError={handleError}
           onMeta={handleMeta}
         />
-
-        <DiaChinhFitButton map={mapInstance} bounds={diaChinhBounds} />
 
         <a
           className="backLink"
@@ -1352,18 +1278,6 @@ export default function App({ onNavigateTools }) {
                 />
               </LayersControl.BaseLayer>
 
-              <LayersControl.Overlay
-                checked={diaChinhVisible}
-                name={DIACHINH_LAYER_NAME}
-              >
-                <TileLayer
-                  url={`${API_URL}/api/tiles/diachinh/{z}/{x}/{y}.png`}
-                  opacity={0.8}
-                  zIndex={5}
-                  attribution="Địa chính"
-                />
-              </LayersControl.Overlay>
-
               <LayersControl.Overlay checked name="Thửa đất">
                 <GeoJSON
                   ref={layerRef}
@@ -1373,8 +1287,6 @@ export default function App({ onNavigateTools }) {
                 />
               </LayersControl.Overlay>
             </LayersControl>
-
-            <DiaChinhVisibilitySync onChange={setDiaChinhVisible} />
 
             <FitBounds focusFeature={selectedFeature} focusTick={focusTick} />
           </MapContainer>

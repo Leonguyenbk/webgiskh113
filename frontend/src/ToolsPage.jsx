@@ -21,7 +21,6 @@ export default function ToolsPage({
   onNavigateHome,
   onNavigateImport,
   onNavigateSync,
-  onNavigateMbtiles,
   onNavigateGcnLinks,
   onNavigateGcnDashboard,
   onNavigateMplisSync,
@@ -36,11 +35,6 @@ export default function ToolsPage({
       name: "⇪ Nhập đồng bộ",
       description: "Nhập file CSV/Excel dữ liệu đồng bộ (bảng dong_bo_du_lieu).",
       onNavigate: onNavigateSync,
-    },
-    {
-      name: "⇪ Quản lý MBTiles",
-      description: "Tải lên/xóa file .mbtiles lớp phủ raster địa chính.",
-      onNavigate: onNavigateMbtiles,
     },
     {
       name: "⇪ Nhập đường link",
