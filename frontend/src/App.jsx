@@ -95,6 +95,14 @@ const GROUP_LABELS = {
 const GCN_COLOR = "#2563eb";
 const GCN_LABEL = "Thửa đất đã nhập biểu";
 
+// Thửa "chưa phân loại" nhưng người thu thập đã đối chiếu thủ công và xác
+// nhận thửa này thực ra đã có trên MPLIS (chỉ khác tờ thửa) — xem
+// properties.ung_thua (get_parcels_in_view/search_parcels trong
+// supabase/schema.sql). Ưu tiên hơn màu "đã nhập biểu" vì là xác nhận
+// chắc chắn hơn, nhưng vẫn nhường màu Nhóm 1/Nhóm 2 nếu có.
+const UNG_THUA_COLOR = "#eab308";
+const UNG_THUA_LABEL = "Đã ứng thửa MPLIS";
+
 function getGroupKey(phanLoai = "") {
   const normalized = phanLoai.trim().toUpperCase();
   return GROUP_COLORS[normalized] ? normalized : "DEFAULT";
@@ -106,8 +114,9 @@ function getGroupColor(phanLoai = "") {
 
 function getParcelFillColor(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
-  if (groupKey === "DEFAULT" && properties.co_gcn) {
-    return GCN_COLOR;
+  if (groupKey === "DEFAULT") {
+    if (properties.ung_thua) return UNG_THUA_COLOR;
+    if (properties.co_gcn) return GCN_COLOR;
   }
   return GROUP_COLORS[groupKey];
 }
@@ -759,6 +768,75 @@ export default function App({ onNavigateTools }) {
     setFocusTick((value) => value + 1);
   }, []);
 
+  // Form "Ứng thửa MPLIS" trong khung thông tin thửa đất — nạp lại mỗi khi
+  // đổi thửa đang chọn (kể cả bỏ chọn), để không lẫn dữ liệu giữa các thửa.
+  const [ungThuaForm, setUngThuaForm] = useState({
+    to_thua_mplis: "",
+    so_giay_chung_nhan: "",
+    ma_don_mplis: "",
+  });
+  const [ungThuaSaving, setUngThuaSaving] = useState(false);
+  const [ungThuaError, setUngThuaError] = useState("");
+
+  useEffect(() => {
+    setUngThuaForm({
+      to_thua_mplis: selected?.ung_thua?.to_thua_mplis || "",
+      so_giay_chung_nhan: selected?.ung_thua?.so_giay_chung_nhan || "",
+      ma_don_mplis: selected?.ung_thua?.ma_don_mplis || "",
+    });
+    setUngThuaError("");
+  }, [selected?.id]);
+
+  const handleSaveUngThua = useCallback(async () => {
+    if (!selected || !ungThuaForm.to_thua_mplis.trim()) return;
+
+    setUngThuaSaving(true);
+    setUngThuaError("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/ung-thua`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ma_xa: selected.ma_xa,
+          so_to: selected.so_to,
+          so_thua: selected.so_thua,
+          to_thua_mplis: ungThuaForm.to_thua_mplis.trim(),
+          so_giay_chung_nhan: ungThuaForm.so_giay_chung_nhan.trim(),
+          ma_don_mplis: ungThuaForm.ma_don_mplis.trim(),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Lưu thất bại");
+
+      const savedUngThua = {
+        to_thua_mplis: body.item?.to_thua_mplis ?? ungThuaForm.to_thua_mplis.trim(),
+        so_giay_chung_nhan:
+          body.item?.so_giay_chung_nhan ?? (ungThuaForm.so_giay_chung_nhan.trim() || null),
+        ma_don_mplis: body.item?.ma_don_mplis ?? (ungThuaForm.ma_don_mplis.trim() || null),
+      };
+
+      // Cập nhật ngay dữ liệu đang có (data/selected) để bản đồ đổi màu
+      // vàng tức thì, không phải tải lại toàn bộ thửa từ server.
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          features: prev.features.map((f) =>
+            f.id === selected.id
+              ? { ...f, properties: { ...f.properties, ung_thua: savedUngThua } }
+              : f,
+          ),
+        };
+      });
+      setSelected((prev) => (prev ? { ...prev, ung_thua: savedUngThua } : prev));
+    } catch (err) {
+      setUngThuaError(err.message);
+    } finally {
+      setUngThuaSaving(false);
+    }
+  }, [selected, ungThuaForm]);
+
   const filtered = useMemo(() => {
     if (!data) return null;
 
@@ -1309,6 +1387,11 @@ export default function App({ onNavigateTools }) {
             </div>
 
             <div>
+              <span style={{ backgroundColor: UNG_THUA_COLOR }} />
+              <label>{UNG_THUA_LABEL}</label>
+            </div>
+
+            <div>
               <span style={{ backgroundColor: GROUP_COLORS.DEFAULT }} />
               <label>{GROUP_LABELS.DEFAULT}</label>
             </div>
@@ -1426,6 +1509,78 @@ export default function App({ onNavigateTools }) {
                     </dd>
                   </div>
                 </dl>
+
+                <div className="ungThuaBox">
+                  <strong>Ứng thửa MPLIS</strong>
+
+                  {selected.ung_thua ? (
+                    <span
+                      className="tag"
+                      style={{ color: "#713f12", backgroundColor: UNG_THUA_COLOR }}
+                    >
+                      {UNG_THUA_LABEL}
+                    </span>
+                  ) : (
+                    <span className="empty">
+                      Thửa chưa được đối chiếu với MPLIS
+                    </span>
+                  )}
+
+                  <label htmlFor="ungThuaToThua">Tờ thửa trên MPLIS</label>
+                  <input
+                    id="ungThuaToThua"
+                    className="filterInput"
+                    value={ungThuaForm.to_thua_mplis}
+                    placeholder="VD: Tờ 12 - Thửa 34"
+                    onChange={(event) =>
+                      setUngThuaForm((prev) => ({
+                        ...prev,
+                        to_thua_mplis: event.target.value,
+                      }))
+                    }
+                  />
+
+                  <label htmlFor="ungThuaSoGcn">Số giấy chứng nhận</label>
+                  <input
+                    id="ungThuaSoGcn"
+                    className="filterInput"
+                    value={ungThuaForm.so_giay_chung_nhan}
+                    onChange={(event) =>
+                      setUngThuaForm((prev) => ({
+                        ...prev,
+                        so_giay_chung_nhan: event.target.value,
+                      }))
+                    }
+                  />
+
+                  <label htmlFor="ungThuaMaDon">Mã đơn trên MPLIS (nếu có)</label>
+                  <input
+                    id="ungThuaMaDon"
+                    className="filterInput"
+                    value={ungThuaForm.ma_don_mplis}
+                    onChange={(event) =>
+                      setUngThuaForm((prev) => ({
+                        ...prev,
+                        ma_don_mplis: event.target.value,
+                      }))
+                    }
+                  />
+
+                  {ungThuaError && <span className="empty">{ungThuaError}</span>}
+
+                  <button
+                    type="button"
+                    className="searchButton"
+                    disabled={!ungThuaForm.to_thua_mplis.trim() || ungThuaSaving}
+                    onClick={handleSaveUngThua}
+                  >
+                    {ungThuaSaving
+                      ? "Đang lưu…"
+                      : selected.ung_thua
+                        ? "Cập nhật"
+                        : "Lưu"}
+                  </button>
+                </div>
 
                 <div className="missingInfo">
                   <strong>Thông tin còn thiếu</strong>

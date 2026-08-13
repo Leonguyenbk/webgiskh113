@@ -114,6 +114,12 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .missingInfo ul { margin: 0; padding-left: 18px; }
 .missingInfo li { margin: 4px 0; font-size: 11px; color: #7c2d12; line-height: 1.4; }
 .missingInfoOk { font-size: 11px; color: #15803d; font-weight: 600; }
+.ungThuaBox { margin: 0 18px 16px; padding: 12px; border-radius: 10px; background: #fefce8; display: flex; flex-direction: column; gap: 6px; }
+.ungThuaBox strong { font-size: 12px; color: #854d0e; }
+.ungThuaBox label { font-size: 11px; color: #6a817e; }
+.ungThuaBox .filterInput { height: 36px; margin-bottom: 0; }
+.ungThuaBox .searchButton { width: 100%; margin-top: 4px; }
+.ungThuaBox .empty { font-size: 11px; }
 .zoomButton {
   width: calc(100% - 36px); margin: 4px 18px 18px; padding: 10px;
   border: 0; border-radius: 9px; color: white; background: #0f766e; font-weight: 700; font-size: 12px;

@@ -787,6 +787,109 @@ def delete_nguon_gcn(ma_nguon: str):
 
 
 # =========================================================
+# ỨNG THỬA MPLIS (public.ung_thua_mplis)
+# Một số thửa "chưa phân loại" trên bản đồ thực ra đã có trên MPLIS, chỉ
+# không khớp tờ thửa hiện tại — người thu thập đối chiếu thủ công (trực
+# tiếp trên bản đồ, khung "Thông tin thửa đất") và ghi lại tờ thửa/số
+# GCN/mã đơn thực tế trên MPLIS. Không cần mã xác thực: đây là công cụ
+# thu thập dữ liệu mở cho mọi người dùng bản đồ, không phải khu quản trị.
+# =========================================================
+
+UNG_THUA_TABLE = "ung_thua_mplis"
+
+
+@app.get("/api/ung-thua")
+def list_ung_thua():
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = supabase_headers()
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    ma_xa = request.args.get("ma_xa", "").strip()
+    params = {"select": "*", "order": "updated_at.desc"}
+    if ma_xa:
+        params["ma_xa"] = f"eq.{ma_xa}"
+
+    try:
+        response = requests.get(
+            f"{base_url}/rest/v1/{UNG_THUA_TABLE}",
+            headers=headers,
+            params=params,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    if not response.ok:
+        return jsonify({"error": response.text}), response.status_code
+
+    return jsonify({"items": response.json()})
+
+
+@app.post("/api/ung-thua")
+def upsert_ung_thua():
+    body = request.get_json(silent=True) or {}
+    ma_xa = str(body.get("ma_xa", "")).strip()
+    to_thua_mplis = str(body.get("to_thua_mplis", "")).strip()
+    so_giay_chung_nhan = str(body.get("so_giay_chung_nhan", "")).strip()
+    ma_don_mplis = str(body.get("ma_don_mplis", "")).strip()
+
+    try:
+        so_to = int(body.get("so_to"))
+        so_thua = int(body.get("so_thua"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Thiếu hoặc sai định dạng so_to/so_thua"}), 400
+
+    if not ma_xa:
+        return jsonify({"error": "Thiếu ma_xa"}), 400
+    if not to_thua_mplis:
+        return jsonify({"error": "Thiếu tờ thửa trên MPLIS"}), 400
+
+    base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify({"error": "Thiếu SUPABASE_URL trong backend/.env"}), 500
+
+    try:
+        headers = {
+            **supabase_headers(),
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=representation",
+        }
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    payload = {
+        "ma_xa": ma_xa,
+        "so_to": so_to,
+        "so_thua": so_thua,
+        "to_thua_mplis": to_thua_mplis,
+        "so_giay_chung_nhan": so_giay_chung_nhan or None,
+        "ma_don_mplis": ma_don_mplis or None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        response = requests.post(
+            f"{base_url}/rest/v1/{UNG_THUA_TABLE}?on_conflict=ma_xa,so_to,so_thua",
+            headers=headers,
+            json=payload,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    if not response.ok:
+        return jsonify({"error": response.text}), response.status_code
+
+    items = response.json()
+    return jsonify({"ok": True, "item": items[0] if items else payload})
+
+
+# =========================================================
 # ĐỒNG BỘ DỮ LIỆU GCN TỪ GOOGLE SHEET (public.du_lieu_gcn)
 # Chạy ngay trên backend (thay vì chỉ chạy local qua sync_gcn/main.py) để
 # trang "Nhập đường link" có nút Đồng bộ, và để GitHub Actions gọi định kỳ
