@@ -5,7 +5,7 @@
 ```text
 Người dùng
   → React/Vercel (HTTPS, GPS)
-  → Flask/Render (HTTPS, API + proxy Vietbando)
+  → Flask/Render (HTTPS, API)
   → Supabase PostGIS
 ```
 
@@ -40,7 +40,7 @@ Name: webgis-thua-dat-api
 Root Directory: backend
 Language: Python 3
 Build Command: pip install -r requirements.txt
-Start Command: gunicorn app:app --timeout 300
+Start Command: gunicorn run:app --timeout 300 --workers 1 --threads 8 --worker-class gthread
 Health Check Path: /api/health
 ```
 
@@ -109,7 +109,7 @@ FRONTEND_URL=https://TEN-WEB.vercel.app,https://bando.tenmien.vn
 
 ## 5. Kiểm tra
 
-1. Bản đồ hiển thị nền Vietbando.
+1. Bản đồ hiển thị nền vệ tinh (Google).
 2. Hiển thị đủ dữ liệu thửa từ Supabase.
 3. Bấm một thửa để xem thuộc tính.
 4. Màu thửa thay đổi theo loại đất.

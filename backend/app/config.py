@@ -28,13 +28,6 @@ class Config:
 
     GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 
-    VIETBANDO_TILE_URL = os.getenv(
-        "VIETBANDO_TILE_URL",
-        "https://images.vietbando.com/ImageLoader/GetImage.ashx"
-        "?Ver=2016&LayerIds=VBD&Y={y}&X={x}&Level={z}",
-    )
-    VIETBANDO_REFERER = os.getenv("VIETBANDO_REFERER", "").strip()
-
     PORT = int(os.getenv("PORT", "5000"))
     FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     RENDER_ENV = os.getenv("RENDER", "local")

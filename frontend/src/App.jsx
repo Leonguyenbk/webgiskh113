@@ -23,7 +23,6 @@ import {
   SearchParcelsLoader,
 } from "./components/map/MapDataLoaders";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
-import { API_URL } from "./config/env";
 import { getXaList } from "./services/parcelService";
 import {
   GCN_COLOR,
@@ -741,15 +740,6 @@ export default function App({ onNavigateTools }) {
                   minZoom={0}
                   maxZoom={19}
                   attribution="&copy; Esri, Maxar, Earthstar Geographics"
-                />
-              </LayersControl.BaseLayer>
-
-              <LayersControl.BaseLayer name="Vietbando">
-                <TileLayer
-                  url={`${API_URL}/api/tiles/{z}/{x}/{y}`}
-                  minZoom={0}
-                  maxZoom={18}
-                  attribution="&copy; Vietbando"
                 />
               </LayersControl.BaseLayer>
 
