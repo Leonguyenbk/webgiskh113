@@ -5,7 +5,7 @@ services:
     plan: starter
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 300 --workers 1 --threads 8 --worker-class gthread
+    startCommand: gunicorn run:app --timeout 300 --workers 1 --threads 8 --worker-class gthread
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:

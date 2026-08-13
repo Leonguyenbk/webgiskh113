@@ -1,6 +1,12 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+import {
+  createNguonGcn,
+  deleteNguonGcn,
+  listNguonGcn,
+  syncNguonGcn,
+  updateNguonGcn,
+} from "./services/adminService";
 
 export default function ManageGcnLinksPage({ onNavigateHome }) {
   const [items, setItems] = useState([]);
@@ -31,12 +37,8 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
     setLoadingList(true);
     setListError("");
 
-    return fetch(`${API_URL}/api/nguon-gcn`)
-      .then((response) => response.json())
-      .then((result) => {
-        if (result?.error) throw new Error(result.error);
-        setItems(result?.items || []);
-      })
+    return listNguonGcn()
+      .then((result) => setItems(result?.items || []))
       .catch((err) => setListError(err.message))
       .finally(() => setLoadingList(false));
   }, []);
@@ -44,11 +46,6 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
   useEffect(() => {
     loadList();
   }, [loadList]);
-
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    ...(token ? { "X-Import-Token": token } : {}),
-  });
 
   const handleCreate = async (event) => {
     event.preventDefault();
@@ -58,18 +55,15 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
     setCreateError("");
 
     try {
-      const response = await fetch(`${API_URL}/api/nguon-gcn`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
+      await createNguonGcn(
+        {
           ma_nguon: maNguon.trim(),
           ten_nguon: tenNguon.trim(),
           url: url.trim(),
           kich_hoat: kichHoat,
-        }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Thêm nguồn thất bại");
+        },
+        token,
+      );
 
       setMaNguon("");
       setTenNguon("");
@@ -100,19 +94,11 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
     setEditError("");
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/nguon-gcn/${encodeURIComponent(item.ma_nguon)}`,
-        {
-          method: "PATCH",
-          headers: authHeaders(),
-          body: JSON.stringify({
-            ten_nguon: editTenNguon.trim(),
-            url: editUrl.trim(),
-          }),
-        },
+      await updateNguonGcn(
+        item.ma_nguon,
+        { ten_nguon: editTenNguon.trim(), url: editUrl.trim() },
+        token,
       );
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Cập nhật thất bại");
 
       setEditingMaNguon("");
       await loadList();
@@ -127,16 +113,7 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
     setBusyMaNguon(item.ma_nguon);
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/nguon-gcn/${encodeURIComponent(item.ma_nguon)}`,
-        {
-          method: "PATCH",
-          headers: authHeaders(),
-          body: JSON.stringify({ kich_hoat: !item.kich_hoat }),
-        },
-      );
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Cập nhật thất bại");
+      await updateNguonGcn(item.ma_nguon, { kich_hoat: !item.kich_hoat }, token);
       await loadList();
     } catch (err) {
       setListError(err.message);
@@ -150,12 +127,7 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
     setSyncResults((prev) => ({ ...prev, [item.ma_nguon]: null }));
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/nguon-gcn/${encodeURIComponent(item.ma_nguon)}/sync`,
-        { method: "POST", headers: authHeaders() },
-      );
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Đồng bộ thất bại");
+      const body = await syncNguonGcn(item.ma_nguon, token);
 
       setSyncResults((prev) => ({
         ...prev,
@@ -182,15 +154,7 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
     setBusyMaNguon(item.ma_nguon);
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/nguon-gcn/${encodeURIComponent(item.ma_nguon)}`,
-        {
-          method: "DELETE",
-          headers: authHeaders(),
-        },
-      );
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Xóa nguồn thất bại");
+      await deleteNguonGcn(item.ma_nguon, token);
       await loadList();
     } catch (err) {
       setListError(err.message);

@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+import { getGcnStats, getXaList } from "./services/parcelService";
+import { GCN_COLOR } from "./utils/constants";
 
-// Cùng 1 màu "đã nhập biểu" với bản đồ chính (App.jsx GCN_COLOR) và
-// cùng màu xám mặc định (App.jsx GROUP_COLORS.DEFAULT) — giữ ngôn ngữ
-// màu nhất quán giữa bản đồ và dashboard.
-const DA_NHAP_COLOR = "#2563eb";
+// Cùng 1 màu "đã nhập biểu" với bản đồ chính (utils/constants.js
+// GCN_COLOR). CHUA_NHAP_COLOR khác màu "chưa phân loại" của bản đồ chính
+// (GROUP_COLORS.DEFAULT = #94a3b8) — giữ nguyên giá trị riêng #cbd5e1
+// đang hiển thị trên dashboard này, không đổi để tránh lệch màu so với
+// trước khi refactor.
+const DA_NHAP_COLOR = GCN_COLOR;
 const CHUA_NHAP_COLOR = "#cbd5e1";
 
 function formatSo(n) {
@@ -102,13 +105,8 @@ export default function GcnDashboardPage({ onNavigateHome }) {
     setLoading(true);
     setError("");
 
-    Promise.all([
-      fetch(`${API_URL}/api/parcels/xa-list`).then((r) => r.json()),
-      fetch(`${API_URL}/api/gcn-stats`).then((r) => r.json()),
-    ])
+    Promise.all([getXaList(), getGcnStats()])
       .then(([xaResult, statsResult]) => {
-        if (xaResult?.error) throw new Error(xaResult.error);
-        if (statsResult?.error) throw new Error(statsResult.error);
         setXaList(xaResult?.items || []);
         setStats(statsResult?.items || []);
       })

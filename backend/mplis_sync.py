@@ -301,7 +301,7 @@ def update_single_parcel(
 # Lưu ý: JobState KHÔNG BAO GIỜ giữ Cookie/token — chỉ nhận qua tham số
 # hàm, sống trong local scope của thread nền, không thoát ra registry
 # _JOBS (registry chỉ để polling tiến độ). Giả định backend chạy 1
-# worker process (xem render.yaml: `gunicorn app:app` không có
+# worker process (xem render.yaml: `gunicorn run:app` không có
 # --workers) — nếu sau này tăng số worker, job in-memory này sẽ không
 # còn thấy được từ worker khác, cần đổi sang lưu trạng thái ngoài
 # (Redis/DB) trước khi tăng worker.

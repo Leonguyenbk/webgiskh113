@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+import { getXaList } from "./services/parcelService";
+import { getUngThuaList } from "./services/mplisService";
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -20,13 +21,8 @@ export default function UngThuaPage({ onNavigateHome }) {
     setLoading(true);
     setError("");
 
-    Promise.all([
-      fetch(`${API_URL}/api/parcels/xa-list`).then((r) => r.json()),
-      fetch(`${API_URL}/api/ung-thua`).then((r) => r.json()),
-    ])
+    Promise.all([getXaList(), getUngThuaList()])
       .then(([xaResult, itemsResult]) => {
-        if (xaResult?.error) throw new Error(xaResult.error);
-        if (itemsResult?.error) throw new Error(itemsResult.error);
         setXaList(xaResult?.items || []);
         setItems(itemsResult?.items || []);
       })

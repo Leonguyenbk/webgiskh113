@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+import { importGml } from "./services/adminService";
 
 export default function ImportGmlPage({ onNavigateHome }) {
   const [file, setFile] = useState(null);
@@ -17,17 +17,8 @@ export default function ImportGmlPage({ onNavigateHome }) {
     setError("");
     setResult(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const response = await fetch(`${API_URL}/api/import-gml`, {
-        method: "POST",
-        headers: token ? { "X-Import-Token": token } : undefined,
-        body: formData,
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Nhập dữ liệu thất bại");
+      const body = await importGml(file, token);
       setResult(body);
       setStatus("done");
     } catch (err) {

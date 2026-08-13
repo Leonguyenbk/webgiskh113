@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+import { capNhatPhanLoai, getCapNhatPhanLoaiJob } from "./services/mplisService";
 
 const POLL_INTERVAL_MS = 1500;
 
@@ -91,12 +91,7 @@ export default function MplisSyncPage({ onNavigateHome }) {
 
       const tick = async () => {
         try {
-          const response = await fetch(
-            `${API_URL}/api/admin/cap-nhat-phan-loai/${encodeURIComponent(jobId)}`,
-            { headers: authToken ? { "X-Import-Token": authToken } : {} },
-          );
-          const body = await response.json();
-          if (!response.ok) throw new Error(body.error || "Không lấy được tiến độ job");
+          const body = await getCapNhatPhanLoaiJob(jobId, authToken);
 
           setJob(body);
           if (body.status !== "running") stopPolling();
@@ -112,30 +107,22 @@ export default function MplisSyncPage({ onNavigateHome }) {
     [stopPolling, authToken],
   );
 
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    ...(authToken ? { "X-Import-Token": authToken } : {}),
-  });
-
   const startSingle = async () => {
     setSubmitting(true);
     setFormError("");
     setSingleResult(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/admin/cap-nhat-phan-loai`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
+      const body = await capNhatPhanLoai(
+        {
           ma_xa: maXa.trim(),
           so_to: soTo.trim(),
           so_thua: soThua.trim(),
           request_verification_token: mplisToken,
           cookie,
-        }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Cập nhật thất bại");
+        },
+        authToken,
+      );
 
       setSingleResult(body);
     } catch (err) {
@@ -152,19 +139,17 @@ export default function MplisSyncPage({ onNavigateHome }) {
     setJob(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/admin/cap-nhat-phan-loai`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
+      const body = await capNhatPhanLoai(
+        {
           ma_xa: maXa.trim(),
           so_to: "",
           so_thua: "",
           request_verification_token: mplisToken,
           cookie,
-        }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Không khởi động được tiến trình");
+        },
+        authToken,
+        { errorFallback: "Không khởi động được tiến trình" },
+      );
 
       setJob({ status: body.status, job_id: body.job_id, ma_xa: maXa.trim() });
       pollJob(body.job_id);
