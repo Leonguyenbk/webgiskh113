@@ -24,9 +24,10 @@ def _register_blueprints(app: Flask) -> None:
     from .routes.gcn_routes import gcn_bp
     from .routes.health_routes import health_bp
     from .routes.mplis_routes import mplis_bp
+    from .routes.nhom4_routes import nhom4_bp
     from .routes.parcel_routes import parcel_bp
 
-    for blueprint in (health_bp, parcel_bp, gcn_bp, admin_bp, mplis_bp):
+    for blueprint in (health_bp, parcel_bp, gcn_bp, admin_bp, mplis_bp, nhom4_bp):
         app.register_blueprint(blueprint)
 
 

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Biểu mẫu nhập Nhóm 4</title>
+  <?!= include("Style"); ?>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    
+    <header class="hero">
+      <div class="brand">
+        <div class="brand-mark">ĐL</div>
+        <div>
+          <div class="agency-title">VĂN PHÒNG ĐĂNG KÝ ĐẤT ĐAI TỈNH ĐẮK LẮK</div>
+          <h1>BIỂU MẪU NHẬP NHÓM 4</h1>
+        </div>
+      </div>
+    </header>
+
+
+    <section class="card">
+      <h2>ĐƠN VỊ HÀNH CHÍNH</h2>
+      <div class="grid2">
+        <div>
+          <label>Chọn xã/phường <b>*</b></label>
+          <select id="chonXa" onchange="chonXaThayDoi()"></select>
+        </div>
+        <div>
+          <label>Mã xã</label>
+          <input id="maXa" readonly value="24373">
+        </div>
+      </div>
+      <div id="trangThaiXa" class="notice muted">Đang tải danh sách xã/phường...</div>
+    </section>
+
+    <section class="card">
+      <h2>ĐỐI TƯỢNG SỬ DỤNG ĐẤT</h2>
+      <div class="tabs subject-tabs">
+        <button class="tab active" data-doituong="Hộ gia đình, cá nhân" onclick="chonDoiTuong(this)">HỘ GIA ĐÌNH, CÁ NHÂN</button>
+        <button class="tab" data-doituong="Tổ chức" onclick="chonDoiTuong(this)">TỔ CHỨC</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <label>Chọn loại hồ sơ</label>
+      <div class="segmented">
+        <button class="seg active" data-chedo="Chưa được cấp GCN" onclick="chonCheDo(this)">Chưa được cấp GCN</button>
+        <button class="seg" data-chedo="Đã có GCN" onclick="chonCheDo(this)">Đã có GCN</button>
+      </div>
+    </section>
+
+    <section class="card" id="boxGCN" style="display:none">
+      <h2>THÔNG TIN GCN</h2>
+      <div class="grid3">
+        <div><label>Số phát hành GCN <b>*</b></label><input id="soPhatHanh" oninput="capNhatTenFileHSQ()" onblur="kiemTraSoPhatHanhGCN()"></div>
+        <div><label>Ngày cấp GCN <b>*</b></label><input id="ngayCap" placeholder="dd/mm/yyyy"></div>
+        <div><label>Số vào sổ GCN <b>*</b></label><input id="soVaoSo"></div>
+      </div>
+    <div id="loiSoPhatHanh" class="notice muted" style="display:none"></div>
+    </section>
+
+    <section class="card" id="boxSoPhatHanhMacDinh">
+      <h2>SỐ PHÁT HÀNH MẶC ĐỊNH</h2>
+      <input id="soPhatHanhMacDinh" readonly placeholder="Tự sinh sau khi nhập số tờ/số thửa">
+    </section>
+
+    <section class="card">
+      <h2>THÔNG TIN CHỦ SỬ DỤNG</h2>
+
+      <div id="boxCaNhanHoGiaDinh">
+      <div class="tabs">
+        <button class="tab active" data-loai="Cá nhân" onclick="chonLoaiChu(this)">Cá nhân</button>
+        <button class="tab" data-loai="Đồng sử dụng" onclick="chonLoaiChu(this)">Đồng sử dụng</button>
+        <button class="tab" data-loai="Vợ chồng" onclick="chonLoaiChu(this)">Vợ chồng</button>
+        <button class="tab" data-loai="Hộ gia đình" onclick="chonLoaiChu(this)">Hộ gia đình</button>
+      </div>
+      <div id="owners"></div>
+      <div class="actions"><button class="btn secondary" id="btnThemNguoi" onclick="themNguoi()">+ Thêm người</button></div>
+      </div>
+
+      <div id="boxToChuc" style="display:none">
+        <div class="subcard">
+          <h3>THÔNG TIN TỔ CHỨC</h3>
+          <div class="grid2">
+            <div>
+              <label>Tên tổ chức <b>*</b></label>
+              <input id="tenToChuc" placeholder="Nhập tên tổ chức">
+            </div>
+            <div>
+              <label>Mã định danh tổ chức</label>
+              <input id="maDinhDanhToChuc" placeholder="Nhập mã định danh tổ chức">
+            </div>
+          </div>
+        </div>
+
+        <div class="subcard">
+          <h3>NGƯỜI ĐẠI DIỆN TỔ CHỨC</h3>
+          <div class="grid2">
+            <div>
+              <label>Họ và tên người đại diện tổ chức</label>
+              <input id="hoTenDaiDien">
+            </div>
+            <div>
+              <label>Ngày tháng năm sinh</label>
+              <input id="ngaySinhDaiDien" placeholder="yyyy hoặc dd/mm/yyyy">
+            </div>
+          </div>
+          <div class="grid2">
+            <div>
+              <label>Giới tính</label>
+              <select id="gioiTinhDaiDien">
+                <option value="">-- Chọn --</option>
+                <option>Nam</option>
+                <option>Nữ</option>
+              </select>
+            </div>
+            <div>
+              <label>Mã định danh cá nhân</label>
+              <input id="maDinhDanhCaNhanDaiDien" maxlength="12" placeholder="Nhập 12 số">
+            </div>
+          </div>
+          <div>
+            <label>Địa chỉ thường trú</label>
+            <input id="diaChiThuongTruDaiDien">
+          </div>
+          <div>
+            <label>Pháp nhân</label>
+            <input id="phapNhanToChuc" readonly value="Tổ chức">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>THÔNG TIN THỬA ĐẤT</h2>
+      <div class="grid2">
+        <div><label>Số hiệu tờ trên bản đồ địa chính <b>*</b></label><input id="soTo" oninput="xuLyNhapSoToThua()" onblur="kiemTraThua()" placeholder="Nhập số tờ"></div>
+        <div><label>Số thứ tự thửa trên bản đồ địa chính <b>*</b></label><input id="soThua" oninput="xuLyNhapSoToThua()" onblur="kiemTraThua()" placeholder="Nhập số thửa"></div>
+      </div>
+
+      <div id="boxThongTinGCNThua" class="grid2" style="display:none">
+        <div><label>Số tờ bản đồ ghi trên GCN</label><input id="soToGCN"></div>
+        <div><label>Số thứ tự thửa đất ghi trên GCN</label><input id="soThuaGCN"></div>
+      </div>
+
+      <div id="ketQuaThua" class="notice muted">Nhập số tờ và số thửa để kiểm tra.</div>
+<div class="grid2">
+        <div><label>Mã định danh thửa đất</label><input id="maDinhDanh" readonly></div>
+        <div><label>Diện tích thửa đất <b>*</b></label><input id="dienTichTong" oninput="tuDongDienTichDat1(); tinhTongDienTichCon();"></div>
+      </div>
+
+      <div><label>Địa chỉ thửa đất</label><input id="diaChiThua" readonly value="Xã Ea Kar, tỉnh Đắk Lắk"></div>
+
+      <div class="subcard">
+        <h3>LOẠI ĐẤT 1</h3>
+        <div class="grid2">
+          <div>
+            <label>Loại đất</label>
+            <select id="loaiDat" onchange="capNhatTheoLoaiDat1();">
+              <option value="">-- Chọn loại đất --</option>
+              <option>ODT</option><option>ONT</option><option>CLN</option><option>LUC</option><option>LUK</option>
+              <option>BHK</option><option>NHK</option><option>RSX</option><option>RPH</option><option>SKC</option><option>TMD</option>
+            </select>
+          </div>
+          <div><label>Diện tích loại đất 1 <b>*</b></label><input id="dienTich1" oninput="tinhTongDienTichCon()"></div>
+        </div>
+        <div class="grid3">
+          <div><label>Nguồn gốc sử dụng</label><select id="nguonGocSuDung"></select></div>
+          <div><label>Hình thức sử dụng</label><select id="hinhThucSuDung"><option>Sử dụng riêng</option><option>Sử dụng chung</option></select></div>
+          <div><label>Thời hạn sử dụng <b>*</b></label><input id="thoiHanSuDung"></div>
+        </div>
+      </div>
+
+      <div id="boxDat2" class="subcard" style="display:none">
+        <h3>LOẠI ĐẤT 2</h3>
+        <div class="grid2">
+          <div>
+            <label>Loại đất 2</label>
+            <select id="loaiDat2" onchange="capNhatTheoLoaiDat2();">
+              <option value="">-- Chọn loại đất 2 --</option>
+              <option>CLN</option><option>LUC</option><option>LUK</option><option>BHK</option><option>NHK</option>
+              <option>RSX</option><option>RPH</option><option>SKC</option><option>TMD</option><option>ODT</option><option>ONT</option>
+            </select>
+          </div>
+          <div><label>Diện tích loại đất 2</label><input id="dienTich2" readonly></div>
+        </div>
+        <div class="grid3">
+          <div><label>Nguồn gốc sử dụng 2</label><select id="nguonGocSuDung2"></select></div>
+          <div><label>Hình thức sử dụng 2</label><select id="hinhThucSuDung2"><option value="">-- Chọn --</option><option>Sử dụng riêng</option><option>Sử dụng chung</option></select></div>
+          <div><label>Thời hạn sử dụng 2 <b>*</b></label><input id="thoiHanSuDung2"></div>
+        </div>
+        <div id="kiemTraTongDienTich" class="notice muted">Diện tích loại đất 2 tự động bằng diện tích thửa đất trừ diện tích đất ở.</div>
+      </div>
+
+      <div><label>Ghi chú</label><textarea id="ghiChu" rows="2"></textarea></div>
+
+
+      <div class="subcard parcel-list-card">
+        <div class="parcel-head">
+          <div>
+            <h3>DANH SÁCH THỬA ĐẤT NHẬP KÈM</h3>
+            <p class="help">Có thể nhập nhiều thửa đất. Mỗi lần nhập đủ thông tin một thửa, bấm “Thêm thửa đất”. Danh sách bên dưới hiển thị gọn để dễ kiểm tra và xóa từng thửa.</p>
+          </div>
+          <div id="parcelCounter" class="parcel-counter">0 thửa</div>
+        </div>
+        <div class="actions parcel-actions">
+          <button type="button" class="btn secondary" onclick="themThuaVaoDanhSach()">+ Thêm thửa đất</button>
+          <button type="button" class="btn secondary" onclick="xoaDanhSachThua()">Xóa toàn bộ</button>
+        </div>
+        <div id="danhSachThuaBox" class="parcel-list-empty">Chưa có thửa nào. Nếu chỉ nhập 1 thửa, có thể lưu trực tiếp.</div>
+      </div>
+
+
+
+      
+    </section>
+
+    <section class="card">
+      <h2>THÔNG TIN HỒ SƠ QUÉT</h2>
+
+      <div id="hsqChuaCo">
+        <label class="check"><input type="checkbox" id="donDangKy" checked onchange="capNhatHienThiUploadHSQ()"> Đơn đăng ký <span class="required">(bắt buộc)</span></label>
+        <div id="uploadDDK" class="upload-box">
+          <label>File PDF Đơn đăng ký</label><input type="file" id="fileDDK" accept="application/pdf">
+          <div id="tenDDK" class="file-name"></div>
+        </div>
+
+        <label class="check"><input type="checkbox" id="giayToChuaCo" onchange="capNhatHienThiUploadHSQ()"> Giấy tờ</label>
+        <div id="uploadGTChuaCo" class="upload-box" style="display:none">
+          <label>File PDF Giấy tờ</label><input type="file" id="fileGTChuaCo" accept="application/pdf">
+          <div id="tenGTChuaCo" class="file-name"></div>
+        </div>
+      </div>
+
+      <div id="hsqDaCo" style="display:none">
+        <label class="check"><input type="checkbox" id="giayChungNhan" checked onchange="capNhatHienThiUploadHSQ()"> Giấy chứng nhận <span class="required">(bắt buộc)</span></label>
+        <div id="uploadGCN" class="upload-box">
+          <label>File PDF Giấy chứng nhận</label><input type="file" id="fileGCN" accept="application/pdf">
+          <div id="tenGCN" class="file-name"></div>
+        </div>
+
+        <label class="check"><input type="checkbox" id="giayToDaCo" onchange="capNhatHienThiUploadHSQ()"> Giấy tờ</label>
+        <div id="uploadGTDaCo" class="upload-box" style="display:none">
+          <label>File PDF Giấy tờ</label><input type="file" id="fileGTDaCo" accept="application/pdf">
+          <div id="tenGTDaCo" class="file-name"></div>
+        </div>
+      </div>
+
+      <div id="trangThaiUpload" class="notice muted">Người nhập chỉ tải file lên. Link Drive chỉ hiện cho quản trị.</div>
+    </section>
+
+    <section class="card">
+      <h2>KIỂM TRA VÀ LƯU</h2>
+      <button class="btn" onclick="xemTruoc()">Bạn có muốn lưu thông tin này không?</button>
+      <div id="preview"></div>
+      <div class="actions"><button class="btn success" id="btnLuu" style="display:none" onclick="luuDuLieu()">Xác nhận lưu</button></div>
+      <div id="status"></div>
+    </section>
+  </div>
+
+  <?!= include("Script"); ?>
+<div class="office-footer">Văn phòng đăng ký đất đai</div>
+</body>
+</html>

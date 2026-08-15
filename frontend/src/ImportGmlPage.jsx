@@ -79,6 +79,12 @@ export default function ImportGmlPage({ onNavigateHome }) {
               <strong>Hoàn tất</strong>
               <span>
                 Đã nhập {result.imported}/{result.total} thửa vào Supabase.
+                {result.deleted > 0 && (
+                  <>
+                    {" "}
+                    Đã xóa {result.deleted} thửa không còn trong file (xã: {(result.xa || []).join(", ")}).
+                  </>
+                )}
               </span>
             </div>
           )}

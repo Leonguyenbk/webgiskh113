@@ -125,6 +125,8 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   border: 0; border-radius: 9px; color: white; background: #0f766e; font-weight: 700; font-size: 12px;
 }
 .zoomButton:hover { background: #0b5f59; }
+.nhom4EntryButton { background: #b45309; }
+.nhom4EntryButton:hover { background: #92400e; }
 .directionsButton {
   display: block; width: calc(100% - 36px); margin: 0 18px 18px;
   padding: 10px; border: 1px solid #0f766e; border-radius: 9px;
@@ -1062,4 +1064,57 @@ label[for="mplisCookie"] {
     width: auto;
     max-height: 72%;
   }
+}
+
+/* Trang "Nhập biểu Nhóm 4" (Nhom4FormPage). */
+.nhom4Card { width: 80%; max-width: 80%; margin: 0 auto; gap: 6px; }
+.nhom4SectionTitle {
+  margin: 20px 0 4px; padding-bottom: 8px;
+  border-bottom: 1px solid #d8e5e2; font-weight: 700; font-size: 13px; color: #0f5a55;
+}
+.nhom4Card select,
+.nhom4Card input[type="text"],
+.nhom4Card input:not([type]),
+.nhom4Card input[type="password"],
+.nhom4Card textarea {
+  padding: 10px 12px; border: 1px solid #b9ccc8; border-radius: 10px;
+  background: white; font-size: 13px; color: #173f3c; font-family: inherit;
+}
+.nhom4Card input[type="file"] {
+  padding: 8px 0; font-size: 12px;
+}
+.nhom4Grid2 {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+}
+.nhom4Tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.nhom4Tab {
+  border: 1px solid #b9ccc8; border-radius: 10px; padding: 8px 12px;
+  background: white; color: #2f5552; font-weight: 600; font-size: 12px;
+}
+.nhom4Tab.active { background: #0f766e; border-color: #0f766e; color: white; }
+.nhom4Subcard {
+  border: 1px solid #d4e1de; border-radius: 12px; padding: 14px; margin: 10px 0;
+  background: #f4faf9; display: flex; flex-direction: column; gap: 8px;
+}
+.nhom4Subcard .nhom4Grid2 { margin-top: 4px; }
+.nhom4OwnerHead { display: flex; justify-content: space-between; align-items: center; }
+.nhom4FieldError { margin: -4px 0 4px; color: #b42318; font-size: 11.5px; }
+.nhom4Check { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; margin: 8px 0; }
+.nhom4Check input { width: auto; }
+.nhom4SecondaryBtn {
+  align-self: flex-start; padding: 8px 14px; border-radius: 9px;
+  border: 1px solid #0f766e; background: white; color: #0f766e; font-weight: 700; font-size: 12px;
+}
+.nhom4MiniBtn {
+  padding: 6px 10px; border-radius: 8px; border: 1px solid #0f766e;
+  background: white; color: #0f766e; font-weight: 700; font-size: 11px;
+}
+.nhom4MiniBtn.danger { border-color: #d9534f; color: #d9534f; }
+.nhom4ParcelList { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nhom4ParcelList li {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 10px; border: 1px solid #d4e1de; border-radius: 8px; background: white; font-size: 12px;
+}
+@media (max-width: 640px) {
+  .nhom4Grid2 { grid-template-columns: 1fr; }
 }

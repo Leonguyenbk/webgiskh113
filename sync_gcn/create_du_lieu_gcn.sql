@@ -119,6 +119,27 @@ alter table public.du_lieu_gcn
     || '_' || coalesce(public.normalize_so_text(sothua), '')
   ) stored;
 
+-- Cột riêng cho nguồn "biểu Nhóm 4" (trang /nhom-4, backend ghi thẳng vào
+-- đây thay vì bảng riêng — xem backend/app/services/nhom4_service.py).
+-- Dữ liệu từ Google Sheet (sync_gcn/) không có các cột này, luôn NULL.
+alter table public.du_lieu_gcn
+  add column if not exists ghichu text;
+
+alter table public.du_lieu_gcn
+  add column if not exists submission_id uuid;
+
+alter table public.du_lieu_gcn
+  add column if not exists file_chinh_drive_id text;
+
+alter table public.du_lieu_gcn
+  add column if not exists file_chinh_ten_file text;
+
+alter table public.du_lieu_gcn
+  add column if not exists file_phu_drive_id text;
+
+alter table public.du_lieu_gcn
+  add column if not exists file_phu_ten_file text;
+
 create index if not exists idx_du_lieu_gcn_ma_nguon
   on public.du_lieu_gcn (ma_nguon);
 

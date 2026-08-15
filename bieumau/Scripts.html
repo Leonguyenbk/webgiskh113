@@ -1,0 +1,1478 @@
+<script>
+let DANH_SACH_XA = [];
+
+function taiDanhSachXa() {
+  google.script.run
+    .withSuccessHandler(function(ds) {
+      DANH_SACH_XA = ds || [];
+
+      const dl = document.getElementById("dsXaPhuong");
+      dl.innerHTML = "";
+
+      DANH_SACH_XA.forEach(x => {
+        const opt = document.createElement("option");
+        opt.value = x.tenXa;
+        dl.appendChild(opt);
+      });
+    })
+    .layDanhSachXa();
+}
+
+function chonXaAutocomplete() {
+  const ten = document.getElementById("chonXaText").value.trim();
+  const xa = DANH_SACH_XA.find(x => x.tenXa === ten);
+
+  document.getElementById("chonXa").value = xa ? xa.maXa : "";
+  document.getElementById("maXa").value = xa ? xa.maXa : "";
+}
+
+const DANH_SACH_XA_CLIENT = [
+  {
+    "tenXa": "Phường Bình Kiến",
+    "maXa": "22045",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Buôn Hồ",
+    "maXa": "24305",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Buôn Ma Thuột",
+    "maXa": "24133",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Cư Bao",
+    "maXa": "24340",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Đông Hòa",
+    "maXa": "22258",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Ea Kao",
+    "maXa": "24169",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Hòa Hiệp",
+    "maXa": "22261",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Phú Yên",
+    "maXa": "22240",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Sông Cầu",
+    "maXa": "22051",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Tân An",
+    "maXa": "24163",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Tân Lập",
+    "maXa": "24121",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Thành Nhất",
+    "maXa": "24154",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Tuy Hòa",
+    "maXa": "22015",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Phường Xuân Đài",
+    "maXa": "22076",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Buôn Đôn",
+    "maXa": "24235",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Cuôr Đăng",
+    "maXa": "24301",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Cư M’gar",
+    "maXa": "24280",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Cư M’ta",
+    "maXa": "24436",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Cư Pơng",
+    "maXa": "24313",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Cư Prao",
+    "maXa": "24415",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Cư Pui",
+    "maXa": "24478",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Cư Yang",
+    "maXa": "24406",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Dang Kang",
+    "maXa": "24454",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Dliê Ya",
+    "maXa": "24346",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Dray Bhăng",
+    "maXa": "24561",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Dur Kmăl",
+    "maXa": "24568",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Đắk Liêng",
+    "maXa": "24595",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Đắk Phơi",
+    "maXa": "24598",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Đồng Xuân",
+    "maXa": "22081",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Đức Bình",
+    "maXa": "22222",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Bá",
+    "maXa": "22225",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Bung",
+    "maXa": "24229",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Drăng",
+    "maXa": "24181",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Drông",
+    "maXa": "24328",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea H’leo",
+    "maXa": "24184",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Hiao",
+    "maXa": "24187",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Kar",
+    "maXa": "24373",
+    "coSheet": true,
+    "coThuMucDrive": true
+  },
+  {
+    "tenXa": "Xã Ea Khăl",
+    "maXa": "24208",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Kiết",
+    "maXa": "24265",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Kly",
+    "maXa": "24496",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Knốp",
+    "maXa": "24376",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Knuếc",
+    "maXa": "24505",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Ktur",
+    "maXa": "24544",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Ly",
+    "maXa": "22237",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea M’Droh",
+    "maXa": "24286",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Na",
+    "maXa": "24559",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Ning",
+    "maXa": "24540",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Nuôl",
+    "maXa": "24250",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Ô",
+    "maXa": "24403",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Păl",
+    "maXa": "24400",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Phê",
+    "maXa": "24502",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Riêng",
+    "maXa": "24433",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Rốk",
+    "maXa": "24217",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Súp",
+    "maXa": "24211",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Trang",
+    "maXa": "24445",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Tul",
+    "maXa": "24277",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Wer",
+    "maXa": "24241",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ea Wy",
+    "maXa": "24193",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Hòa Mỹ",
+    "maXa": "22285",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Hòa Phú",
+    "maXa": "24175",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Hòa Sơn",
+    "maXa": "24472",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Hòa Thịnh",
+    "maXa": "22276",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Hòa Xuân",
+    "maXa": "22291",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ia Lốp",
+    "maXa": "24214",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ia Rvê",
+    "maXa": "24221",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Krông Á",
+    "maXa": "24444",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Krông Ana",
+    "maXa": "24538",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Krông Bông",
+    "maXa": "24448",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Krông Búk",
+    "maXa": "24310",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Krông Năng",
+    "maXa": "24343",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Krông Nô",
+    "maXa": "24604",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Krông Pắc",
+    "maXa": "24490",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Liên Sơn Lắk",
+    "maXa": "24580",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã M’Drắk",
+    "maXa": "24412",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Nam Ka",
+    "maXa": "24607",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Ô Loan",
+    "maXa": "22147",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Phú Hòa 1",
+    "maXa": "22319",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Phú Hòa 2",
+    "maXa": "22303",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Phú Mỡ",
+    "maXa": "22096",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Phú Xuân",
+    "maXa": "24364",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Pơng Drang",
+    "maXa": "24316",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Quảng Phú",
+    "maXa": "24259",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Sông Hinh",
+    "maXa": "22207",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Sơn Hòa",
+    "maXa": "22165",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Sơn Thành",
+    "maXa": "22250",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Suối Trai",
+    "maXa": "22192",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tam Giang",
+    "maXa": "24352",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tân Tiến",
+    "maXa": "24526",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tây Hòa",
+    "maXa": "22255",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tây Sơn",
+    "maXa": "22171",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tuy An Bắc",
+    "maXa": "22114",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tuy An Đông",
+    "maXa": "22120",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tuy An Nam",
+    "maXa": "22153",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Tuy An Tây",
+    "maXa": "22132",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Vân Hòa",
+    "maXa": "22177",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Vụ Bổn",
+    "maXa": "24529",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Xuân Cảnh",
+    "maXa": "22060",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Xuân Lãnh",
+    "maXa": "22090",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Xuân Lộc",
+    "maXa": "22057",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Xuân Phước",
+    "maXa": "22111",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Xuân Thọ",
+    "maXa": "22075",
+    "coSheet": false,
+    "coThuMucDrive": false
+  },
+  {
+    "tenXa": "Xã Yang Mao",
+    "maXa": "24484",
+    "coSheet": false,
+    "coThuMucDrive": false
+  }
+];
+
+let doiTuong = "Hộ gia đình, cá nhân";
+let cheDo = "Chưa được cấp GCN";
+let loaiChu = "Cá nhân";
+let daKiemTraThua = false;
+let dangTrungThua = false;
+let isAdmin = false;
+let thuaList = [];
+let timerKiemTraTrung = null;
+let tomSelectXa = null;
+let DANH_SACH_XA_SERVER = [];
+
+const NGUON_GOC = [
+  "Nhà nước giao đất có thu tiền sử dụng đất",
+  "Nhà nước giao đất không thu tiền sử dụng đất",
+  "Nhà nước cho thuê đất trả tiền hàng năm",
+  "Nhà nước cho thuê đất trả tiền một lần",
+  "Nhà nước công nhận quyền sử dụng đất như Nhà nước giao đất có thu tiền sử dụng đất",
+  "Nhà nước công nhận quyền sử dụng đất như Nhà nước giao đất không thu tiền sử dụng đất",
+  "Nhận chuyển nhượng quyền sử dụng đất",
+  "Thừa kế quyền sử dụng đất",
+  "Tặng cho quyền sử dụng đất"
+];
+
+document.addEventListener("DOMContentLoaded", () => {
+  napNguonGoc();
+  napDanhSachXaNhanh();
+  taiBootstrapTuServer();
+  taoDanhSachNguoiTheoLoai();
+  capNhatSoPhatHanhMacDinh();
+  capNhatHienThiUploadHSQ();
+  const sph = document.getElementById("soPhatHanh");
+  if (sph) sph.addEventListener("input", capNhatTenFileHSQ);
+});
+
+function napDanhSachXaNhanh() {
+  const sel = document.getElementById("chonXa");
+  if (!sel) return;
+
+  huyTomSelectXa();
+  sel.innerHTML = "";
+
+  DANH_SACH_XA_CLIENT.forEach(x => {
+    const opt = document.createElement("option");
+    opt.value = String(x.maXa);
+    opt.textContent = `${x.tenXa} - ${x.maXa}`;
+    opt.dataset.tenXa = x.tenXa || "";
+    opt.dataset.coSheet = x.coSheet ? "1" : "0";
+    opt.dataset.coThuMucDrive = x.coThuMucDrive ? "1" : "0";
+    if (String(x.maXa) === "24373") opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  document.getElementById("maXa").value = sel.value || "24373";
+  capNhatDiaChiXa();
+  capNhatTrangThaiXa();
+  khoiTaoTomSelectXa();
+}
+
+function taiBootstrapTuServer() {
+  google.script.run
+    .withSuccessHandler(cfg => {
+      isAdmin = !!cfg.isAdmin;
+      if (cfg.danhSachXa && cfg.danhSachXa.length) {
+        napDanhSachXaTuMang(cfg.danhSachXa);
+      }
+    })
+    .withFailureHandler(() => {
+      // Nếu lỗi cấu hình, vẫn dùng danh sách nhúng sẵn để không làm gián đoạn nhập liệu.
+    })
+    .getBootstrap();
+}
+
+function napDanhSachXaTuMang(list) {
+  if (!list || !list.length) return;
+
+  DANH_SACH_XA_SERVER = list;
+
+  const current = val("chonXa") || "24373";
+  const sel = document.getElementById("chonXa");
+  if (!sel) return;
+
+  huyTomSelectXa();
+  sel.innerHTML = "";
+
+  list.forEach(x => {
+    const opt = document.createElement("option");
+    opt.value = String(x.maXa);
+    opt.textContent = `${x.tenXa || "Xã/phường"} - ${x.maXa}`;
+    opt.dataset.tenXa = x.tenXa || "";
+    opt.dataset.coSheet = x.coSheet ? "1" : "0";
+    opt.dataset.coThuMucDrive = x.coThuMucDrive ? "1" : "0";
+    opt.dataset.sheetUrl = layLinkSheet(x) || "";
+    opt.dataset.driveUrl = layLinkDrive(x) || "";
+    if (String(x.maXa) === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  if (!sel.value) sel.value = "24373";
+  document.getElementById("maXa").value = sel.value;
+  capNhatDiaChiXaTheoDanhSach(list);
+  capNhatTrangThaiXaTheoDanhSach(list);
+  khoiTaoTomSelectXa();
+}
+
+function capNhatDiaChiXaTheoDanhSach(list) {
+  const xa = list.find(x => String(x.maXa) === val("chonXa"));
+  document.getElementById("diaChiThua").value = `${xa ? xa.tenXa : "Xã Ea Kar"}, tỉnh Đắk Lắk`;
+}
+
+function capNhatTrangThaiXaTheoDanhSach(list) {
+  const xa = list.find(x => String(x.maXa) === val("chonXa"));
+  if (!xa) return;
+
+  const sheetText = xa.coSheet ? "Đã có Google Sheet." : "Chưa có Google Sheet.";
+  const driveText = xa.coThuMucDrive ? "Đã có thư mục Drive." : "Chưa có thư mục Drive.";
+  const sheetUrl = layLinkSheet(xa);
+  const driveUrl = layLinkDrive(xa);
+
+  let html = `Đang chọn ${escapeHtml(xa.tenXa || "Xã/phường")} - mã xã ${escapeHtml(xa.maXa)}. ${sheetText} ${driveText}`;
+  if (sheetUrl) html += ` <a href="${escapeAttr(sheetUrl)}" target="_blank" rel="noopener">Mở Google Sheet</a>`;
+  if (driveUrl) html += ` <a href="${escapeAttr(driveUrl)}" target="_blank" rel="noopener">Mở Drive</a>`;
+
+  setNoticeHtml("trangThaiXa", html, xa.coSheet ? "ok" : "err");
+}
+
+
+function khoiTaoTomSelectXa() {
+  const sel = document.getElementById("chonXa");
+  if (!sel || typeof TomSelect === "undefined") return;
+
+  huyTomSelectXa();
+
+  tomSelectXa = new TomSelect(sel, {
+    create: false,
+    maxOptions: 500,
+    searchField: ["text"],
+    sortField: [{ field: "text", direction: "asc" }],
+    placeholder: "Gõ tên xã/phường hoặc mã xã...",
+    onChange: function() {
+      chonXaThayDoi();
+    }
+  });
+}
+
+function huyTomSelectXa() {
+  if (tomSelectXa) {
+    tomSelectXa.destroy();
+    tomSelectXa = null;
+  }
+}
+
+function layLinkSheet(x) {
+  return layLinkTuObject(x, [
+    "sheetUrl", "sheetURL", "urlSheet", "linkSheet", "sheetLink", "googleSheetUrl",
+    "googleSheetLink", "spreadsheetUrl", "spreadsheetLink", "linkGoogleSheet"
+  ]);
+}
+
+function layLinkDrive(x) {
+  return layLinkTuObject(x, [
+    "driveUrl", "driveURL", "urlDrive", "linkDrive", "driveLink", "folderUrl",
+    "folderLink", "thuMucDriveUrl", "thuMucDriveLink", "linkThuMucDrive"
+  ]);
+}
+
+function layLinkTuObject(x, keys) {
+  if (!x) return "";
+  for (const k of keys) {
+    if (x[k]) return String(x[k]);
+  }
+  return "";
+}
+
+function setNoticeHtml(id, html, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = "notice " + type;
+  el.innerHTML = html;
+}
+
+function escapeAttr(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+
+function napNguonGoc() {
+  ["nguonGocSuDung","nguonGocSuDung2"].forEach(id => {
+    document.getElementById(id).innerHTML = '<option value="">-- Chọn nguồn gốc --</option>' + NGUON_GOC.map(x => `<option>${x}</option>`).join("");
+  });
+}
+
+function chonXaThayDoi() {
+  document.getElementById("maXa").value = val("chonXa");
+  daKiemTraThua = false; dangTrungThua = false;
+  capNhatDiaChiXa(); capNhatSoPhatHanhMacDinh(); capNhatTrangThaiXa();
+  setNotice("ketQuaThua","Đã đổi xã. Vui lòng kiểm tra lại số tờ/số thửa.","muted");
+}
+
+function capNhatDiaChiXa() {
+  const sel = document.getElementById("chonXa");
+  const text = sel && sel.selectedOptions && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "";
+  const tenXa = text ? text.split(" - ")[0] : "Xã Ea Kar";
+  document.getElementById("diaChiThua").value = `${tenXa}, tỉnh Đắk Lắk`;
+}
+
+function capNhatTrangThaiXa() {
+  const maXa = val("chonXa") || "24373";
+  const xaServer = DANH_SACH_XA_SERVER.find(x => String(x.maXa) === String(maXa));
+  if (xaServer) {
+    capNhatTrangThaiXaTheoDanhSach(DANH_SACH_XA_SERVER);
+    return;
+  }
+
+  const sel = document.getElementById("chonXa");
+  const text = sel && sel.selectedOptions && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "";
+  const tenXa = text ? text.split(" - ")[0] : "Xã Ea Kar";
+  setNotice("trangThaiXa", `Đang chọn ${tenXa} - mã xã ${maXa}. Cấu hình Sheet/Drive sẽ đọc từ file cấu hình khi lưu.`, "ok");
+}
+
+
+function chonDoiTuong(btn) {
+  document.querySelectorAll(".subject-tabs .tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  doiTuong = btn.dataset.doituong || "Hộ gia đình, cá nhân";
+
+  const laToChuc = doiTuong === "Tổ chức";
+  document.getElementById("boxCaNhanHoGiaDinh").style.display = laToChuc ? "none" : "block";
+  document.getElementById("boxToChuc").style.display = laToChuc ? "block" : "none";
+
+  if (!laToChuc) {
+    taoDanhSachNguoiTheoLoai();
+  }
+}
+
+function chonCheDo(btn) {
+  document.querySelectorAll(".seg").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  cheDo = btn.dataset.chedo;
+  document.getElementById("boxGCN").style.display = cheDo === "Đã có GCN" ? "block" : "none";
+  document.getElementById("boxSoPhatHanhMacDinh").style.display = cheDo === "Chưa được cấp GCN" ? "block" : "none";
+  document.getElementById("hsqChuaCo").style.display = cheDo === "Chưa được cấp GCN" ? "block" : "none";
+  document.getElementById("hsqDaCo").style.display = cheDo === "Đã có GCN" ? "block" : "none";
+  document.getElementById("boxThongTinGCNThua").style.display = cheDo === "Đã có GCN" ? "grid" : "none";
+  capNhatHienThiUploadHSQ(); capNhatTenFileHSQ();
+}
+
+function chonLoaiChu(btn) {
+  document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  loaiChu = btn.dataset.loai;
+  taoDanhSachNguoiTheoLoai();
+}
+
+function taoDanhSachNguoiTheoLoai() {
+  const box = document.getElementById("owners"); box.innerHTML = "";
+  if (loaiChu === "Cá nhân") {
+    themNguoi("Người sử dụng 1", "Cá nhân", "Cá nhân", false);
+    document.getElementById("btnThemNguoi").style.display = "none";
+  } else if (loaiChu === "Vợ chồng") {
+    themNguoi("Chồng", "Vợ chồng", "Chồng", false, "Nam");
+    themNguoi("Vợ", "Vợ chồng", "Vợ", false, "Nữ");
+    document.getElementById("btnThemNguoi").style.display = "none";
+  } else if (loaiChu === "Hộ gia đình") {
+    themNguoi("Chủ hộ", "Hộ gia đình", "Chủ hộ", false);
+    themNguoi("Vợ/chồng chủ hộ", "Hộ gia đình", "Vợ/chồng chủ hộ", false, "", true);
+    document.getElementById("btnThemNguoi").style.display = "inline-block";
+  } else {
+    themNguoi("Người sử dụng 1", loaiChu, "Cá nhân", false);
+    themNguoi("Người sử dụng 2", loaiChu, "Cá nhân", false);
+    document.getElementById("btnThemNguoi").style.display = "inline-block";
+  }
+}
+
+function themNguoi(tieuDe, phapNhan, vaiTro, choXoa = true, gioiTinhMacDinh = "", optional = false) {
+  const box = document.getElementById("owners");
+  if (!tieuDe) tieuDe = loaiChu === "Hộ gia đình" ? "Thành viên hộ gia đình" : `Người sử dụng ${box.children.length + 1}`;
+  phapNhan = phapNhan || loaiChu;
+  vaiTro = vaiTro || (loaiChu === "Hộ gia đình" ? "Thành viên hộ gia đình" : "Cá nhân");
+  const div = document.createElement("div");
+  div.className = "owner";
+  div.dataset.optional = optional ? "1" : "0";
+  div.innerHTML = `
+    <div class="owner-title"><span>${tieuDe}${optional ? " (không bắt buộc)" : ""}</span>${choXoa ? '<button class="btn danger" type="button" onclick="this.closest(\'.owner\').remove()">Xóa</button>' : ''}</div>
+    <div class="grid2"><div><label>Họ và tên chủ sử dụng <b>*</b></label><input class="hoTen"></div><div><label>Ngày tháng năm sinh <b>*</b></label><input class="ngaySinh" placeholder="yyyy hoặc dd/mm/yyyy"></div></div>
+    <div class="grid2"><div><label>Giới tính <b>*</b></label><select class="gioiTinh"><option value="">-- Chọn --</option><option ${gioiTinhMacDinh==="Nam"?"selected":""}>Nam</option><option ${gioiTinhMacDinh==="Nữ"?"selected":""}>Nữ</option></select></div><div><label>Số CCCD <b>*</b></label><input class="cccd" maxlength="12"></div></div>
+    <div><label>Địa chỉ thường trú <b>*</b></label><input class="diaChiThuongTru"></div>
+    <div class="grid2"><div><label>Pháp nhân</label><input class="phapNhan" readonly value="${phapNhan}"></div><div><label>Vai trò pháp nhân</label><input class="vaiTroPhapNhan" readonly value="${vaiTro}"></div></div>`;
+  box.appendChild(div);
+}
+
+
+function xuLyNhapSoToThua() {
+  daKiemTraThua = false;
+  dangTrungThua = false;
+  capNhatSoPhatHanhMacDinh();
+
+  if (timerKiemTraTrung) clearTimeout(timerKiemTraTrung);
+
+  const soTo = val("soTo");
+  const soThua = val("soThua");
+  if (!soTo || !soThua) {
+    setNotice("ketQuaThua", "Nhập số tờ và số thửa để kiểm tra.", "muted");
+    return;
+  }
+
+  timerKiemTraTrung = setTimeout(() => {
+    kiemTraTrungNgayKhiNhap();
+  }, 350);
+}
+
+function kiemTraTrungNgayKhiNhap() {
+  const soTo = val("soTo");
+  const soThua = val("soThua");
+  if (!soTo || !soThua) return;
+  if (dangTrungThua) { setNotice("ketQuaThua", "Thửa này đã được nhập rồi", "err"); return; }
+
+  setNotice("ketQuaThua", "Đang kiểm tra thửa đã nhập chưa...", "muted");
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.trung) {
+        dangTrungThua = true;
+        daKiemTraThua = false;
+        document.getElementById("btnLuu").style.display = "none";
+        setNotice("ketQuaThua", "Thửa này đã được nhập rồi", "err");
+      } else if (res && res.ok) {
+        dangTrungThua = false;
+        setNotice("ketQuaThua", "Thửa này chưa có trong dữ liệu đã nhập. Rời ô để kiểm tra trong DSCanThuThap,DangKy (Do VPĐK giao).", "muted");
+      } else {
+        setNotice("ketQuaThua", (res && res.message) || "Không kiểm tra được trùng thửa.", "err");
+      }
+    })
+    .withFailureHandler(err => {
+      setNotice("ketQuaThua", err.message || "Lỗi kiểm tra trùng thửa.", "err");
+    })
+    .kiemTraTrungNhanh(soTo, soThua, val("maXa") || "24373");
+}
+
+
+function kiemTraThua() {
+  const soTo = val("soTo"), soThua = val("soThua");
+  daKiemTraThua = false; dangTrungThua = false;
+  capNhatSoPhatHanhMacDinh();
+  if (!soTo || !soThua) return;
+  setNotice("ketQuaThua","Đang kiểm tra số tờ/số thửa...","muted");
+  google.script.run.withSuccessHandler(res => {
+    if (res.ok) {
+      daKiemTraThua = true;
+      document.getElementById("maDinhDanh").value = res.data.maDinhDanh || "";
+      document.getElementById("dienTichTong").value = res.data.dienTich || "";
+      document.getElementById("diaChiThua").value = res.data.diaChiThua || document.getElementById("diaChiThua").value;
+      tuDongDienTichDat1(); tinhTongDienTichCon();
+      setNotice("ketQuaThua","Đã tìm thấy thửa đất.","ok");
+    } else {
+      if (res.duplicate) { dangTrungThua = true; document.getElementById("btnLuu").style.display = "none"; }
+      setNotice("ketQuaThua",res.message,"err");
+    }
+  }).withFailureHandler(err => setNotice("ketQuaThua", err.message || "Lỗi kiểm tra thửa đất.", "err"))
+    .kiemTraThuaDat(soTo, soThua, val("maXa") || "24373");
+}
+
+
+function layThuaHienTai() {
+  return {
+    thuaDat: {
+      soTo: val("soTo"),
+      soThua: val("soThua"),
+      maDinhDanh: val("maDinhDanh"),
+      diaChiThua: val("diaChiThua"),
+      dienTichTong: val("dienTichTong"),
+      ghiChu: val("ghiChu")
+    },
+    gcnThua: {
+      soToGCN: val("soToGCN"),
+      soThuaGCN: val("soThuaGCN")
+    },
+    dat1: {
+      loaiDat: val("loaiDat"),
+      dienTich: val("dienTich1"),
+      nguonGocSuDung: val("nguonGocSuDung"),
+      hinhThucSuDung: val("hinhThucSuDung"),
+      thoiHanSuDung: val("thoiHanSuDung")
+    },
+    dat2: {
+      loaiDat2: val("loaiDat2"),
+      dienTich2: val("dienTich2"),
+      nguonGocSuDung2: val("nguonGocSuDung2"),
+      hinhThucSuDung2: val("hinhThucSuDung2"),
+      thoiHanSuDung2: val("thoiHanSuDung2")
+    }
+  };
+}
+
+function themThuaVaoDanhSach() {
+  if (dangTrungThua) {
+    setNotice("ketQuaThua", "Thửa này đã được nhập rồi", "err");
+    return;
+  }
+  if (!daKiemTraThua) {
+    setNotice("ketQuaThua", "Vui lòng kiểm tra số tờ/số thửa hợp lệ trước khi thêm vào danh sách.", "err");
+    return;
+  }
+
+  const parcel = layThuaHienTai();
+  const thua = parcel.thuaDat;
+  const key = `${val("maXa")}_${thua.soTo}_${thua.soThua}`;
+
+  const loi = kiemTraThongTinDatTruocKhiThem(parcel);
+  if (loi) {
+    setNotice("ketQuaThua", loi, "err");
+    return;
+  }
+
+  if (thuaList.some(x => x.key === key)) {
+    setNotice("ketQuaThua", "Thửa này đã có trong danh sách nhập.", "err");
+    return;
+  }
+
+  parcel.key = key;
+  thuaList.push(parcel);
+  capNhatDanhSachThua();
+  lamTrangThongTinThuaSauKhiThem();
+}
+
+function kiemTraThongTinDatTruocKhiThem(parcel) {
+  const thua = parcel.thuaDat || {};
+  const dat1 = parcel.dat1 || {};
+  const dat2 = parcel.dat2 || {};
+
+  if (!thua.soTo || !thua.soThua) return "Vui lòng nhập số tờ/số thửa.";
+  if (!thua.dienTichTong) return "Vui lòng nhập diện tích thửa đất.";
+  if (!dat1.loaiDat || !dat1.dienTich || !dat1.nguonGocSuDung || !dat1.hinhThucSuDung || !dat1.thoiHanSuDung) {
+    return "Vui lòng nhập đủ Loại đất 1, Diện tích, Nguồn gốc, Hình thức, Thời hạn.";
+  }
+
+  const coDat2 = dat2.loaiDat2 || dat2.dienTich2 || dat2.nguonGocSuDung2 || dat2.hinhThucSuDung2 || dat2.thoiHanSuDung2;
+  if (coDat2) {
+    if (!dat2.loaiDat2 || !dat2.dienTich2 || !dat2.nguonGocSuDung2 || !dat2.hinhThucSuDung2 || !dat2.thoiHanSuDung2) {
+      return "Nếu có loại đất 2 thì phải nhập đủ thông tin loại đất 2.";
+    }
+    const tong = parseNumberVN(thua.dienTichTong);
+    const dt1 = parseNumberVN(dat1.dienTich);
+    const dt2 = parseNumberVN(dat2.dienTich2);
+    if (isNaN(tong) || isNaN(dt1) || isNaN(dt2)) return "Diện tích phải là số.";
+    if (Math.abs((dt1 + dt2) - tong) > 0.0001) return "Diện tích loại đất 1 + loại đất 2 phải bằng diện tích thửa đất.";
+  }
+
+  return "";
+}
+
+
+
+function capNhatDanhSachThua() {
+  const box = document.getElementById("danhSachThuaBox");
+  const counter = document.getElementById("parcelCounter");
+  if (counter) counter.textContent = `${thuaList.length} thửa`;
+
+  if (!thuaList.length) {
+    box.className = "parcel-list-empty";
+    box.innerHTML = "Chưa có thửa nào. Nếu chỉ nhập 1 thửa, có thể lưu trực tiếp.";
+    return;
+  }
+
+  box.className = "parcel-table-wrap";
+  const rows = thuaList.map((p, i) => {
+    const t = p.thuaDat || {};
+    const d1 = p.dat1 || {};
+    const d2 = p.dat2 || {};
+    const dat2Text = d2.loaiDat2 ? `${escapeHtml(d2.loaiDat2)} (${escapeHtml(d2.dienTich2 || "")})` : "";
+    return `
+      <tr>
+        <td class="center">${i + 1}</td>
+        <td><b>${escapeHtml(t.soTo)}</b></td>
+        <td><b>${escapeHtml(t.soThua)}</b></td>
+        <td>${escapeHtml(t.dienTichTong || "")}</td>
+        <td>${escapeHtml(d1.loaiDat || "")} ${d1.dienTich ? "(" + escapeHtml(d1.dienTich) + ")" : ""}</td>
+        <td>${dat2Text}</td>
+        <td class="center">
+          <button type="button" class="mini-btn danger" onclick="xoaThuaKhoiDanhSach(${i})">Xóa</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  box.innerHTML = `
+    <table class="parcel-table">
+      <thead>
+        <tr>
+          <th>STT</th>
+          <th>Số tờ</th>
+          <th>Số thửa</th>
+          <th>Diện tích</th>
+          <th>Loại đất 1</th>
+          <th>Loại đất 2</th>
+          <th>Xóa</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function xoaThuaKhoiDanhSach(index) {
+  thuaList.splice(index, 1);
+  capNhatDanhSachThua();
+}
+
+
+function xoaDanhSachThua() {
+  thuaList = [];
+  capNhatDanhSachThua();
+}
+
+function lamTrangThongTinThuaSauKhiThem() {
+  [
+    "soTo","soThua","soToGCN","soThuaGCN","maDinhDanh","dienTichTong","ghiChu",
+    "loaiDat","dienTich1","nguonGocSuDung","thoiHanSuDung",
+    "loaiDat2","dienTich2","nguonGocSuDung2","hinhThucSuDung2","thoiHanSuDung2"
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.value = "";
+      if (id !== "dienTich2") el.readOnly = false;
+    }
+  });
+  document.getElementById("hinhThucSuDung").value = "Sử dụng riêng";
+  document.getElementById("dienTich2").readOnly = true;
+  anDat2();
+  capNhatDiaChiXa();
+  capNhatSoPhatHanhMacDinh();
+  daKiemTraThua = false;
+  dangTrungThua = false;
+  setNotice("ketQuaThua", "Đã thêm thửa vào danh sách. Nhập thửa tiếp theo.", "ok");
+  const soToEl = document.getElementById("soTo");
+  if (soToEl) soToEl.focus();
+}
+
+
+function capNhatSoPhatHanhMacDinh() {
+  const soTo = val("soTo"), soThua = val("soThua");
+  document.getElementById("soPhatHanhMacDinh").value = soTo && soThua ? `CHUACOGIAY_${val("maXa") || "24373"}_${soTo}_${soThua}` : "";
+  capNhatTenFileHSQ();
+}
+
+function capNhatTheoLoaiDat1() {
+  const loai = val("loaiDat"), th = document.getElementById("thoiHanSuDung"), dt1 = document.getElementById("dienTich1");
+  if (loai === "ODT" || loai === "ONT") {
+    th.value = "Lâu dài"; th.readOnly = true; dt1.readOnly = false; document.getElementById("boxDat2").style.display = "block";
+  } else {
+    th.readOnly = false; if (th.value === "Lâu dài") th.value = ""; dt1.value = val("dienTichTong"); dt1.readOnly = true; anDat2();
+  }
+  tinhTongDienTichCon();
+}
+
+function tuDongDienTichDat1() {
+  const loai = val("loaiDat");
+  if (loai && loai !== "ODT" && loai !== "ONT") { document.getElementById("dienTich1").value = val("dienTichTong"); document.getElementById("dienTich1").readOnly = true; }
+}
+
+function anDat2() {
+  document.getElementById("boxDat2").style.display = "none";
+  ["loaiDat2","dienTich2","nguonGocSuDung2","hinhThucSuDung2","thoiHanSuDung2"].forEach(id => document.getElementById(id).value = "");
+}
+
+function capNhatTheoLoaiDat2() {
+  const loai = val("loaiDat2"), input = document.getElementById("thoiHanSuDung2");
+  if (loai === "ODT" || loai === "ONT") { input.value = "Lâu dài"; input.readOnly = true; }
+  else { input.readOnly = false; if (input.value === "Lâu dài") input.value = ""; }
+  tinhTongDienTichCon();
+}
+
+function tinhTongDienTichCon() {
+  const box = document.getElementById("kiemTraTongDienTich");
+  if (!box || document.getElementById("boxDat2").style.display === "none") return;
+  const tong = parseNumberVN(val("dienTichTong")), dt1 = parseNumberVN(val("dienTich1"));
+  if (!isNaN(tong) && !isNaN(dt1)) document.getElementById("dienTich2").value = tong - dt1 >= 0 ? lamGonSo(tong - dt1) : "";
+  box.className = "notice ok"; box.textContent = "Diện tích loại đất 2 tự tính là " + val("dienTich2");
+}
+
+function taoTenHSQTheoLoai(kind) {
+  const ma = val("maXa") || "24373";
+  const soTo = val("soTo");
+  const soThua = val("soThua");
+  const sph = val("soPhatHanh");
+
+  if (kind === "DDK") {
+    if (!soTo || !soThua) return "";
+    return `CHUACOGIAY_${ma}_${soTo}_${soThua}-DDK.pdf`;
+  }
+
+  if (kind === "GT_CHUA_CO") {
+    if (!soTo || !soThua) return "";
+    return `CHUACOGIAY_${ma}_${soTo}_${soThua}-GT.pdf`;
+  }
+
+  // Trường hợp Đã có GCN: chỉ đặt theo Số phát hành GCN
+  if (!sph) return "";
+  if (kind === "GCN") return `${sph}-GCN.pdf`;
+  if (kind === "GT_DA_CO") return `${sph}-GT.pdf`;
+
+  return "";
+}
+
+function capNhatTenFileHSQ() {
+  [["tenDDK","DDK"],["tenGTChuaCo","GT_CHUA_CO"],["tenGCN","GCN"],["tenGTDaCo","GT_DA_CO"]].forEach(([id,k]) => {
+    const el = document.getElementById(id); if (el) el.textContent = taoTenHSQTheoLoai(k) || "Tên file sẽ tự sinh sau khi nhập đủ thông tin.";
+  });
+}
+
+function capNhatHienThiUploadHSQ() {
+  const show = (id, yes) => { const el = document.getElementById(id); if (el) el.style.display = yes ? "block" : "none"; };
+  show("uploadDDK", document.getElementById("donDangKy")?.checked && cheDo === "Chưa được cấp GCN");
+  show("uploadGTChuaCo", document.getElementById("giayToChuaCo")?.checked && cheDo === "Chưa được cấp GCN");
+  show("uploadGCN", document.getElementById("giayChungNhan")?.checked && cheDo === "Đã có GCN");
+  show("uploadGTDaCo", document.getElementById("giayToDaCo")?.checked && cheDo === "Đã có GCN");
+  capNhatTenFileHSQ();
+}
+
+function getFileItems() {
+  const items = [];
+  if (cheDo === "Chưa được cấp GCN") {
+    if (document.getElementById("donDangKy").checked) items.push({kind:"DDK",label:"Đơn đăng ký",inputId:"fileDDK",targetName:taoTenHSQTheoLoai("DDK")});
+    if (document.getElementById("giayToChuaCo").checked) items.push({kind:"GT_CHUA_CO",label:"Giấy tờ",inputId:"fileGTChuaCo",targetName:taoTenHSQTheoLoai("GT_CHUA_CO")});
+  } else {
+    if (document.getElementById("giayChungNhan").checked) items.push({kind:"GCN",label:"Giấy chứng nhận",inputId:"fileGCN",targetName:taoTenHSQTheoLoai("GCN")});
+    if (document.getElementById("giayToDaCo").checked) items.push({kind:"GT_DA_CO",label:"Giấy tờ",inputId:"fileGTDaCo",targetName:taoTenHSQTheoLoai("GT_DA_CO")});
+  }
+  return items;
+}
+
+function readFilesForPayload() {
+  const items = getFileItems();
+  return Promise.all(items.map(item => new Promise((resolve, reject) => {
+    const input = document.getElementById(item.inputId);
+    const file = input && input.files && input.files[0] ? input.files[0] : null;
+    if (!file) return resolve({...item, missing:true});
+    if (file.type !== "application/pdf") return reject(new Error(item.label + ": chỉ cho phép file PDF."));
+    const reader = new FileReader();
+    reader.onload = e => resolve({...item, name:file.name, mimeType:file.type, base64:String(e.target.result).split(",")[1]});
+    reader.onerror = () => reject(new Error(item.label + ": không đọc được file."));
+    reader.readAsDataURL(file);
+  })));
+}
+
+
+function validateSoPhatHanhGCN(value) {
+  const s = String(value || "").trim().toUpperCase();
+  if (!s) return false;
+
+  // Chỉ số: đúng 10 số, không dấu cách
+  if (/^\d{10}$/.test(s)) return true;
+
+  // Có chữ + số: bắt buộc có đúng 1 dấu cách giữa chữ và số
+  if (!/^[A-ZĐ]{1,2} \d+$/.test(s)) return false;
+
+  const parts = s.split(" ");
+  if (parts.length !== 2) return false;
+
+  const letters = parts[0];
+
+  // Tính cả khoảng trắng:
+  // 1 ký tự chữ phía trước: tổng độ dài 8 hoặc 9
+  if (letters.length === 1) {
+    return s.length === 8 || s.length === 9;
+  }
+
+  // 2 ký tự chữ phía trước: tổng độ dài 9 hoặc 11
+  if (letters.length === 2) {
+    return s.length === 9 || s.length === 11;
+  }
+
+  return false;
+}
+
+function kiemTraSoPhatHanhGCN() {
+  if (cheDo !== "Đã có GCN") return true;
+
+  const input = document.getElementById("soPhatHanh");
+  const box = document.getElementById("loiSoPhatHanh");
+  const value = input ? input.value.trim() : "";
+
+  if (!value) {
+    if (box) box.style.display = "none";
+    return false;
+  }
+
+  if (!validateSoPhatHanhGCN(value)) {
+    if (box) {
+      box.style.display = "block";
+      box.className = "notice err";
+      box.textContent = "nhập không đúng!";
+    }
+    if (input) input.classList.add("input-error");
+    return false;
+  }
+
+  if (box) {
+    box.style.display = "block";
+    box.className = "notice ok";
+    box.textContent = "Số phát hành GCN hợp lệ.";
+  }
+  if (input) input.classList.remove("input-error");
+  return true;
+}
+
+
+function thuThapDuLieu(files) {
+  const owners = [...document.querySelectorAll(".owner")].map(o => ({
+    hoTen:o.querySelector(".hoTen").value.trim(), ngaySinh:o.querySelector(".ngaySinh").value.trim(), gioiTinh:o.querySelector(".gioiTinh").value.trim(),
+    cccd:o.querySelector(".cccd").value.trim(), diaChiThuongTru:o.querySelector(".diaChiThuongTru").value.trim(),
+    phapNhan:o.querySelector(".phapNhan").value.trim(), vaiTroPhapNhan:o.querySelector(".vaiTroPhapNhan").value.trim(), optional:o.dataset.optional==="1"
+  })).filter(o => !o.optional || o.hoTen || o.ngaySinh || o.gioiTinh || o.cccd || o.diaChiThuongTru);
+
+  return {
+    maXa: val("maXa") || "24373", doiTuong, cheDo, loaiChu,
+    gcn: {soPhatHanh:val("soPhatHanh"), ngayCap:val("ngayCap"), soVaoSo:val("soVaoSo"), soToGCN:val("soToGCN"), soThuaGCN:val("soThuaGCN")},
+    chuSuDung: doiTuong === "Tổ chức" ? [{
+      hoTen: val("hoTenDaiDien"),
+      ngaySinh: val("ngaySinhDaiDien"),
+      gioiTinh: val("gioiTinhDaiDien"),
+      cccd: val("maDinhDanhCaNhanDaiDien"),
+      diaChiThuongTru: val("diaChiThuongTruDaiDien"),
+      phapNhan: "Tổ chức",
+      vaiTroPhapNhan: ""
+    }] : owners,
+    toChuc: {
+      tenToChuc: val("tenToChuc"),
+      maDinhDanhToChuc: val("maDinhDanhToChuc"),
+      hoTenDaiDien: val("hoTenDaiDien"),
+      ngaySinhDaiDien: val("ngaySinhDaiDien"),
+      gioiTinhDaiDien: val("gioiTinhDaiDien"),
+      maDinhDanhCaNhanDaiDien: val("maDinhDanhCaNhanDaiDien"),
+      diaChiThuongTruDaiDien: val("diaChiThuongTruDaiDien"),
+      phapNhan: "Tổ chức"
+    },
+    thuaDat: {soTo:val("soTo"), soThua:val("soThua"), maDinhDanh:val("maDinhDanh"), diaChiThua:val("diaChiThua"), dienTichTong:val("dienTichTong"), ghiChu:val("ghiChu")},
+    dat1: {loaiDat:val("loaiDat"), dienTich:val("dienTich1"), nguonGocSuDung:val("nguonGocSuDung"), hinhThucSuDung:val("hinhThucSuDung"), thoiHanSuDung:val("thoiHanSuDung")},
+    dat2: {loaiDat2:val("loaiDat2"), dienTich2:val("dienTich2"), nguonGocSuDung2:val("nguonGocSuDung2"), hinhThucSuDung2:val("hinhThucSuDung2"), thoiHanSuDung2:val("thoiHanSuDung2")},
+    hsq: {donDangKy:document.getElementById("donDangKy").checked, giayTo: cheDo==="Chưa được cấp GCN" ? document.getElementById("giayToChuaCo").checked : document.getElementById("giayToDaCo").checked, giayChungNhan:document.getElementById("giayChungNhan").checked},
+    files: files || [],
+    thuaList: thuaList.length ? thuaList : []
+  };
+}
+
+function kiemTraTruocClient(data) {
+  if (doiTuong === "Tổ chức") {
+    const tc = data.toChuc || {};
+    if (!tc.tenToChuc) return "Vui lòng nhập Tên tổ chức.";
+    if (tc.maDinhDanhCaNhanDaiDien && !/^\d{12}$/.test(String(tc.maDinhDanhCaNhanDaiDien))) {
+      return "Mã định danh cá nhân phải đủ 12 số.";
+    }
+  }
+  if (cheDo === "Đã có GCN" && !kiemTraSoPhatHanhGCN()) return "nhập không đúng!";
+  if (dangTrungThua) return "Thửa này đã được nhập rồi";
+  if (!thuaList.length && !daKiemTraThua) return "Vui lòng kiểm tra số tờ/số thửa hợp lệ trước khi lưu.";
+  if (!thuaList.length) {
+    const loiDat = kiemTraThongTinDatTruocKhiThem(layThuaHienTai());
+    if (loiDat) return loiDat;
+  }
+  if (thuaList.length && daKiemTraThua) {
+    // Nếu đang có một thửa đã kiểm tra nhưng chưa bấm thêm, tự thêm thửa hiện tại vào cuối danh sách
+    const parcel = layThuaHienTai();
+    const t = parcel.thuaDat || {};
+    const key = `${val("maXa")}_${t.soTo}_${t.soThua}`;
+    if (t.soTo && t.soThua && !thuaList.some(x => x.key === key)) {
+      const loi = kiemTraThongTinDatTruocKhiThem(parcel);
+      if (loi) return loi;
+      parcel.key = key;
+      thuaList.push(parcel);
+      capNhatDanhSachThua();
+    }
+  }
+  return "";
+}
+
+function xemTruoc() {
+  readFilesForPayload().then(files => {
+    const data = thuThapDuLieu(files);
+    const loi = kiemTraTruocClient(data);
+    if (loi) { setStatus(loi,"err"); document.getElementById("btnLuu").style.display="none"; return; }
+    const text = [`Mã xã: ${data.maXa}`,`Đối tượng: ${data.doiTuong}`,`Loại hồ sơ: ${data.cheDo}`,`Số thửa sẽ lưu: ${(data.thuaList && data.thuaList.length) ? data.thuaList.length : 1}`,`Số file PDF: ${files.filter(f=>!f.missing).length}`,`Số người sử dụng: ${data.chuSuDung.length}`].join("\n");
+    document.getElementById("preview").innerHTML = `<div class="preview-box">${escapeHtml(text)}</div>`;
+    document.getElementById("btnLuu").style.display = "inline-block";
+    setStatus("Thông tin đã sẵn sàng. Bấm Xác nhận để lưu.","ok");
+  }).catch(err => setStatus(err.message,"err"));
+}
+
+function luuDuLieu() {
+  setStatus("Đang đọc file PDF...","muted");
+  document.getElementById("btnLuu").disabled = true;
+  readFilesForPayload().then(files => {
+    const missing = files.find(f => f.missing);
+    if (missing) throw new Error("Vui lòng chọn file PDF: " + missing.label);
+    const data = thuThapDuLieu(files);
+    const loi = kiemTraTruocClient(data);
+    if (loi) throw new Error(loi);
+    setStatus("Đang lưu dữ liệu và upload PDF...","muted");
+    google.script.run.withSuccessHandler(res => {
+      document.getElementById("btnLuu").disabled = false;
+      if (!res.ok) { setStatus(res.message,"err"); return; }
+      const uploadText = (res.uploadedFiles || []).map(f => `${f.label}: ${f.name}`).join("\n");
+      setNotice("trangThaiUpload", "Đã upload hồ sơ quét.\n" + uploadText, "ok");
+      setStatus(res.message + " Hồ sơ quét đã tải lên Drive bảo mật.","ok");
+      lamTrangBieuMauSauKhiLuu();
+    }).withFailureHandler(err => {
+      document.getElementById("btnLuu").disabled = false;
+      setStatus(err.message || "Có lỗi khi lưu.","err");
+    }).saveHoSoWithFiles(data);
+  }).catch(err => { document.getElementById("btnLuu").disabled = false; setStatus(err.message,"err"); });
+}
+
+function lamTrangBieuMauSauKhiLuu() {
+  ["tenToChuc","maDinhDanhToChuc","hoTenDaiDien","ngaySinhDaiDien","gioiTinhDaiDien","maDinhDanhCaNhanDaiDien","diaChiThuongTruDaiDien","soPhatHanh","ngayCap","soVaoSo","soToGCN","soThuaGCN","soTo","soThua","maDinhDanh","dienTichTong","loaiDat","dienTich1","thoiHanSuDung","nguonGocSuDung","ghiChu","loaiDat2","dienTich2","hinhThucSuDung2","thoiHanSuDung2","nguonGocSuDung2","fileDDK","fileGTChuaCo","fileGCN","fileGTDaCo"].forEach(id => {
+    const el = document.getElementById(id); if (el) { el.value=""; if (id!=="dienTich2") el.readOnly=false; }
+  });
+  document.getElementById("dienTich2").readOnly = true;
+  capNhatDiaChiXa(); capNhatSoPhatHanhMacDinh(); taoDanhSachNguoiTheoLoai(); anDat2();
+  thuaList = [];
+  capNhatDanhSachThua();
+  daKiemTraThua=false; dangTrungThua=false;
+  document.getElementById("preview").innerHTML=""; document.getElementById("btnLuu").style.display="none";
+  setNotice("ketQuaThua","Nhập số tờ và số thửa để kiểm tra.","muted");
+}
+
+function val(id){const el=document.getElementById(id);return el?String(el.value||"").trim():"";}
+function setNotice(id,msg,type){const el=document.getElementById(id);el.className="notice "+type;el.textContent=msg;}
+function setStatus(msg,type){setNotice("status",msg,type);}
+function parseNumberVN(v){let s=String(v||"").trim().replace(/\s/g,"");if(!s)return NaN;if(s.includes(",")&&s.includes("."))s=s.replace(/\./g,"").replace(",",".");else s=s.replace(",",".");return Number(s);}
+function lamGonSo(n){return isNaN(n)?"":Number(Math.round(n*10000)/10000).toString();}
+function escapeHtml(str){return String(str).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");}
+</script>

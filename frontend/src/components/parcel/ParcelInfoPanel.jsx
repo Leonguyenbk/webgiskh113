@@ -17,6 +17,7 @@ export default function ParcelInfoPanel({
   onClose,
   onZoom,
   onMplisSaved,
+  onNhapNhom4,
 }) {
   if (!parcel) return null;
 
@@ -106,6 +107,10 @@ export default function ParcelInfoPanel({
 
         <button type="button" className="zoomButton" onClick={onZoom}>
           Phóng đến thửa
+        </button>
+
+        <button type="button" className="zoomButton nhom4EntryButton" onClick={() => onNhapNhom4?.(parcel)}>
+          📝 Nhập dữ liệu (biểu Nhóm 4)
         </button>
 
         {feature && (

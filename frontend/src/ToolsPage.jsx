@@ -25,6 +25,7 @@ export default function ToolsPage({
   onNavigateGcnDashboard,
   onNavigateMplisSync,
   onNavigateUngThua,
+  onNavigateNhom4,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -56,6 +57,11 @@ export default function ToolsPage({
       name: "🟡 Thửa đã ứng thửa MPLIS",
       description: "Danh sách thửa chưa phân loại đã đối chiếu thủ công với MPLIS (tờ thửa, số GCN, mã đơn).",
       onNavigate: onNavigateUngThua,
+    },
+    {
+      name: "📝 Nhập biểu Nhóm 4",
+      description: "Nhập biểu mẫu thu thập dữ liệu thửa đất (Hộ gia đình/Tổ chức), lưu vào Supabase, hồ sơ quét lên Google Drive.",
+      onNavigate: onNavigateNhom4,
     },
   ];
 

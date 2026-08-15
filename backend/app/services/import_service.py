@@ -23,9 +23,31 @@ def import_gml(file_stream):
     if not rows:
         return None, (jsonify({"error": "File GML không có thửa đất hợp lệ"}), 400)
 
+    # Nhập lại GML cùng 1 xã = ĐỒNG BỘ theo xã đó, không chỉ thêm dòng mới:
+    # thửa cũ có thể đã bị tách thành nhiều thửa mới trong file mới, nên
+    # thửa nào không còn xuất hiện trong file phải bị xóa; thửa còn giữ
+    # lại thì cập nhật thông tin/hình học mới nhất (upsert, không còn bỏ
+    # qua trùng như trước). Gom theo xã vì mỗi lần nhập chỉ nên đụng tới
+    # đúng những xã có mặt trong file, không ảnh hưởng xã khác.
+    keys_by_xa: dict[str, list[str]] = {}
+    for row in rows:
+        keys_by_xa.setdefault(row["ma_xa"], []).append(f"{row['so_to']}_{row['so_thua']}")
+
+    deleted = 0
+    try:
+        for ma_xa, keep_keys in keys_by_xa.items():
+            count, error_response = supabase_client.call_rpc(
+                "delete_thua_dat_not_in", {"p_ma_xa": ma_xa, "p_keep_keys": keep_keys}, timeout=60
+            )
+            if error_response:
+                return None, error_response
+            deleted += int(count or 0)
+    except RuntimeError as exc:
+        return None, (jsonify({"error": str(exc)}), 500)
+
     try:
         imported = supabase_client.upsert_to_supabase(
-            "thua_dat", "ma_xa,so_to,so_thua", "ignore-duplicates", rows
+            "thua_dat", "ma_xa,so_to,so_thua", "merge-duplicates", rows
         )
     except RuntimeError as exc:
         return None, (jsonify({"error": str(exc)}), 500)
@@ -33,7 +55,13 @@ def import_gml(file_stream):
         detail = exc.response.text if exc.response is not None else str(exc)
         return None, (jsonify({"error": detail, "total": len(rows)}), 502)
 
-    return {"ok": True, "total": len(rows), "imported": imported}, None
+    return {
+        "ok": True,
+        "total": len(rows),
+        "imported": imported,
+        "deleted": deleted,
+        "xa": list(keys_by_xa.keys()),
+    }, None
 
 
 def import_dong_bo(filename: str, data: bytes):

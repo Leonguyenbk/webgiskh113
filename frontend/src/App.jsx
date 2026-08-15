@@ -50,7 +50,7 @@ const ESRI_IMAGERY_URL =
 // Nới khung quanh phạm vi dữ liệu để không sót thửa nằm sát mép, đơn vị độ.
 const EXTENT_PADDING = 0.01;
 
-export default function App({ onNavigateTools }) {
+export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
@@ -808,6 +808,7 @@ export default function App({ onNavigateTools }) {
             onClose={() => setSelected(null)}
             onZoom={() => setFocusTick((value) => value + 1)}
             onMplisSaved={handleMplisSaved}
+            onNhapNhom4={onNavigateNhom4}
           />
         </div>
       </section>
