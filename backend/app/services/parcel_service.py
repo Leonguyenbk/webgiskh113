@@ -127,8 +127,10 @@ def search():
     if error_response:
         return None, error_response
 
+    ten_thon = request.args.get("ten_thon", "").strip() or None
+
     result, error_response = parcel_repository.search(
-        ma_xa, nhom_list or None, so_to, so_thua, requested_limit, page_offset, 0
+        ma_xa, nhom_list or None, so_to, so_thua, requested_limit, page_offset, 0, ten_thon
     )
     if error_response:
         return None, error_response

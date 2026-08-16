@@ -24,6 +24,7 @@ import {
 } from "./components/map/MapDataLoaders";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
 import { getXaList } from "./services/parcelService";
+import { getRanhGioiThon } from "./services/ranhThonService";
 import {
   GCN_COLOR,
   GCN_LABEL,
@@ -97,6 +98,40 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [submittedFilters, setSubmittedFilters] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
 
+  // Ranh giới thôn: tải hết 1 lần khi mở trang (dataset nhỏ, không cần
+  // theo khung bản đồ/xã) — hễ zoom/kéo tới đâu có ranh là hiện ngay,
+  // không cần bấm Tra cứu trước. Xã nào chưa có dữ liệu ranh thì đơn giản
+  // là không có feature nào rơi vào khu vực đó.
+  const [ranhThonData, setRanhThonData] = useState({ type: "FeatureCollection", features: [] });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getRanhGioiThon({}, { signal: controller.signal })
+      .then((result) => setRanhThonData(result || { type: "FeatureCollection", features: [] }))
+      .catch((fetchError) => {
+        if (fetchError.name !== "AbortError") setRanhThonData({ type: "FeatureCollection", features: [] });
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  // Danh sách thôn của xã đang chọn trong bộ lọc (không phải xã đã tra
+  // cứu) — suy ra thẳng từ ranhThonData đã tải sẵn, không gọi thêm API.
+  // Rỗng thì không hiện bộ lọc thôn (xã đó chưa có dữ liệu ranh).
+  const thonOptionsForXa = useMemo(() => {
+    if (!maXa) return [];
+    const names = ranhThonData.features
+      .filter((f) => f.properties?.ma_xa === maXa)
+      .map((f) => f.properties.ten_thon);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [ranhThonData, maXa]);
+
+  const [tenThon, setTenThon] = useState("");
+
+  useEffect(() => {
+    setTenThon("");
+  }, [maXa]);
+
   // Đánh dấu lần tìm gần nhất là bấm nút "Tìm thửa quanh đây" (theo khung
   // nhìn bản đồ), để phân biệt với tra cứu theo mã xã / định vị GPS.
   const [viewportSearchActive, setViewportSearchActive] = useState(false);
@@ -163,9 +198,10 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
       nhom,
       soTo: soTo.trim(),
       soThua: soThua.trim(),
+      tenThon: tenThon || "",
     });
     setFiltersOpen(false);
-  }, [maXa, nhom, soTo, soThua]);
+  }, [maXa, nhom, soTo, soThua, tenThon]);
 
   const handleNearMe = useCallback(() => {
     if (!myPosition) return;
@@ -502,6 +538,25 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 )}
               </div>
 
+              {thonOptionsForXa.length > 0 && (
+                <div>
+                  <label htmlFor="filterTenThon">Thôn</label>
+                  <select
+                    id="filterTenThon"
+                    className="filterInput"
+                    value={tenThon}
+                    onChange={(event) => setTenThon(event.target.value)}
+                  >
+                    <option value="">-- Tất cả thôn --</option>
+                    {thonOptionsForXa.map((ten) => (
+                      <option key={ten} value={ten}>
+                        {ten}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="filterRow">
                 <div>
                   <label htmlFor="filterSoTo">Số tờ</label>
@@ -749,6 +804,25 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   data={{ type: "FeatureCollection", features: [] }}
                   style={style}
                   onEachFeature={onEachFeature}
+                />
+              </LayersControl.Overlay>
+
+              <LayersControl.Overlay name="Ranh giới thôn">
+                <GeoJSON
+                  key={JSON.stringify(ranhThonData.features.map((f) => f.id))}
+                  data={ranhThonData}
+                  style={{
+                    color: "#dc2626",
+                    weight: 2,
+                    opacity: 1,
+                    dashArray: "6 4",
+                    fillOpacity: 0,
+                  }}
+                  onEachFeature={(feature, layer) => {
+                    if (feature.properties?.ten_thon) {
+                      layer.bindTooltip(feature.properties.ten_thon, { sticky: true });
+                    }
+                  }}
                 />
               </LayersControl.Overlay>
             </LayersControl>

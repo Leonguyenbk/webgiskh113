@@ -91,6 +91,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       ...prev,
       soTo,
       soThua,
+      maDinhDanh: prefill.ma_thua_dat || prev.maDinhDanh,
       dienTichThuaDat: prefill.dien_tich != null ? String(prefill.dien_tich) : prev.dienTichThuaDat,
       diaChiThuaDat: prefill.dia_chi || prev.diaChiThuaDat,
     }));
@@ -131,15 +132,13 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     }
 
     try {
-      // /api/parcels/search chưa trả ma_thua_dat trong properties (RPC hiện
-      // tại chỉ có ma_xa/so_to/so_thua/muc_dich_su_dung/dien_tich/ten_chu/
-      // dia_chi) — chỉ auto-fill diện tích/địa chỉ, mã định danh nhập tay.
       const found = await searchParcels({ ma_xa: maXa, so_to: thua.soTo, so_thua: thua.soThua });
       const feature = found?.features?.[0];
       if (feature) {
         const props = feature.properties || {};
         setThua((prev) => ({
           ...prev,
+          maDinhDanh: prev.maDinhDanh || props.ma_thua_dat || prev.maDinhDanh,
           dienTichThuaDat: prev.dienTichThuaDat || (props.dien_tich ? String(props.dien_tich) : prev.dienTichThuaDat),
           diaChiThuaDat: prev.diaChiThuaDat || props.dia_chi || prev.diaChiThuaDat,
         }));
@@ -219,6 +218,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
     const payload = {
       ma_xa: maXa,
+      ten_xa: xaList.find((x) => x.ma_xa === maXa)?.ten_xa || "",
       doi_tuong: doiTuong,
       che_do: cheDo,
       gcn: {
@@ -559,7 +559,11 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
           <div className="nhom4Grid2">
             <div>
               <label>Mã định danh thửa đất</label>
-              <input readOnly value={thua.maDinhDanh} />
+              <input
+                value={thua.maDinhDanh}
+                onChange={(e) => setThua({ ...thua, maDinhDanh: e.target.value })}
+                placeholder="Tự điền nếu có, hoặc nhập tay"
+              />
             </div>
             <div>
               <label>Diện tích thửa đất *</label>

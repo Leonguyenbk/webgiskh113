@@ -26,6 +26,7 @@ export default function ToolsPage({
   onNavigateMplisSync,
   onNavigateUngThua,
   onNavigateNhom4,
+  onNavigateRanhThon,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -62,6 +63,11 @@ export default function ToolsPage({
       name: "📝 Nhập biểu Nhóm 4",
       description: "Nhập biểu mẫu thu thập dữ liệu thửa đất (Hộ gia đình/Tổ chức), lưu vào Supabase, hồ sơ quét lên Google Drive.",
       onNavigate: onNavigateNhom4,
+    },
+    {
+      name: "🗺️ Nhập ranh giới thôn",
+      description: "Nhập file Shapefile (.zip) ranh giới thôn vào Supabase, hiển thị dạng viền trên bản đồ.",
+      onNavigate: onNavigateRanhThon,
     },
   ];
 

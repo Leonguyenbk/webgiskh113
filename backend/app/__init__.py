@@ -26,8 +26,9 @@ def _register_blueprints(app: Flask) -> None:
     from .routes.mplis_routes import mplis_bp
     from .routes.nhom4_routes import nhom4_bp
     from .routes.parcel_routes import parcel_bp
+    from .routes.ranh_thon_routes import ranh_thon_bp
 
-    for blueprint in (health_bp, parcel_bp, gcn_bp, admin_bp, mplis_bp, nhom4_bp):
+    for blueprint in (health_bp, parcel_bp, gcn_bp, admin_bp, mplis_bp, nhom4_bp, ranh_thon_bp):
         app.register_blueprint(blueprint)
 
 

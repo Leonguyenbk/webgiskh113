@@ -116,7 +116,12 @@ def _feature_from_member(member: ET.Element, transformer: Transformer, index: in
             "so_thua": so_thua,
             "ma_xa": _text(parcel, "maXa"),
             "ma_thua_dat": _text(parcel, "maThuaDat"),
-            "muc_dich_su_dung": _text(parcel, "mucDichSuDung"),
+            # Một số nguồn xuất GML đặt tên khác cho mục đích sử dụng đất
+            # (VD maLoaiDat thay vì mucDichSuDung) — thử lần lượt, không để
+            # trống nếu file dùng tên khác. Quan trọng từ khi import_gml
+            # chuyển sang upsert merge-duplicates: đọc sai/để trống ở đây sẽ
+            # ghi đè xóa mất muc_dich_su_dung đúng đã có sẵn trong Supabase.
+            "muc_dich_su_dung": _text(parcel, "mucDichSuDung") or _text(parcel, "maLoaiDat"),
             "dien_tich": float(dien_tich_raw or 0),
             "ten_chu": _text(parcel, "tenChu"),
             "dia_chi": _text(parcel, "diaChi"),

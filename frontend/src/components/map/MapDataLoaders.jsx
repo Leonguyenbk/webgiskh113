@@ -69,6 +69,7 @@ export function SearchParcelsLoader({ filters, onData, onLoading, onError, onMet
       if (filters.nhom?.length) baseParams.nhom = filters.nhom.join(",");
       if (filters.soTo) baseParams.so_to = filters.soTo;
       if (filters.soThua) baseParams.so_thua = filters.soThua;
+      if (filters.tenThon) baseParams.ten_thon = filters.tenThon;
 
       const collected = [];
       const seen = new Set();

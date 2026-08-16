@@ -11,6 +11,7 @@ import GcnDashboardPage from "./GcnDashboardPage.jsx";
 import MplisSyncPage from "./MplisSyncPage.jsx";
 import UngThuaPage from "./UngThuaPage.jsx";
 import Nhom4FormPage from "./Nhom4FormPage.jsx";
+import ImportRanhThonPage from "./ImportRanhThonPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -43,6 +44,7 @@ function Root() {
         onNavigateMplisSync={() => navigate("/cap-nhat-mplis")}
         onNavigateUngThua={() => navigate("/ung-thua-mplis")}
         onNavigateNhom4={() => navigate("/nhom-4")}
+        onNavigateRanhThon={() => navigate("/import-ranh-thon")}
       />
     );
   }
@@ -66,6 +68,9 @@ function Root() {
   }
   if (path.startsWith("/nhom-4")) {
     return <Nhom4FormPage onNavigateHome={() => navigate("/")} prefill={nhom4Prefill} />;
+  }
+  if (path.startsWith("/import-ranh-thon")) {
+    return <ImportRanhThonPage onNavigateHome={() => navigate("/")} />;
   }
   return <App onNavigateTools={() => navigate("/tools")} onNavigateNhom4={navigateToNhom4} />;
 }

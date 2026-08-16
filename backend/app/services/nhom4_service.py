@@ -198,7 +198,7 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
             return None, (jsonify({"error": f"Thửa này đã có dữ liệu GCN rồi: {key}"}), 409)
 
     try:
-        folder_id = google_drive_client.resolve_xa_folder(ma_xa)
+        folder_id = google_drive_client.resolve_xa_folder(ma_xa, payload.get("ten_xa"))
     except RuntimeError as exc:
         return None, (jsonify({"error": str(exc)}), 500)
 

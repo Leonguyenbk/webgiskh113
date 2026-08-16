@@ -29,6 +29,18 @@ export function importDongBo(file, token) {
   });
 }
 
+export function importRanhThon(file, token) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request("/api/import-ranh-thon", {
+    method: "POST",
+    body: formData,
+    isFormData: true,
+    token,
+    errorFallback: "Nhập ranh giới thôn thất bại",
+  });
+}
+
 // =========================================================
 // NGUỒN GOOGLE SHEET CHO ĐỒNG BỘ GCN (public.nguon_gcn)
 // =========================================================

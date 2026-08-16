@@ -48,7 +48,7 @@ def list_xa_phuong():
     return supabase_client.call_rpc("list_xa_phuong", {}, timeout=20)
 
 
-def search(ma_xa, nhom, so_to, so_thua, limit, offset, simplify=0):
+def search(ma_xa, nhom, so_to, so_thua, limit, offset, simplify=0, ten_thon=None):
     return supabase_client.call_rpc(
         "search_parcels",
         {
@@ -59,6 +59,7 @@ def search(ma_xa, nhom, so_to, so_thua, limit, offset, simplify=0):
             "p_limit": limit,
             "p_offset": offset,
             "p_simplify": simplify,
+            "p_ten_thon": ten_thon,
         },
         timeout=45,
     )

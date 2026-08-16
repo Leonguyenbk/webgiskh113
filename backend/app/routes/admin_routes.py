@@ -23,6 +23,21 @@ def import_gml():
     return jsonify(data)
 
 
+@admin_bp.post("/api/import-ranh-thon")
+def import_ranh_thon():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Thiếu file Shapefile (.zip)"}), 400
+
+    data, error_response = import_service.import_ranh_thon(uploaded.stream)
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @admin_bp.post("/api/import-dong-bo")
 def import_dong_bo():
     if not check_import_token():

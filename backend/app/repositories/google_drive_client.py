@@ -10,10 +10,16 @@ from google.oauth2.service_account import Credentials
 # Upload PDF hồ sơ quét lên Google Drive bằng Service Account — dùng lại
 # GOOGLE_SERVICE_ACCOUNT_JSON đã có (xem backend/gcn_sync.py), nhưng với
 # scope drive.file riêng (không dùng chung Credentials với gcn_sync vì
-# khác scope). drive.file chỉ cho thấy file/folder do CHÍNH service
-# account tạo ra — nên folder gốc (GOOGLE_DRIVE_ROOT_FOLDER_ID) phải được
-# tạo bằng scripts/create_drive_root_folder.py, không phải tạo tay rồi
-# share cho service account.
+# khác scope).
+#
+# Folder gốc (GOOGLE_DRIVE_ROOT_FOLDER_ID) có 2 cách hợp lệ để chuẩn bị:
+# 1) Tự tạo bằng scripts/create_drive_root_folder.py (service account là
+#    chủ sở hữu), HOẶC
+# 2) Dùng folder có sẵn của người dùng (VD "HSQ 2959" đã tạo tay), miễn
+#    là SHARE folder đó cho email service account (lấy từ trường
+#    "client_email" trong GOOGLE_SERVICE_ACCOUNT_JSON) với quyền Editor —
+#    scope drive.file vẫn thấy/ghi được các file share trực tiếp cho nó,
+#    không chỉ file tự tạo. Không cần đổi sang scope "drive" rộng hơn.
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
 DRIVE_UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
@@ -54,15 +60,18 @@ def _get_root_folder_id() -> str:
     return root_id
 
 
-def _find_folder(session: AuthorizedSession, parent_id: str, name: str) -> str | None:
-    escaped_name = name.replace("'", "\\'")
+def _find_folder_by_ma_xa(session: AuthorizedSession, parent_id: str, ma_xa: str) -> str | None:
+    # Dùng "contains" (không phải "=") vì folder có sẵn của người dùng đặt
+    # tên kiểu "Xã Yang Mao - 24484" (tên xã + mã xã), không phải chỉ mã xã
+    # trần — khớp theo mã xã là đủ, không cần biết đúng tên xã ghi trước đó.
+    escaped_ma_xa = ma_xa.replace("'", "\\'")
     query = (
-        f"'{parent_id}' in parents and name = '{escaped_name}' "
+        f"'{parent_id}' in parents and name contains '{escaped_ma_xa}' "
         "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
     )
     response = session.get(
         f"{DRIVE_API_BASE}/files",
-        params={"q": query, "fields": "files(id,name)", "pageSize": 1},
+        params={"q": query, "fields": "files(id,name)", "pageSize": 5},
         timeout=15,
     )
     response.raise_for_status()
@@ -85,19 +94,25 @@ def _create_folder(session: AuthorizedSession, parent_id: str, name: str) -> str
     return response.json()["id"]
 
 
-def resolve_xa_folder(ma_xa: str) -> str:
+def resolve_xa_folder(ma_xa: str, ten_xa: str | None = None) -> str:
     """Tìm (hoặc tạo mới) subfolder theo mã xã dưới folder gốc. Cache
     trong tiến trình để đỡ gọi Drive API lặp lại — chấp nhận mất cache khi
-    Render restart, không ảnh hưởng tính đúng vì vẫn tìm-hoặc-tạo lại."""
+    Render restart, không ảnh hưởng tính đúng vì vẫn tìm-hoặc-tạo lại.
+
+    ten_xa (tùy chọn): chỉ dùng để đặt tên khi phải TẠO MỚI folder (xã
+    chưa có sẵn) — khớp đúng quy ước đặt tên "Xã <tên xã> - <mã xã>" đã
+    dùng cho các folder có sẵn, để không tạo folder trùng mục đích nhưng
+    khác cách đặt tên."""
     if ma_xa in _folder_cache:
         return _folder_cache[ma_xa]
 
     session = _get_session()
     root_id = _get_root_folder_id()
 
-    folder_id = _find_folder(session, root_id, ma_xa)
+    folder_id = _find_folder_by_ma_xa(session, root_id, ma_xa)
     if not folder_id:
-        folder_id = _create_folder(session, root_id, ma_xa)
+        folder_name = f"{ten_xa} - {ma_xa}" if ten_xa else ma_xa
+        folder_id = _create_folder(session, root_id, folder_name)
 
     _folder_cache[ma_xa] = folder_id
     return folder_id

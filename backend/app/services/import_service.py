@@ -4,6 +4,7 @@ import requests
 from flask import jsonify
 
 import gml_reader
+import shapefile_reader
 from sync_reader import parse_sync_file
 from ..repositories import supabase_client
 
@@ -61,6 +62,56 @@ def import_gml(file_stream):
         "imported": imported,
         "deleted": deleted,
         "xa": list(keys_by_xa.keys()),
+    }, None
+
+
+def import_ranh_thon(file_stream):
+    base_url = supabase_client.get_base_url()
+    if not base_url:
+        return None, supabase_client.missing_base_url_response()
+
+    try:
+        rows = list(shapefile_reader.iter_rows(file_stream))
+    except Exception as exc:  # noqa: BLE001 - lỗi parse file người dùng tải lên, phải báo rõ nguyên nhân
+        return None, (jsonify({"error": f"Không đọc được file Shapefile: {exc}"}), 400)
+
+    if not rows:
+        return None, (jsonify({"error": "File Shapefile không có ranh thôn hợp lệ"}), 400)
+
+    # Đồng bộ theo xã giống import_gml: thôn không còn trong file mới (đổi
+    # tên/vẽ lại/gộp) bị xóa, thôn còn lại thì thêm mới/cập nhật hình học.
+    thon_by_xa: dict[str, list[str]] = {}
+    for row in rows:
+        thon_by_xa.setdefault(row["ma_xa"], []).append(row["ten_thon"])
+
+    deleted = 0
+    try:
+        for ma_xa, keep_thon in thon_by_xa.items():
+            count, error_response = supabase_client.call_rpc(
+                "delete_ranh_gioi_thon_not_in", {"p_ma_xa": ma_xa, "p_keep_thon": keep_thon}, timeout=60
+            )
+            if error_response:
+                return None, error_response
+            deleted += int(count or 0)
+    except RuntimeError as exc:
+        return None, (jsonify({"error": str(exc)}), 500)
+
+    try:
+        imported = supabase_client.upsert_to_supabase(
+            "ranh_gioi_thon", "ma_xa,ten_thon", "merge-duplicates", rows
+        )
+    except RuntimeError as exc:
+        return None, (jsonify({"error": str(exc)}), 500)
+    except requests.RequestException as exc:
+        detail = exc.response.text if exc.response is not None else str(exc)
+        return None, (jsonify({"error": detail, "total": len(rows)}), 502)
+
+    return {
+        "ok": True,
+        "total": len(rows),
+        "imported": imported,
+        "deleted": deleted,
+        "xa": list(thon_by_xa.keys()),
     }, None
 
 

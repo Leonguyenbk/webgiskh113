@@ -16,7 +16,10 @@ def _json_or_error(response, error_response):
 
 
 def gcn_thu_thap_theo_xa():
-    return supabase_client.call_rpc("gcn_thu_thap_theo_xa", {}, timeout=30)
+    # thua_dat đã 1.36 triệu dòng — hàm SQL đã gắn statement_timeout riêng
+    # 30s (xem supabase/schema.sql), timeout HTTP ở đây phải lớn hơn 1 chút
+    # để không tự cắt trước khi Postgres kịp trả lỗi/kết quả.
+    return supabase_client.call_rpc("gcn_thu_thap_theo_xa", {}, timeout=40)
 
 
 def list_nguon():
