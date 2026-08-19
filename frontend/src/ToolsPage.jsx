@@ -24,7 +24,6 @@ export default function ToolsPage({
   onNavigateGcnLinks,
   onNavigateGcnDashboard,
   onNavigateMplisSync,
-  onNavigateUngThua,
   onNavigateNhom4,
   onNavigateRanhThon,
 }) {
@@ -53,11 +52,6 @@ export default function ToolsPage({
       name: "🔄 Cập nhật MPLIS",
       description: "Lấy trạng thái thửa đất từ MPLIS, cập nhật vào dong_bo_du_lieu (1 thửa hoặc cả xã).",
       onNavigate: onNavigateMplisSync,
-    },
-    {
-      name: "🟡 Thửa đã ứng thửa MPLIS",
-      description: "Danh sách thửa chưa phân loại đã đối chiếu thủ công với MPLIS (tờ thửa, số GCN, mã đơn).",
-      onNavigate: onNavigateUngThua,
     },
     {
       name: "📝 Nhập biểu Nhóm 4",

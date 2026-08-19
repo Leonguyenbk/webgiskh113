@@ -31,8 +31,6 @@ import {
   GROUP_COLORS,
   GROUP_LABELS,
   NEAR_ME_TARGET,
-  UNG_THUA_COLOR,
-  UNG_THUA_LABEL,
   VIEWPORT_SEARCH_TARGET,
   getParcelFillColor,
 } from "./utils/constants";
@@ -247,27 +245,6 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     setSelected({ id: feature.id, feature, ...feature.properties });
     setFocusTick((value) => value + 1);
   }, []);
-
-  // Sau khi MplisMatchForm lưu thành công: cập nhật ngay dữ liệu đang có
-  // (data/selected) để bản đồ đổi màu vàng tức thì, không phải tải lại
-  // toàn bộ thửa từ server.
-  const handleMplisSaved = useCallback(
-    (savedUngThua) => {
-      setData((prev) => {
-        if (!prev || !selected) return prev;
-        return {
-          ...prev,
-          features: prev.features.map((f) =>
-            f.id === selected.id
-              ? { ...f, properties: { ...f.properties, ung_thua: savedUngThua } }
-              : f,
-          ),
-        };
-      });
-      setSelected((prev) => (prev ? { ...prev, ung_thua: savedUngThua } : prev));
-    },
-    [selected],
-  );
 
   const filtered = useMemo(() => {
     if (!data) return null;
@@ -848,11 +825,6 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             </div>
 
             <div>
-              <span style={{ backgroundColor: UNG_THUA_COLOR }} />
-              <label>{UNG_THUA_LABEL}</label>
-            </div>
-
-            <div>
               <span style={{ backgroundColor: GROUP_COLORS.DEFAULT }} />
               <label>{GROUP_LABELS.DEFAULT}</label>
             </div>
@@ -881,7 +853,6 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             xaNameByCode={xaNameByCode}
             onClose={() => setSelected(null)}
             onZoom={() => setFocusTick((value) => value + 1)}
-            onMplisSaved={handleMplisSaved}
             onNhapNhom4={onNavigateNhom4}
           />
         </div>

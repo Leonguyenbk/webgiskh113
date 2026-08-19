@@ -9,7 +9,6 @@ import ImportSyncPage from "./ImportSyncPage.jsx";
 import ManageGcnLinksPage from "./ManageGcnLinksPage.jsx";
 import GcnDashboardPage from "./GcnDashboardPage.jsx";
 import MplisSyncPage from "./MplisSyncPage.jsx";
-import UngThuaPage from "./UngThuaPage.jsx";
 import Nhom4FormPage from "./Nhom4FormPage.jsx";
 import ImportRanhThonPage from "./ImportRanhThonPage.jsx";
 
@@ -42,7 +41,6 @@ function Root() {
         onNavigateGcnLinks={() => navigate("/nguon-gcn")}
         onNavigateGcnDashboard={() => navigate("/thong-ke-gcn")}
         onNavigateMplisSync={() => navigate("/cap-nhat-mplis")}
-        onNavigateUngThua={() => navigate("/ung-thua-mplis")}
         onNavigateNhom4={() => navigate("/nhom-4")}
         onNavigateRanhThon={() => navigate("/import-ranh-thon")}
       />
@@ -62,9 +60,6 @@ function Root() {
   }
   if (path.startsWith("/cap-nhat-mplis")) {
     return <MplisSyncPage onNavigateHome={() => navigate("/")} />;
-  }
-  if (path.startsWith("/ung-thua-mplis")) {
-    return <UngThuaPage onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/nhom-4")) {
     return <Nhom4FormPage onNavigateHome={() => navigate("/")} prefill={nhom4Prefill} />;

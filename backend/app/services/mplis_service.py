@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from flask import current_app, jsonify
 
 import mplis_sync
-from ..repositories import mplis_repository, supabase_client
-from ..utils.validators import UNG_THUA_ALLOWED_FIELDS, clean_text
+from ..repositories import supabase_client
 
 
 def _validate_mode(ma_xa: str, so_to: str, so_thua: str) -> tuple[str | None, str | None]:
@@ -72,44 +69,3 @@ def get_job_status(job_id: str):
     if job is None:
         return None, (jsonify({"error": "Không tìm thấy job"}), 404)
     return job.snapshot(), None
-
-
-def list_ung_thua(ma_xa: str | None):
-    result, error_response = mplis_repository.list_ung_thua(ma_xa)
-    if error_response:
-        return None, error_response
-    return {"items": result}, None
-
-
-def save_ung_thua(body: dict):
-    ma_xa = str(body.get("ma_xa", "")).strip()
-
-    try:
-        so_to = int(body.get("so_to"))
-        so_thua = int(body.get("so_thua"))
-    except (TypeError, ValueError):
-        return None, (jsonify({"error": "Thiếu hoặc sai định dạng so_to/so_thua"}), 400)
-
-    if not ma_xa:
-        return None, (jsonify({"error": "Thiếu ma_xa"}), 400)
-
-    # Whitelist: chỉ nhận đúng các trường được phép cập nhật, không để
-    # frontend gửi field tùy ý rồi update toàn bộ row (mục 12 yêu cầu).
-    cleaned = {field: clean_text(body.get(field)) for field in UNG_THUA_ALLOWED_FIELDS}
-
-    if not cleaned["to_thua_mplis"]:
-        return None, (jsonify({"error": "Thiếu tờ thửa trên MPLIS"}), 400)
-
-    payload = {
-        "ma_xa": ma_xa,
-        "so_to": so_to,
-        "so_thua": so_thua,
-        **cleaned,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    result, error_response = mplis_repository.upsert_ung_thua(payload)
-    if error_response:
-        return None, error_response
-
-    return {"ok": True, "item": result[0] if result else payload}, None

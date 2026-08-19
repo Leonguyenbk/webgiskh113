@@ -47,14 +47,11 @@ def import_gml(file_stream):
         return None, (jsonify({"error": str(exc)}), 500)
 
     try:
-        imported = supabase_client.upsert_to_supabase(
-            "thua_dat", "ma_xa,so_to,so_thua", "merge-duplicates", rows
-        )
+        imported, error_response = supabase_client.upsert_thua_dat_diff(rows)
+        if error_response:
+            return None, error_response
     except RuntimeError as exc:
         return None, (jsonify({"error": str(exc)}), 500)
-    except requests.RequestException as exc:
-        detail = exc.response.text if exc.response is not None else str(exc)
-        return None, (jsonify({"error": detail, "total": len(rows)}), 502)
 
     return {
         "ok": True,

@@ -11,11 +11,6 @@ SPATIAL_ARGS = (
     "center_lat",
 )
 
-# Ứng thửa MPLIS (mplis_service.save_ung_thua): chỉ nhận đúng các trường
-# này từ body request, không update toàn bộ row theo field tùy ý frontend
-# gửi lên.
-UNG_THUA_ALLOWED_FIELDS = ("to_thua_mplis", "so_giay_chung_nhan", "ma_don_mplis")
-
 
 def check_import_token() -> bool:
     import_token = current_app.config.get("IMPORT_TOKEN", "")
@@ -76,11 +71,3 @@ def read_optional_int(name: str):
         return int(raw), None
     except ValueError:
         return None, (jsonify({"error": f"{name} phải là số nguyên"}), 400)
-
-
-def clean_text(value) -> str | None:
-    """Trim chuỗi, chuyển chuỗi rỗng thành None — dùng khi lưu các trường
-    tùy chọn (VD số giấy chứng nhận, mã đơn MPLIS) để không lưu khoảng
-    trắng hoặc chuỗi rỗng vào Supabase."""
-    text = str(value or "").strip()
-    return text or None

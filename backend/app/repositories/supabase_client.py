@@ -197,6 +197,28 @@ def fetch_all_rows(
     return rows[:requested_limit]
 
 
+def upsert_thua_dat_diff(rows: list[dict], batch_size: int = 200):
+    """Upsert thua_dat qua RPC upsert_thua_dat_diff (so sánh trước khi ghi
+    ngay trong Postgres) — chỉ ghi thửa thật sự đổi thay vì ghi lại toàn
+    bộ thửa có trong file như upsert_to_supabase. Trả (số_thửa_đã_ghi,
+    None) khi thành công, hoặc (None, response_loi)."""
+    key_fields = ("ma_xa", "so_to", "so_thua")
+    deduped = {}
+    for row in rows:
+        key = tuple(row.get(field) for field in key_fields)
+        deduped[key] = row
+    rows = list(deduped.values())
+
+    changed = 0
+    for start in range(0, len(rows), batch_size):
+        batch = rows[start : start + batch_size]
+        count, error_response = call_rpc("upsert_thua_dat_diff", {"p_rows": batch}, timeout=60)
+        if error_response:
+            return None, error_response
+        changed += int(count or 0)
+    return changed, None
+
+
 def upsert_to_supabase(
     table: str,
     on_conflict: str,

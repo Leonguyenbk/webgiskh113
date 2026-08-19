@@ -1,4 +1,3 @@
-import MplisMatchForm from "../mplis/MplisMatchForm";
 import { GCN_COLOR, GCN_LABEL, GROUP_LABELS, getGroupColor, getGroupKey } from "../../utils/constants";
 import { googleMapsDirectionsUrl } from "../../utils/geometry";
 import ParcelMissingInfo from "./ParcelMissingInfo";
@@ -8,15 +7,14 @@ function EmptyValue({ children }) {
 }
 
 // Khung "Thông tin thửa đất" bên phải bản đồ — chỉ bố trí giao diện và
-// truyền dữ liệu xuống các component con (MplisMatchForm, ParcelMissingInfo),
-// không tự chứa logic gọi API/validate.
+// truyền dữ liệu xuống component con (ParcelMissingInfo), không tự chứa
+// logic gọi API/validate.
 export default function ParcelInfoPanel({
   parcel,
   feature,
   xaNameByCode,
   onClose,
   onZoom,
-  onMplisSaved,
   onNhapNhom4,
 }) {
   if (!parcel) return null;
@@ -100,8 +98,6 @@ export default function ParcelInfoPanel({
             </dd>
           </div>
         </dl>
-
-        <MplisMatchForm parcel={parcel} onSaved={onMplisSaved} />
 
         <ParcelMissingInfo dongBo={parcel.dong_bo} />
 

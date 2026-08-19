@@ -42,14 +42,6 @@ export const GROUP_LABELS = {
 export const GCN_COLOR = "#2563eb";
 export const GCN_LABEL = "Thửa đất đã nhập biểu";
 
-// Thửa "chưa phân loại" nhưng người thu thập đã đối chiếu thủ công và xác
-// nhận thửa này thực ra đã có trên MPLIS (chỉ khác tờ thửa) — xem
-// properties.ung_thua (get_parcels_in_view/search_parcels trong
-// supabase/schema.sql). Ưu tiên hơn màu "đã nhập biểu" vì là xác nhận
-// chắc chắn hơn, nhưng vẫn nhường màu Nhóm 1/Nhóm 2 nếu có.
-export const UNG_THUA_COLOR = "#eab308";
-export const UNG_THUA_LABEL = "Đã ứng thửa MPLIS";
-
 export function getGroupKey(phanLoai = "") {
   const normalized = phanLoai.trim().toUpperCase();
   return GROUP_COLORS[normalized] ? normalized : "DEFAULT";
@@ -62,7 +54,6 @@ export function getGroupColor(phanLoai = "") {
 export function getParcelFillColor(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
   if (groupKey === "DEFAULT") {
-    if (properties.ung_thua) return UNG_THUA_COLOR;
     if (properties.co_gcn) return GCN_COLOR;
   }
   return GROUP_COLORS[groupKey];

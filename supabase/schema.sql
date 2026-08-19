@@ -62,9 +62,11 @@ create policy "Cho phép đọc thửa đất"
 -- không cần đọc lại từ Supabase.
 --
 -- Lưu ý: các bảng tham chiếu theo (ma_xa, so_to, so_thua) — dong_bo_du_lieu,
--- du_lieu_gcn, ung_thua_mplis — không có khóa ngoại tới thua_dat.id nên
+-- du_lieu_gcn — không có khóa ngoại tới thua_dat.id nên
 -- xóa thửa ở đây KHÔNG xóa dữ liệu đã thu thập của thửa đó; nếu thửa đó
 -- được thêm lại sau (cùng so_to/so_thua) thì dữ liệu cũ tự động khớp lại.
+-- Việc thêm mới/cập nhật thửa còn giữ lại dùng upsert_thua_dat_diff bên
+-- dưới (so sánh trước khi ghi) — hàm này CHỈ lo phần xóa.
 create or replace function public.delete_thua_dat_not_in(
     p_ma_xa text,
     p_keep_keys text[]
@@ -91,6 +93,79 @@ $$;
 
 revoke all on function public.delete_thua_dat_not_in(text, text[]) from public;
 grant execute on function public.delete_thua_dat_not_in(text, text[]) to service_role;
+
+-- Nhập lại GML cùng 1 xã: đa số thửa không đổi gì giữa 2 lần nhập, nhưng
+-- upsert cũ (ON CONFLICT DO UPDATE) vẫn ghi lại TẤT CẢ thửa có trong file,
+-- tốn ghi/bảo trì chỉ mục (btree + GIST geom) cho cả những thửa giữ
+-- nguyên. Hàm này so sánh từng thửa với bản ghi hiện có (thuộc tính +
+-- hình học) NGAY TRONG POSTGRES trước khi ghi — chỉ INSERT/UPDATE thửa
+-- thật sự khác, bỏ qua thửa trùng khớp hoàn toàn.
+--
+-- So geom bằng ST_Equals (so sánh không gian, không phải toán tử "="
+-- vốn chỉ so bounding box) để không bị lệch bởi thứ tự đỉnh/điểm bắt đầu
+-- vòng khác nhau giữa 2 lần parse cùng 1 hình dạng.
+--
+-- p_rows: mảng JSON các thửa đã parse từ GML (backend/gml_reader.py),
+-- mỗi phần tử có geom dạng GeoJSON Polygon. Trả về số thửa thực sự đã
+-- ghi (insert hoặc update), KHÔNG tính thửa bỏ qua vì không đổi.
+create or replace function public.upsert_thua_dat_diff(p_rows jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+    v_count integer;
+begin
+    with incoming as (
+        select
+            (r->>'ma_xa') as ma_xa,
+            (r->>'so_to')::integer as so_to,
+            (r->>'so_thua')::integer as so_thua,
+            nullif(r->>'ma_thua_dat', '') as ma_thua_dat,
+            nullif(r->>'muc_dich_su_dung', '') as muc_dich_su_dung,
+            (r->>'dien_tich')::double precision as dien_tich,
+            nullif(r->>'ten_chu', '') as ten_chu,
+            nullif(r->>'dia_chi', '') as dia_chi,
+            ST_SetSRID(ST_GeomFromGeoJSON(r->'geom'), 4326) as geom
+        from jsonb_array_elements(p_rows) as r
+    ),
+    changed as (
+        select i.*
+        from incoming i
+        left join public.thua_dat t
+            on t.ma_xa = i.ma_xa and t.so_to = i.so_to and t.so_thua = i.so_thua
+        where t.id is null
+           or t.ma_thua_dat is distinct from i.ma_thua_dat
+           or t.muc_dich_su_dung is distinct from i.muc_dich_su_dung
+           or t.dien_tich is distinct from i.dien_tich
+           or t.ten_chu is distinct from i.ten_chu
+           or t.dia_chi is distinct from i.dia_chi
+           or not ST_Equals(t.geom, i.geom)
+    ),
+    upserted as (
+        insert into public.thua_dat
+            (ma_xa, so_to, so_thua, ma_thua_dat, muc_dich_su_dung, dien_tich, ten_chu, dia_chi, geom, updated_at)
+        select ma_xa, so_to, so_thua, ma_thua_dat, muc_dich_su_dung, dien_tich, ten_chu, dia_chi, geom, now()
+        from changed
+        on conflict (ma_xa, so_to, so_thua) do update set
+            ma_thua_dat = excluded.ma_thua_dat,
+            muc_dich_su_dung = excluded.muc_dich_su_dung,
+            dien_tich = excluded.dien_tich,
+            ten_chu = excluded.ten_chu,
+            dia_chi = excluded.dia_chi,
+            geom = excluded.geom,
+            updated_at = now()
+        returning id
+    )
+    select count(*) into v_count from upserted;
+
+    return v_count;
+end;
+$$;
+
+revoke all on function public.upsert_thua_dat_diff(jsonb) from public;
+grant execute on function public.upsert_thua_dat_diff(jsonb) to service_role;
 
 -- =========================================================
 -- RANH GIỚI THÔN (lớp bản đồ mới) — người dùng tự vẽ/chuẩn bị bằng phần
@@ -206,40 +281,6 @@ create policy "Cho phép đọc đồng bộ dữ liệu"
     for select
     to anon, authenticated
     using (true);
-
--- =========================================================
--- ỨNG THỬA MPLIS (public.ung_thua_mplis)
--- Một số thửa "chưa phân loại" trên bản đồ thực ra ĐÃ có trên MPLIS,
--- chỉ là không khớp tờ thửa hiện tại — người thu thập đối chiếu thủ công
--- và ghi lại tờ thửa/số GCN/mã đơn thực tế trên MPLIS ở đây. Bảng CHỈ
--- lưu thông tin đối chiếu (tham chiếu), KHÔNG đổi so_to/so_thua gốc của
--- public.thua_dat — tránh vỡ khóa tra cứu/join với dong_bo_du_lieu.
--- Có dòng trong bảng này = thửa đó "đã ứng thửa" (tô vàng trên bản đồ,
--- xem 'ung_thua' trong get_parcels_in_view/search_parcels bên dưới).
--- =========================================================
-
-create table if not exists public.ung_thua_mplis (
-    id bigint generated by default as identity primary key,
-    ma_xa text not null,
-    so_to integer not null,
-    so_thua integer not null,
-    to_thua_mplis text not null,
-    so_giay_chung_nhan text,
-    ma_don_mplis text,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now(),
-    constraint ung_thua_mplis_ma_xa_so_to_so_thua_key unique (ma_xa, so_to, so_thua)
-);
-
-create index if not exists ung_thua_mplis_tra_cuu_idx
-    on public.ung_thua_mplis (ma_xa, so_to, so_thua);
-
-alter table public.ung_thua_mplis enable row level security;
-
--- Không tạo policy nào: giống nguon_gcn/du_lieu_gcn, chỉ Service Role Key
--- (backend Flask) đọc/ghi được — anon/authenticated không truy cập trực
--- tiếp qua PostgREST (frontend luôn đi qua backend, không gọi Supabase
--- thẳng).
 
 -- =========================================================
 -- LẤY/ĐẾM THỬA THEO KHUNG BẢN ĐỒ (dùng cho /api/parcels,
@@ -364,17 +405,6 @@ as $$
                     select 1
                     from public.du_lieu_gcn g
                     where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-                ),
-                -- Thửa đã được người thu thập đối chiếu thủ công với MPLIS
-                -- (xem public.ung_thua_mplis ở trên) — tô vàng trên bản đồ.
-                'ung_thua', (
-                    select jsonb_build_object(
-                        'to_thua_mplis', u.to_thua_mplis,
-                        'so_giay_chung_nhan', u.so_giay_chung_nhan,
-                        'ma_don_mplis', u.ma_don_mplis
-                    )
-                    from public.ung_thua_mplis u
-                    where u.ma_xa = t.ma_xa and u.so_to = t.so_to and u.so_thua = t.so_thua
                 )
             )
         ) as feature
@@ -505,15 +535,6 @@ as $$
                     select 1
                     from public.du_lieu_gcn g
                     where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-                ),
-                'ung_thua', (
-                    select jsonb_build_object(
-                        'to_thua_mplis', u.to_thua_mplis,
-                        'so_giay_chung_nhan', u.so_giay_chung_nhan,
-                        'ma_don_mplis', u.ma_don_mplis
-                    )
-                    from public.ung_thua_mplis u
-                    where u.ma_xa = t.ma_xa and u.so_to = t.so_to and u.so_thua = t.so_thua
                 )
             )
         ) as feature

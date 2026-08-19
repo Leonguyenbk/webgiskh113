@@ -5,7 +5,6 @@ import json
 from flask import Blueprint, jsonify, request
 
 from ..services import nhom4_service
-from ..utils.validators import check_import_token
 
 nhom4_bp = Blueprint("nhom4", __name__)
 
@@ -24,9 +23,6 @@ def kiem_tra_trung_thua():
 
 @nhom4_bp.post("/api/nhom4/ho-so")
 def submit_ho_so():
-    if not check_import_token():
-        return jsonify({"error": "Mã xác thực không đúng"}), 401
-
     raw_payload = request.form.get("payload", "")
     try:
         payload = json.loads(raw_payload) if raw_payload else {}

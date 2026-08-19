@@ -59,7 +59,6 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
   const [fileChinh, setFileChinh] = useState(null);
   const [filePhu, setFilePhu] = useState(null);
-  const [token, setToken] = useState("");
   const [status, setStatus] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -276,7 +275,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
     setStatus("submitting");
     try {
-      const body = await submitHoSo(payload, fileChinh, filePhu, token);
+      const body = await submitHoSo(payload, fileChinh, filePhu);
       setResult(body);
       setStatus("done");
       setThuaList([]);
@@ -740,15 +739,6 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
           <input type="file" accept="application/pdf" onChange={(e) => setFileChinh(e.target.files?.[0] || null)} />
           <label>File PDF Giấy tờ (tùy chọn)</label>
           <input type="file" accept="application/pdf" onChange={(e) => setFilePhu(e.target.files?.[0] || null)} />
-
-          <label htmlFor="nhom4Token">Mã xác thực</label>
-          <input
-            id="nhom4Token"
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="Nhập mã do quản trị viên cấp (nếu có)"
-          />
 
           <button type="submit" className="importButton" disabled={status === "submitting"}>
             {status === "submitting" ? "Đang lưu…" : "Lưu hồ sơ"}

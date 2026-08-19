@@ -36,28 +36,3 @@ def cap_nhat_phan_loai_mplis_status(job_id: str):
     if error_response:
         return error_response
     return jsonify(data)
-
-
-# =========================================================
-# ỨNG THỬA MPLIS (public.ung_thua_mplis) — công cụ thu thập dữ liệu mở
-# cho mọi người dùng bản đồ, KHÔNG cần mã xác thực (khác các endpoint
-# quản trị phía trên).
-# =========================================================
-
-
-@mplis_bp.get("/api/ung-thua")
-def list_ung_thua():
-    ma_xa = request.args.get("ma_xa", "").strip()
-    data, error_response = mplis_service.list_ung_thua(ma_xa or None)
-    if error_response:
-        return error_response
-    return jsonify(data)
-
-
-@mplis_bp.post("/api/ung-thua")
-def upsert_ung_thua():
-    body = request.get_json(silent=True) or {}
-    data, error_response = mplis_service.save_ung_thua(body)
-    if error_response:
-        return error_response
-    return jsonify(data)

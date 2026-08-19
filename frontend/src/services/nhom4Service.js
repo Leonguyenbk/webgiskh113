@@ -8,7 +8,7 @@ export function checkTrungThua({ maXa, soTo, soThua }, { signal } = {}) {
   });
 }
 
-export function submitHoSo(payload, fileChinh, filePhu, token) {
+export function submitHoSo(payload, fileChinh, filePhu) {
   const formData = new FormData();
   formData.append("payload", JSON.stringify(payload));
   formData.append("file_chinh", fileChinh);
@@ -18,7 +18,6 @@ export function submitHoSo(payload, fileChinh, filePhu, token) {
     method: "POST",
     body: formData,
     isFormData: true,
-    token,
     errorFallback: "Lưu hồ sơ thất bại",
   });
 }
