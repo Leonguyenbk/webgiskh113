@@ -1,28 +1,98 @@
 name: Đồng bộ dữ liệu GCN
 
-# Gọi định kỳ /api/nguon-gcn/sync-all trên backend (Render) để tự cập nhật
-# dữ liệu GCN từ các Google Sheet đang kích hoạt trong bảng nguon_gcn — thay
-# cho việc phải tự chạy sync_gcn/main.py thủ công trên máy.
-#
-# Cần khai báo 2 secret trong GitHub repo (Settings → Secrets and variables
-# → Actions → New repository secret):
-#   BACKEND_URL   URL backend Render, ví dụ https://webgis-thua-dat-api.onrender.com
-#   IMPORT_TOKEN  phải khớp đúng biến IMPORT_TOKEN đã đặt trên Render
+# Mỗi 2 giờ chạy một đợt đồng bộ.
+# Đồng bộ tuần tự từng nguồn Google Sheet đang kích hoạt:
+# nguồn 1 xong mới tới nguồn 2, rồi nguồn 3...
+# Không gọi /sync-all để tránh một request xử lý toàn bộ nguồn.
+# Nếu một nguồn lỗi thì ghi nhận lỗi và tiếp tục nguồn kế tiếp.
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 */2 * * *"
   workflow_dispatch: {}
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
+
     steps:
-      - name: Gọi API đồng bộ GCN
+      - name: Đồng bộ tuần tự từng nguồn GCN
+        shell: bash
         run: |
-          curl --fail-with-body --max-time 280 --retry 2 --retry-delay 10 \
-            -X POST "${BACKEND_URL%/}/api/nguon-gcn/sync-all" \
-            -H "X-Import-Token: $IMPORT_TOKEN"
+          set -u
+
+          BASE_URL="${BACKEND_URL%/}"
+
+          echo "Lấy danh sách nguồn GCN..."
+
+          SOURCES_JSON=$(curl \
+            --fail-with-body \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 5 \
+            "$BASE_URL/api/nguon-gcn") || {
+              echo "Không lấy được danh sách nguồn GCN."
+              exit 1
+            }
+
+          SOURCES=$(echo "$SOURCES_JSON" | jq -c \
+            '[.items[] | select(.kich_hoat == true)] | sort_by(.ma_nguon)')
+
+          COUNT=$(echo "$SOURCES" | jq 'length')
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "Không có nguồn GCN nào đang kích hoạt."
+            exit 0
+          fi
+
+          echo "Có $COUNT nguồn đang kích hoạt."
+          echo "Bắt đầu đồng bộ tuần tự..."
+
+          FAILED=0
+
+          for ((i=0; i<COUNT; i++)); do
+
+            MA_NGUON=$(echo "$SOURCES" | jq -r ".[$i].ma_nguon")
+            TEN_NGUON=$(echo "$SOURCES" | jq -r ".[$i].ten_nguon // \"\"")
+
+            MA_NGUON_URI=$(printf '%s' "$MA_NGUON" | jq -sRr @uri)
+
+            echo "=================================================="
+            echo "[$((i + 1))/$COUNT] Đồng bộ:"
+            echo "Mã nguồn: $MA_NGUON"
+            echo "Tên nguồn: $TEN_NGUON"
+
+            if curl \
+              --fail-with-body \
+              --max-time 280 \
+              --retry 2 \
+              --retry-delay 10 \
+              -X POST \
+              "$BASE_URL/api/nguon-gcn/$MA_NGUON_URI/sync" \
+              -H "X-Import-Token: $IMPORT_TOKEN"
+            then
+              echo
+              echo "OK: $MA_NGUON"
+            else
+              echo
+              echo "LỖI: $MA_NGUON"
+              echo "Bỏ qua và tiếp tục nguồn kế tiếp."
+              FAILED=$((FAILED + 1))
+            fi
+
+          done
+
+          echo "=================================================="
+          echo "ĐỒNG BỘ HOÀN TẤT"
+          echo "Tổng nguồn: $COUNT"
+          echo "Thành công: $((COUNT - FAILED))"
+          echo "Lỗi: $FAILED"
+
+          if [ "$FAILED" -gt 0 ]; then
+            exit 1
+          fi
+
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
