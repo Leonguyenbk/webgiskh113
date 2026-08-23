@@ -11,6 +11,15 @@ from ..utils.nhom4_validation import normalize_thoi_han_su_dung, validate_payloa
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
 
+# Thửa đã thuộc Nhóm 1/Nhóm 2 (KH 2959) coi như đã có dữ liệu từ trước —
+# không cần nhập biểu Nhóm 4 nữa, giống quy ước đã dùng ở
+# gcn_thu_thap_theo_xa (supabase/schema.sql).
+NHOM_1_2 = {"NHÓM 1", "NHÓM 2"}
+
+
+def _is_nhom_1_2(phan_loai) -> bool:
+    return str(phan_loai or "").strip().upper() in NHOM_1_2
+
 
 def _to_int(value):
     try:
@@ -31,13 +40,17 @@ def check_trung_thua(ma_xa: str, so_to: str, so_thua: str):
     so_to_int = _to_int(so_to)
     so_thua_int = _to_int(so_thua)
     if not ma_xa or so_to_int is None or so_thua_int is None:
-        return {"trung": False}, None
+        return {"trung": False, "nhom_1_2": False}, None
 
     trung, error_response = nhom4_repository.exists_key(_make_key(ma_xa, so_to_int, so_thua_int))
     if error_response:
         return None, error_response
 
-    return {"trung": trung}, None
+    phan_loai, error_response = nhom4_repository.get_phan_loai(ma_xa, so_to_int, so_thua_int)
+    if error_response:
+        return None, error_response
+
+    return {"trung": trung, "nhom_1_2": _is_nhom_1_2(phan_loai), "phan_loai": phan_loai}, None
 
 
 def _sanitize_filename(name: str) -> str:
@@ -196,6 +209,28 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
     for key in seen_in_payload:
         if key in existing_keys:
             return None, (jsonify({"error": f"Thửa này đã có dữ liệu GCN rồi: {key}"}), 409)
+
+    phan_loai_by_xa, error_response = nhom4_repository.list_phan_loai_by_xa(ma_xa)
+    if error_response:
+        return None, error_response
+
+    for parcel in parcels:
+        thua = parcel.get("thua") or {}
+        so_to = _to_int(thua.get("so_to"))
+        so_thua = _to_int(thua.get("so_thua"))
+        phan_loai = phan_loai_by_xa.get((so_to, so_thua))
+        if _is_nhom_1_2(phan_loai):
+            return None, (
+                jsonify(
+                    {
+                        "error": (
+                            f"Thửa {so_to}_{so_thua} đã thuộc {phan_loai} — "
+                            "coi như đã có dữ liệu từ trước, không cần nhập biểu Nhóm 4 nữa."
+                        )
+                    }
+                ),
+                409,
+            )
 
     try:
         folder_id = google_drive_client.resolve_xa_folder(ma_xa, payload.get("ten_xa"))

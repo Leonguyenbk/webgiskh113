@@ -1,4 +1,4 @@
-import { GCN_COLOR, GCN_LABEL, GROUP_LABELS, getGroupColor, getGroupKey } from "../../utils/constants";
+import { GCN_COLOR, GCN_LABEL, GROUP_LABELS, getGroupColor, getGroupKey, isNhom12 } from "../../utils/constants";
 import { googleMapsDirectionsUrl } from "../../utils/geometry";
 import ParcelMissingInfo from "./ParcelMissingInfo";
 
@@ -18,6 +18,8 @@ export default function ParcelInfoPanel({
   onNhapNhom4,
 }) {
   if (!parcel) return null;
+
+  const dangNhom12 = isNhom12(parcel.dong_bo?.phan_loai_ke_hoach_2959);
 
   return (
     <aside className="parcelDrawer">
@@ -83,20 +85,22 @@ export default function ParcelInfoPanel({
             </dd>
           </div>
 
-          <div>
-            <dt>Dữ liệu GCN</dt>
-            <dd>
-              <span
-                className="tag"
-                style={{
-                  color: parcel.co_gcn ? "white" : "#334155",
-                  backgroundColor: parcel.co_gcn ? GCN_COLOR : "#e2e8f0",
-                }}
-              >
-                {parcel.co_gcn ? GCN_LABEL : "Thửa đất chưa nhập biểu"}
-              </span>
-            </dd>
-          </div>
+          {!dangNhom12 && (
+            <div>
+              <dt>Dữ liệu GCN</dt>
+              <dd>
+                <span
+                  className="tag"
+                  style={{
+                    color: parcel.co_gcn ? "white" : "#334155",
+                    backgroundColor: parcel.co_gcn ? GCN_COLOR : "#e2e8f0",
+                  }}
+                >
+                  {parcel.co_gcn ? GCN_LABEL : "Thửa đất chưa nhập biểu"}
+                </span>
+              </dd>
+            </div>
+          )}
         </dl>
 
         <ParcelMissingInfo dongBo={parcel.dong_bo} />
@@ -105,9 +109,11 @@ export default function ParcelInfoPanel({
           Phóng đến thửa
         </button>
 
-        <button type="button" className="zoomButton nhom4EntryButton" onClick={() => onNhapNhom4?.(parcel)}>
-          📝 Nhập dữ liệu (biểu Nhóm 4)
-        </button>
+        {!dangNhom12 && (
+          <button type="button" className="zoomButton nhom4EntryButton" onClick={() => onNhapNhom4?.(parcel)}>
+            📝 Nhập dữ liệu (biểu Nhóm 4)
+          </button>
+        )}
 
         {feature && (
           <a

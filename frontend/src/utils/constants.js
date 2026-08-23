@@ -47,6 +47,13 @@ export function getGroupKey(phanLoai = "") {
   return GROUP_COLORS[normalized] ? normalized : "DEFAULT";
 }
 
+// Thửa đã thuộc Nhóm 1/Nhóm 2 (KH 2959) coi như đã có dữ liệu từ trước —
+// không cần hiện trạng thái "chưa nhập biểu GCN" hay nút nhập biểu Nhóm 4
+// nữa (xem ParcelInfoPanel.jsx).
+export function isNhom12(phanLoai = "") {
+  return getGroupKey(phanLoai) !== "DEFAULT";
+}
+
 export function getGroupColor(phanLoai = "") {
   return GROUP_COLORS[getGroupKey(phanLoai)];
 }

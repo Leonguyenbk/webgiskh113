@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getXaList, searchParcels } from "./services/parcelService";
 import { checkTrungThua, submitHoSo } from "./services/nhom4Service";
@@ -74,6 +74,22 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     setOwners(Array.from({ length: soNguoi }, taoChuRong));
   }, [loaiChu]);
 
+  // Kiểm tra trùng thửa + đã thuộc Nhóm 1/2 hay chưa — Nhóm 1/2 coi như đã
+  // có dữ liệu từ trước, không cần nhập biểu Nhóm 4 nữa (giống quy ước ở
+  // dashboard "Thống kê thu thập"). Dùng chung cho cả blur số tờ/thửa lẫn
+  // khi điền sẵn từ bản đồ.
+  const runCheckTrungThua = useCallback(async (maXaValue, soTo, soThua) => {
+    setTrungThuaStatus("checking");
+    try {
+      const result = await checkTrungThua({ maXa: maXaValue, soTo, soThua });
+      if (result?.nhom_1_2) setTrungThuaStatus("nhom12");
+      else if (result?.trung) setTrungThuaStatus("trung");
+      else setTrungThuaStatus("ok");
+    } catch {
+      setTrungThuaStatus("");
+    }
+  }, []);
+
   // Nhận dữ liệu thửa từ bản đồ khi bấm "Nhập dữ liệu (biểu Nhóm 4)" ở
   // ParcelInfoPanel — điền sẵn xã/số tờ/số thửa/diện tích/địa chỉ, rồi kiểm
   // tra trùng thửa ngay (parcel từ bản đồ đã có sẵn dữ liệu, không cần gọi
@@ -104,12 +120,9 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     }
 
     if (maXaValue && soTo && soThua) {
-      setTrungThuaStatus("checking");
-      checkTrungThua({ maXa: maXaValue, soTo, soThua })
-        .then((trung) => setTrungThuaStatus(trung?.trung ? "trung" : "ok"))
-        .catch(() => setTrungThuaStatus(""));
+      runCheckTrungThua(maXaValue, soTo, soThua);
     }
-  }, [prefill]);
+  }, [prefill, runCheckTrungThua]);
 
   const dat2DienTichTinh = useMemo(() => {
     if (!coDat2) return "";
@@ -122,13 +135,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
   const handleBlurSoToThua = async () => {
     if (!maXa || !thua.soTo || !thua.soThua) return;
 
-    setTrungThuaStatus("checking");
-    try {
-      const trung = await checkTrungThua({ maXa, soTo: thua.soTo, soThua: thua.soThua });
-      setTrungThuaStatus(trung?.trung ? "trung" : "ok");
-    } catch {
-      setTrungThuaStatus("");
-    }
+    runCheckTrungThua(maXa, thua.soTo, thua.soThua);
 
     try {
       const found = await searchParcels({ ma_xa: maXa, so_to: thua.soTo, so_thua: thua.soThua });
@@ -540,6 +547,11 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
           </div>
           {trungThuaStatus === "checking" && <div className="notice">Đang kiểm tra trùng thửa…</div>}
           {trungThuaStatus === "trung" && <div className="notice error">Thửa này đã được nhập rồi.</div>}
+          {trungThuaStatus === "nhom12" && (
+            <div className="notice error">
+              Thửa này đã thuộc Nhóm 1/Nhóm 2 — coi như đã có dữ liệu từ trước, không cần nhập biểu nữa.
+            </div>
+          )}
           {trungThuaStatus === "ok" && <div className="notice">Thửa này chưa có trong dữ liệu đã nhập.</div>}
 
           {cheDo === "Đã có GCN" && (

@@ -22,31 +22,42 @@ create table if not exists public.thua_dat (
 alter table public.thua_dat
     add column if not exists ma_thua_dat text;
 
--- Chỉ mục theo biểu thức (KHÔNG dùng cột generated — bảng đã 1.36 triệu
--- dòng, "add column ... generated ... stored" bắt Postgres viết lại toàn
--- bộ bảng, tốn gấp đôi dung lượng đang dùng và đã làm hết ổ đĩa Supabase
--- lúc chạy thử). Expression index không đụng tới bảng gốc, chỉ tạo thêm
--- 1 chỉ mục — nhẹ hơn nhiều. Điều kiện: mọi câu truy vấn (search_parcels,
--- get_parcels_in_view, gcn_thu_thap_theo_xa) phải viết ĐÚNG Y HỆT biểu
--- thức "ma_xa || '_' || so_to::text || '_' || so_thua::text" thì Postgres
--- mới nhận ra và dùng được chỉ mục này.
-create index if not exists thua_dat_ma_xa_so_to_so_thua_idx
-    on public.thua_dat ((ma_xa || '_' || so_to::text || '_' || so_thua::text));
+-- ĐÍNH CHÍNH: bỏ chỉ mục theo biểu thức đã thêm trước đó
+-- (thua_dat_ma_xa_so_to_so_thua_idx) — kiểm tra thực tế qua
+-- pg_stat_user_indexes cho thấy 0 lượt quét. Lý do: chỗ dùng biểu thức
+-- này (JOIN trong gcn_thu_thap_theo_xa, EXISTS trong co_gcn) đều để
+-- Postgres tự tính biểu thức rồi hash join/hash lookup, không cần tra
+-- theo index của thua_dat — index này chỉ tốn 44MB vô ích. Việc
+-- gcn_thu_thap_theo_xa chạy được là nhờ statement_timeout tăng lên, không
+-- phải nhờ index này.
+drop index if exists public.thua_dat_ma_xa_so_to_so_thua_idx;
 
 create index if not exists thua_dat_geom_gix
     on public.thua_dat using gist (geom);
 
-create index if not exists thua_dat_tra_cuu_idx
-    on public.thua_dat (ma_xa, so_to, so_thua);
+-- Có "thua_dat_geom_gist" trùng hệt (tạo tay ngoài file này, không qua
+-- schema.sql) — xóa bản trùng, giữ lại đúng 1 chỉ mục GIST quản lý ở đây.
+drop index if exists public.thua_dat_geom_gist;
+
+-- ĐÍNH CHÍNH: bỏ luôn thua_dat_tra_cuu_idx (ma_xa,so_to,so_thua) — trùng
+-- hoàn toàn với chỉ mục của ràng buộc UNIQUE
+-- thua_dat_ma_xa_so_to_so_thua_key (cùng 3 cột, cùng thứ tự). Số liệu
+-- pg_stat_user_indexes cho thấy chỉ mục UNIQUE được dùng nhiều hơn hẳn
+-- (1,5 triệu lượt so với 28 nghìn) — Postgres đã tự ưu tiên nó, giữ cả 2
+-- chỉ tốn thêm ~62MB vô ích.
+drop index if exists public.thua_dat_tra_cuu_idx;
 
 alter table public.thua_dat enable row level security;
 
+-- Thu hồi policy công khai cũ: frontend KHÔNG gọi thẳng Supabase (đã xác
+-- minh — không có supabase-js/anon key ở frontend), mọi request đều qua
+-- backend Flask bằng Service Role Key (bỏ qua RLS). Giữ policy anon đọc
+-- thẳng bảng 1.36 triệu dòng + geometry là lỗ hổng hiệu năng thật sự —
+-- ai cũng gọi được "GET /rest/v1/thua_dat?select=*" không giới hạn,
+-- không qua backend, góp phần vào cảnh báo "exhausting multiple
+-- resources" của Supabase. Không tạo policy nào nữa — chỉ Service Role
+-- đọc/ghi được, giống mọi bảng khác trong dự án.
 drop policy if exists "Cho phép đọc thửa đất" on public.thua_dat;
-create policy "Cho phép đọc thửa đất"
-    on public.thua_dat
-    for select
-    to anon, authenticated
-    using (true);
 
 -- =========================================================
 -- ĐỒNG BỘ THUA_DAT KHI NHẬP LẠI GML CÙNG 1 XÃ (trang "Nhập GML").
@@ -270,17 +281,17 @@ create table if not exists public.dong_bo_du_lieu (
     constraint dong_bo_du_lieu_ma_xa_so_to_so_thua_key unique (ma_xa, so_to, so_thua)
 );
 
-create index if not exists dong_bo_du_lieu_tra_cuu_idx
-    on public.dong_bo_du_lieu (ma_xa, so_to, so_thua);
+-- ĐÍNH CHÍNH: bỏ dong_bo_du_lieu_tra_cuu_idx (ma_xa,so_to,so_thua) — cùng
+-- lý do thua_dat_tra_cuu_idx phía trên: trùng cột với chỉ mục UNIQUE
+-- dong_bo_du_lieu_ma_xa_so_to_so_thua_key (số liệu thực tế: 1 lượt quét
+-- so với 1.050.984 lượt của chỉ mục UNIQUE), tốn thêm ~34MB vô ích.
+drop index if exists public.dong_bo_du_lieu_tra_cuu_idx;
 
 alter table public.dong_bo_du_lieu enable row level security;
 
+-- Thu hồi policy công khai cũ — cùng lý do với thua_dat: frontend không
+-- gọi thẳng Supabase, chỉ backend (Service Role) mới cần đọc bảng này.
 drop policy if exists "Cho phép đọc đồng bộ dữ liệu" on public.dong_bo_du_lieu;
-create policy "Cho phép đọc đồng bộ dữ liệu"
-    on public.dong_bo_du_lieu
-    for select
-    to anon, authenticated
-    using (true);
 
 -- =========================================================
 -- LẤY/ĐẾM THỬA THEO KHUNG BẢN ĐỒ (dùng cho /api/parcels,
@@ -328,9 +339,17 @@ as $$
       );
 $$;
 
+-- Thu hồi quyền anon/authenticated cũ — frontend không gọi thẳng
+-- Supabase, chỉ backend (Service Role) dùng hàm này. Cho phép public gọi
+-- thẳng nghĩa là ai cũng quét được thua_dat (1.36 triệu dòng) không qua
+-- backend, không giới hạn — góp phần vào cảnh báo "exhausting multiple
+-- resources" của Supabase.
+revoke all on function public.count_parcels_in_view(
+    double precision, double precision, double precision, double precision, text, text[]
+) from public;
 grant execute on function public.count_parcels_in_view(
     double precision, double precision, double precision, double precision, text, text[]
-) to anon, authenticated;
+) to service_role;
 
 drop function if exists public.get_parcels_in_view(
     double precision, double precision, double precision, double precision,
@@ -428,10 +447,14 @@ as $$
     ) features;
 $$;
 
+revoke all on function public.get_parcels_in_view(
+    double precision, double precision, double precision, double precision,
+    double precision, double precision, integer, integer, text, double precision, text[]
+) from public;
 grant execute on function public.get_parcels_in_view(
     double precision, double precision, double precision, double precision,
     double precision, double precision, integer, integer, text, double precision, text[]
-) to anon, authenticated;
+) to service_role;
 
 -- =========================================================
 -- BỘ LỌC TRA CỨU: mã xã (bắt buộc) + nhóm + số tờ + số thửa
@@ -450,7 +473,8 @@ as $$
     order by t.ma_xa;
 $$;
 
-grant execute on function public.list_ma_xa() to anon, authenticated;
+revoke all on function public.list_ma_xa() from public;
+grant execute on function public.list_ma_xa() to service_role;
 
 -- Danh sách mã xã kèm tên xã (bảng public.danhsachxaphuong) để combobox
 -- hiển thị tên cho dễ nhận biết, còn tra cứu vẫn dùng mã xã.
@@ -464,7 +488,8 @@ as $$
     order by x.ten_xa;
 $$;
 
-grant execute on function public.list_xa_phuong() to anon, authenticated;
+revoke all on function public.list_xa_phuong() from public;
+grant execute on function public.list_xa_phuong() to service_role;
 
 drop function if exists public.search_parcels(
     text, text, integer, integer, integer, integer, double precision
@@ -568,9 +593,12 @@ as $$
     ) features;
 $$;
 
+revoke all on function public.search_parcels(
+    text, text[], integer, integer, integer, integer, double precision, text
+) from public;
 grant execute on function public.search_parcels(
     text, text[], integer, integer, integer, integer, double precision, text
-) to anon, authenticated;
+) to service_role;
 
 -- Danh sách nguồn Google Sheet cho công cụ đồng bộ GCN (sync_gcn/).
 -- Quản lý qua trang "Nhập đường link" trên web (backend dùng Service
@@ -640,7 +668,8 @@ as $$
     order by t.ma_xa;
 $$;
 
-grant execute on function public.gcn_thu_thap_theo_xa() to anon, authenticated;
+revoke all on function public.gcn_thu_thap_theo_xa() from public;
+grant execute on function public.gcn_thu_thap_theo_xa() to service_role;
 
 -- =========================================================
 -- CẬP NHẬT TRẠNG THÁI TỪ MPLIS (trang "Cập nhật MPLIS", backend
@@ -657,8 +686,9 @@ grant execute on function public.gcn_thu_thap_theo_xa() to anon, authenticated;
 -- insert...on conflict không thể update cùng 1 dòng 2 lần, nếu lô đưa
 -- vào có khóa trùng thì cả lô sẽ lỗi.
 --
--- Index tra cứu theo (ma_xa, so_to, so_thua) đã có sẵn
--- (dong_bo_du_lieu_tra_cuu_idx).
+-- Tra cứu theo (ma_xa, so_to, so_thua) đã có index sẵn qua chính ràng
+-- buộc UNIQUE ở trên (dong_bo_du_lieu_ma_xa_so_to_so_thua_key) — không
+-- cần thêm index riêng (đã bỏ dong_bo_du_lieu_tra_cuu_idx vì trùng cột).
 --
 -- Hàm ghi dữ liệu nên KHÔNG cấp quyền cho anon/authenticated (khác các
 -- hàm đọc phía trên) — chỉ Service Role Key (backend) gọi được.
