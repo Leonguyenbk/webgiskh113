@@ -9,18 +9,26 @@ from google.oauth2.service_account import Credentials
 
 # Upload PDF hồ sơ quét lên Google Drive bằng Service Account — dùng lại
 # GOOGLE_SERVICE_ACCOUNT_JSON đã có (xem backend/gcn_sync.py), nhưng với
-# scope drive.file riêng (không dùng chung Credentials với gcn_sync vì
-# khác scope).
+# scope riêng (không dùng chung Credentials với gcn_sync vì khác scope).
 #
 # Folder gốc (GOOGLE_DRIVE_ROOT_FOLDER_ID) có 2 cách hợp lệ để chuẩn bị:
 # 1) Tự tạo bằng scripts/create_drive_root_folder.py (service account là
 #    chủ sở hữu), HOẶC
-# 2) Dùng folder có sẵn của người dùng (VD "HSQ 2959" đã tạo tay), miễn
-#    là SHARE folder đó cho email service account (lấy từ trường
-#    "client_email" trong GOOGLE_SERVICE_ACCOUNT_JSON) với quyền Editor —
-#    scope drive.file vẫn thấy/ghi được các file share trực tiếp cho nó,
-#    không chỉ file tự tạo. Không cần đổi sang scope "drive" rộng hơn.
-DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+# 2) Dùng folder có sẵn của người dùng (VD "HSQ 2959" đã tạo tay), share
+#    folder đó cho email service account (lấy từ trường "client_email"
+#    trong GOOGLE_SERVICE_ACCOUNT_JSON) với quyền Editor.
+#
+# ĐÍNH CHÍNH: trước đây dùng scope "drive.file", với giả định share tay
+# qua Drive UI là đủ để service account tìm/liệt kê folder đó qua API.
+# THỰC TẾ đã kiểm chứng KHÔNG đúng — dù share đúng folder ID + đúng email
+# + quyền Editor, gọi files.list vẫn bị 403 Forbidden. "drive.file" chỉ
+# cho thấy file/folder do chính app tạo ra hoặc người dùng tự chọn qua
+# Google Picker — share tay qua giao diện Drive thường không đủ để lọt
+# qua scope hẹp này khi tìm kiếm (files.list) folder không do app tạo.
+# Đổi sang scope "drive" đầy đủ — phạm vi truy cập thực tế vẫn bị giới
+# hạn bởi những gì thật sự được share với service account, chỉ scope
+# OAuth là rộng hơn để API cho phép liệt kê/tìm kiếm.
+DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
 DRIVE_UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
 
