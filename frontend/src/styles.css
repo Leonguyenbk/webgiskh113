@@ -280,6 +280,11 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .leaflet-control-layers { border-radius: 10px !important; font-family: inherit; font-size: 12px; }
 .leaflet-bar a { color: #0f5f59 !important; }
 .leaflet-tooltip { border: 0; border-radius: 7px; font-family: inherit; font-size: 11px; box-shadow: 0 4px 14px #173f3c44; }
+.mapSheetLabel {
+  background: #0f172acc; color: #fff; font-weight: 600;
+  padding: 2px 7px; box-shadow: none;
+}
+.mapSheetLabel::before { display: none; }
 
 .toolsShell { min-height: 100vh; display: flex; flex-direction: column; }
 .toolsGrid {

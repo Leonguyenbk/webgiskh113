@@ -21,6 +21,7 @@ def create_app() -> Flask:
 
 def _register_blueprints(app: Flask) -> None:
     from .routes.admin_routes import admin_bp
+    from .routes.ban_do_nen_routes import ban_do_nen_bp
     from .routes.gcn_routes import gcn_bp
     from .routes.health_routes import health_bp
     from .routes.mplis_routes import mplis_bp
@@ -28,7 +29,9 @@ def _register_blueprints(app: Flask) -> None:
     from .routes.parcel_routes import parcel_bp
     from .routes.ranh_thon_routes import ranh_thon_bp
 
-    for blueprint in (health_bp, parcel_bp, gcn_bp, admin_bp, mplis_bp, nhom4_bp, ranh_thon_bp):
+    for blueprint in (
+        health_bp, parcel_bp, gcn_bp, admin_bp, mplis_bp, nhom4_bp, ranh_thon_bp, ban_do_nen_bp,
+    ):
         app.register_blueprint(blueprint)
 
 

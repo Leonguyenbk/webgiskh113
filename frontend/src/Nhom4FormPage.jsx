@@ -263,7 +263,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         },
         dat1: {
           loai_dat: p.dat1.loaiDat,
-          dien_tich: p.dat1.dienTich,
+          // Chỉ 1 loại đất (p.dat2 null): ô diện tích loại đất 1 hiển thị
+          // readOnly = diện tích thửa (xem input dienTich ở JSX), KHÔNG
+          // ghi vào dat1.dienTich — phải lấy thẳng từ thua.dienTichThuaDat
+          // ở đây, nếu không payload gửi dien_tich rỗng dù giao diện đang
+          // hiện đúng số (bug đã gặp thực tế).
+          dien_tich: p.dat2 ? p.dat1.dienTich : p.thua.dienTichThuaDat,
           nguon_goc_su_dung: p.dat1.nguonGocSuDung,
           hinh_thuc_su_dung: p.dat1.hinhThucSuDung,
           thoi_han_su_dung: p.dat1.thoiHanSuDung,

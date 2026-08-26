@@ -26,6 +26,7 @@ export default function ToolsPage({
   onNavigateMplisSync,
   onNavigateNhom4,
   onNavigateRanhThon,
+  onNavigateBanDoNen,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -62,6 +63,11 @@ export default function ToolsPage({
       name: "🗺️ Nhập ranh giới thôn",
       description: "Nhập file Shapefile (.zip) ranh giới thôn vào Supabase, hiển thị dạng viền trên bản đồ.",
       onNavigate: onNavigateRanhThon,
+    },
+    {
+      name: "🗺️ Quản lý bản đồ nền",
+      description: "Quản lý tờ bản đồ raster chuyển đổi từ DGN (mã xã + số tờ), tải tile lên Supabase Storage.",
+      onNavigate: onNavigateBanDoNen,
     },
   ];
 

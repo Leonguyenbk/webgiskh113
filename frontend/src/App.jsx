@@ -8,11 +8,14 @@ import {
 
 import {
   GeoJSON,
+  LayerGroup,
   LayersControl,
   MapContainer,
   TileLayer,
   ZoomControl,
 } from "react-leaflet";
+
+import L from "leaflet";
 
 import CurrentLocation from "./components/map/CurrentLocation";
 import { FindHereButton } from "./components/map/MapControls";
@@ -22,9 +25,13 @@ import {
   NearMeLoader,
   SearchParcelsLoader,
 } from "./components/map/MapDataLoaders";
+import MapSheetBoundaryLayer from "./components/map/MapSheetBoundaryLayer";
+import MapSheetTilesLayer from "./components/map/MapSheetTilesLayer";
+import MapSheetTilesLoader from "./components/map/MapSheetTilesLoader";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
 import { getXaList } from "./services/parcelService";
 import { getRanhGioiThon } from "./services/ranhThonService";
+import { searchBanDoNen } from "./services/mapSheetService";
 import {
   GCN_COLOR,
   GCN_LABEL,
@@ -129,6 +136,32 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   useEffect(() => {
     setTenThon("");
   }, [maXa]);
+
+  // Bản đồ nền (raster DGN): danh sách tờ giao khung nhìn hiện tại, tự tải
+  // lại khi pan/zoom (xem MapSheetTilesLoader) — độc lập với bộ lọc tra
+  // cứu thửa đất.
+  const [banDoNenSheets, setBanDoNenSheets] = useState([]);
+  const [banDoNenOpacity, setBanDoNenOpacity] = useState(0.75);
+  const [banDoNenSearchError, setBanDoNenSearchError] = useState("");
+
+  const handleSearchBanDoNen = useCallback(async () => {
+    if (!maXa) return;
+    setBanDoNenSearchError("");
+    try {
+      const result = await searchBanDoNen({ maXa, soTo: soTo.trim() || undefined });
+      const features = result?.features || [];
+      if (features.length === 0) {
+        setBanDoNenSearchError("Không tìm thấy tờ bản đồ nền khớp mã xã/số tờ này.");
+        return;
+      }
+      if (mapInstance) {
+        const bounds = L.geoJSON({ type: "FeatureCollection", features }).getBounds();
+        if (bounds.isValid()) mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
+      }
+    } catch (fetchError) {
+      setBanDoNenSearchError(fetchError.message);
+    }
+  }, [maXa, soTo, mapInstance]);
 
   // Đánh dấu lần tìm gần nhất là bấm nút "Tìm thửa quanh đây" (theo khung
   // nhìn bản đồ), để phân biệt với tra cứu theo mã xã / định vị GPS.
@@ -570,6 +603,16 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   Tra cứu
                 </button>
 
+                <button
+                  type="button"
+                  className="resetButton"
+                  onClick={handleSearchBanDoNen}
+                  disabled={!maXa}
+                  title="Phóng đến tờ bản đồ nền khớp mã xã/số tờ"
+                >
+                  Tìm bản đồ nền
+                </button>
+
                 {hasActiveQuery && (
                   <button
                     type="button"
@@ -580,6 +623,10 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   </button>
                 )}
               </div>
+
+              {banDoNenSearchError && (
+                <div className="notice error">{banDoNenSearchError}</div>
+              )}
             </>
           )}
 
@@ -728,6 +775,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               onMeta={handleMeta}
             />
 
+            <MapSheetTilesLoader onData={setBanDoNenSheets} />
+
             <MapInstanceCapture onReady={setMapInstance} />
 
             <CurrentLocation onPosition={setMyPosition} />
@@ -802,6 +851,13 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   }}
                 />
               </LayersControl.Overlay>
+
+              <LayersControl.Overlay name="Bản đồ địa chính">
+                <LayerGroup>
+                  <MapSheetTilesLayer sheets={banDoNenSheets} opacity={banDoNenOpacity} />
+                  <MapSheetBoundaryLayer sheets={banDoNenSheets} />
+                </LayerGroup>
+              </LayersControl.Overlay>
             </LayersControl>
 
             <FitBounds focusFeature={selectedFeature} focusTick={focusTick} />
@@ -842,6 +898,23 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 value={Math.round(parcelOpacity * 100)}
                 onChange={(event) =>
                   setParcelOpacity(Number(event.target.value) / 100)
+                }
+              />
+            </div>
+
+            <div className="opacitySlider">
+              <label htmlFor="banDoNenOpacity">
+                Độ mờ bản đồ nền
+                <span>{Math.round(banDoNenOpacity * 100)}%</span>
+              </label>
+              <input
+                id="banDoNenOpacity"
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round(banDoNenOpacity * 100)}
+                onChange={(event) =>
+                  setBanDoNenOpacity(Number(event.target.value) / 100)
                 }
               />
             </div>
