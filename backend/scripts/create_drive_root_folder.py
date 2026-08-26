@@ -1,9 +1,11 @@
 """Chạy MỘT LẦN cục bộ để tạo folder gốc trên Google Drive cho biểu Nhóm 4.
 
-Vì backend dùng scope Drive `drive.file` (chỉ thấy file/folder do chính
-Service Account tạo ra), folder gốc phải được Service Account tự tạo —
-không phải người tạo tay trên Drive UI rồi share cho Service Account (khi
-đó `drive.file` sẽ không thấy được folder này).
+LƯU Ý: từ khi backend chuyển sang OAuth (ủy quyền bằng tài khoản Gmail cá
+nhân — xem get_drive_oauth_refresh_token.py), script này KHÔNG còn bắt
+buộc — bạn có thể tự tạo 1 folder bình thường trên Drive của chính mình,
+copy ID từ URL rồi dán vào GOOGLE_DRIVE_ROOT_FOLDER_ID. Script này vẫn
+chạy được (tiện nếu muốn tạo bằng lệnh thay vì tay) vì cũng gọi chung
+_get_session() đã dùng OAuth.
 
 Cách dùng:
     cd backend

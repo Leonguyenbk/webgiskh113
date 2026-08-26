@@ -5,29 +5,26 @@ import os
 
 import requests
 from google.auth.transport.requests import AuthorizedSession
-from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials as OAuthCredentials
 
-# Upload PDF hồ sơ quét lên Google Drive bằng Service Account — dùng lại
-# GOOGLE_SERVICE_ACCOUNT_JSON đã có (xem backend/gcn_sync.py), nhưng với
-# scope riêng (không dùng chung Credentials với gcn_sync vì khác scope).
+# Upload PDF hồ sơ quét lên Google Drive bằng OAuth ủy quyền CHÍNH tài
+# khoản Gmail cá nhân của người dùng (KHÔNG dùng Service Account nữa).
 #
-# Folder gốc (GOOGLE_DRIVE_ROOT_FOLDER_ID) có 2 cách hợp lệ để chuẩn bị:
-# 1) Tự tạo bằng scripts/create_drive_root_folder.py (service account là
-#    chủ sở hữu), HOẶC
-# 2) Dùng folder có sẵn của người dùng (VD "HSQ 2959" đã tạo tay), share
-#    folder đó cho email service account (lấy từ trường "client_email"
-#    trong GOOGLE_SERVICE_ACCOUNT_JSON) với quyền Editor.
+# LÝ DO đổi từ Service Account sang OAuth: đã kiểm chứng thực tế Service
+# Account cá nhân (không phải Google Workspace) KHÔNG có dung lượng lưu trữ
+# riêng trên Drive — mọi lần upload_pdf() đều lỗi "storageQuotaExceeded"
+# (reason Google trả về), kể cả khi đã share đúng folder + quyền Editor.
+# Đây là giới hạn kiến trúc của Google, không sửa được bằng cách share/xin
+# thêm quyền. OAuth ủy quyền bằng tài khoản thật thì file tính vào dung
+# lượng Drive của chính tài khoản đó (mua thêm qua Google One nếu cần).
 #
-# ĐÍNH CHÍNH: trước đây dùng scope "drive.file", với giả định share tay
-# qua Drive UI là đủ để service account tìm/liệt kê folder đó qua API.
-# THỰC TẾ đã kiểm chứng KHÔNG đúng — dù share đúng folder ID + đúng email
-# + quyền Editor, gọi files.list vẫn bị 403 Forbidden. "drive.file" chỉ
-# cho thấy file/folder do chính app tạo ra hoặc người dùng tự chọn qua
-# Google Picker — share tay qua giao diện Drive thường không đủ để lọt
-# qua scope hẹp này khi tìm kiếm (files.list) folder không do app tạo.
-# Đổi sang scope "drive" đầy đủ — phạm vi truy cập thực tế vẫn bị giới
-# hạn bởi những gì thật sự được share với service account, chỉ scope
-# OAuth là rộng hơn để API cho phép liệt kê/tìm kiếm.
+# Cách lấy GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET /
+# GOOGLE_OAUTH_REFRESH_TOKEN: chạy backend/scripts/get_drive_oauth_refresh_token.py
+# một lần cục bộ (xem hướng dẫn đầy đủ trong docstring của script đó).
+#
+# Folder gốc (GOOGLE_DRIVE_ROOT_FOLDER_ID): giờ chạy dưới quyền tài khoản
+# thật nên có thể tạo folder bình thường trên Drive UI của chính bạn rồi
+# dán ID vào — không cần "share" cho ai nữa (bạn đã là chủ sở hữu).
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
 DRIVE_UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
@@ -56,20 +53,25 @@ def _drive_error_detail(response) -> str:
 def _get_session() -> AuthorizedSession:
     global _session
     if _session is None:
-        raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-        if not raw:
+        client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
+        client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
+        refresh_token = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "").strip()
+        if not client_id or not client_secret or not refresh_token:
             raise RuntimeError(
-                "Thiếu GOOGLE_SERVICE_ACCOUNT_JSON trong backend/.env (nội dung "
-                "file service_account.json, dán nguyên văn thành 1 dòng)"
+                "Thiếu GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET / "
+                "GOOGLE_OAUTH_REFRESH_TOKEN trong backend/.env — chạy "
+                "backend/scripts/get_drive_oauth_refresh_token.py một lần để lấy "
+                "(xem hướng dẫn trong file đó)."
             )
-        try:
-            info = json.loads(raw)
-        except ValueError as exc:
-            raise RuntimeError(
-                f"GOOGLE_SERVICE_ACCOUNT_JSON không phải JSON hợp lệ: {exc}"
-            ) from exc
 
-        creds = Credentials.from_service_account_info(info, scopes=DRIVE_SCOPES)
+        creds = OAuthCredentials(
+            token=None,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=DRIVE_SCOPES,
+        )
         _session = AuthorizedSession(creds)
     return _session
 
