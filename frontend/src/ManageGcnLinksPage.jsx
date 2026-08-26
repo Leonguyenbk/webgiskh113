@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   createNguonGcn,
@@ -32,6 +32,18 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
 
   const [syncingMaNguon, setSyncingMaNguon] = useState("");
   const [syncResults, setSyncResults] = useState({});
+
+  const [filterQuery, setFilterQuery] = useState("");
+
+  const filteredItems = useMemo(() => {
+    const keyword = filterQuery.trim().toLocaleLowerCase("vi");
+    if (!keyword) return items;
+    return items.filter(
+      (item) =>
+        (item.ma_nguon || "").toLocaleLowerCase("vi").includes(keyword) ||
+        (item.ten_nguon || "").toLocaleLowerCase("vi").includes(keyword),
+    );
+  }, [items, filterQuery]);
 
   const loadList = useCallback(() => {
     setLoadingList(true);
@@ -256,7 +268,14 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
         </form>
 
         <div className="importCard gcnLinksListCard">
-          <label>Danh sách nguồn</label>
+          <label htmlFor="gcnFilterQuery">Danh sách nguồn</label>
+          <input
+            id="gcnFilterQuery"
+            className="filterInput"
+            value={filterQuery}
+            onChange={(event) => setFilterQuery(event.target.value)}
+            placeholder="Lọc theo mã nguồn hoặc tên xã…"
+          />
 
           {loadingList && <div className="notice">Đang tải danh sách…</div>}
 
@@ -271,9 +290,13 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
             <div className="notice">Chưa có nguồn nào.</div>
           )}
 
-          {items.length > 0 && (
+          {!loadingList && !listError && items.length > 0 && filteredItems.length === 0 && (
+            <div className="notice">Không có nguồn nào khớp bộ lọc.</div>
+          )}
+
+          {filteredItems.length > 0 && (
             <div className="gcnLinkList">
-              {items.map((item) => {
+              {filteredItems.map((item) => {
                 const isEditing = editingMaNguon === item.ma_nguon;
                 const isBusy = busyMaNguon === item.ma_nguon;
 
