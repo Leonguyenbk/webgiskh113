@@ -384,7 +384,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
                 value={gcn.ngayCap}
                 onChange={(e) => setGcn({ ...gcn, ngayCap: e.target.value })}
               />
-              <label htmlFor="soVaoSo">Số vào sổ GCN *</label>
+              <label htmlFor="soVaoSo">Số vào sổ GCN</label>
               <input
                 id="soVaoSo"
                 value={gcn.soVaoSo}

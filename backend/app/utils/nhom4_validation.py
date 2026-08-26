@@ -188,7 +188,7 @@ def validate_payload(payload: dict) -> str | None:
 
     if che_do == "Đã có GCN":
         gcn = payload.get("gcn") or {}
-        if not gcn.get("so_phat_hanh") or not gcn.get("ngay_cap") or not gcn.get("so_vao_so"):
+        if not gcn.get("so_phat_hanh") or not gcn.get("ngay_cap"):
             return "Vui lòng nhập đủ thông tin GCN."
         if not validate_so_phat_hanh_gcn(gcn.get("so_phat_hanh")):
             return "Số phát hành GCN nhập không đúng định dạng."
