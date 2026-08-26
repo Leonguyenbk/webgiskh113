@@ -630,7 +630,25 @@ alter table public.nguon_gcn enable row level security;
 -- JOIN (thay vì EXISTS tương quan từng dòng như get_parcels_in_view) vì
 -- hàm này quét toàn bộ thua_dat chứ không giới hạn theo khung bản đồ/
 -- limit.
+--
+-- CACHE: quét thẳng 1,36 triệu dòng thua_dat MỖI LẦN mở trang Dashboard
+-- (đo thực tế qua Query Performance: trung bình 15s/lần, có lúc gần chạm
+-- trần 30s, góp phần vào cảnh báo "exhausting multiple resources" của
+-- Supabase) — quá tốn cho 1 trang thống kê không cần realtime tuyệt đối.
+-- Đổi sang đọc từ bảng cache, chỉ tính lại khi cache cũ quá 15 phút —
+-- giữ NGUYÊN chữ ký hàm (không tham số, cùng cột trả về) nên
+-- backend/frontend không cần sửa gì.
 -- =========================================================
+
+create table if not exists public.gcn_thu_thap_theo_xa_cache (
+    ma_xa text primary key,
+    tong_so_thua bigint not null,
+    da_nhap_bieu bigint not null,
+    computed_at timestamptz not null default now()
+);
+alter table public.gcn_thu_thap_theo_xa_cache enable row level security;
+-- Không tạo policy: chỉ Service Role Key (qua hàm security definer bên
+-- dưới, hoặc backend) mới đọc/ghi được.
 
 create or replace function public.gcn_thu_thap_theo_xa()
 returns table (
@@ -638,34 +656,49 @@ returns table (
     tong_so_thua bigint,
     da_nhap_bieu bigint
 )
-language sql
-stable
+language plpgsql
 security definer
 set search_path = public, extensions
 -- Bảng thua_dat đã 1.36 triệu dòng — statement_timeout mặc định của
 -- Supabase (khoảng 8s cho các hàm gọi qua API) không đủ để quét hết dù
 -- đã có index. Gắn timeout riêng CHỈ cho hàm này (không đổi cài đặt
--- chung của project, các hàm khác vẫn giữ giới hạn 8s để tránh truy vấn
--- runaway từ phía client).
+-- chung của project) — chỉ thật sự cần khi tính lại cache (nhánh chậm),
+-- lần đọc cache (đa số lần gọi) rất nhanh nên không bị ảnh hưởng.
 set statement_timeout = '30s'
 as $$
-    with gcn_keys as (
-        select distinct g.madvhc_soto_sothua
-        from public.du_lieu_gcn g
-        where g.madvhc_soto_sothua is not null
-    )
-    select
-        t.ma_xa,
-        count(*)::bigint as tong_so_thua,
-        count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu
-    from public.thua_dat t
-    left join public.dong_bo_du_lieu d
-        on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
-    left join gcn_keys k
-        on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-    where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
-    group by t.ma_xa
-    order by t.ma_xa;
+declare
+    v_last_computed timestamptz;
+begin
+    select max(c.computed_at) into v_last_computed from public.gcn_thu_thap_theo_xa_cache c;
+
+    if v_last_computed is null or now() - v_last_computed > interval '15 minutes' then
+        delete from public.gcn_thu_thap_theo_xa_cache;
+
+        insert into public.gcn_thu_thap_theo_xa_cache (ma_xa, tong_so_thua, da_nhap_bieu, computed_at)
+        with gcn_keys as (
+            select distinct g.madvhc_soto_sothua
+            from public.du_lieu_gcn g
+            where g.madvhc_soto_sothua is not null
+        )
+        select
+            t.ma_xa,
+            count(*)::bigint as tong_so_thua,
+            count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
+            now()
+        from public.thua_dat t
+        left join public.dong_bo_du_lieu d
+            on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+        left join gcn_keys k
+            on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+        where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
+        group by t.ma_xa;
+    end if;
+
+    return query
+        select c.ma_xa, c.tong_so_thua, c.da_nhap_bieu
+        from public.gcn_thu_thap_theo_xa_cache c
+        order by c.ma_xa;
+end;
 $$;
 
 revoke all on function public.gcn_thu_thap_theo_xa() from public;
