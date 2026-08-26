@@ -36,6 +36,23 @@ _session: AuthorizedSession | None = None
 _folder_cache: dict[str, str] = {}
 
 
+def _drive_error_detail(response) -> str:
+    # requests.HTTPError chỉ in status code + URL trong str(exc), KHÔNG in
+    # nội dung JSON lỗi thật Google trả về (thường có "reason" cụ thể như
+    # insufficientPermissions/appNotAuthorizedToFile/accessNotConfigured —
+    # cần thấy đúng reason này mới chẩn đoán chính xác thay vì đoán mò).
+    try:
+        body = response.json()
+        error = body.get("error") or {}
+        message = error.get("message") or str(body)
+        reasons = [e.get("reason") for e in (error.get("errors") or []) if e.get("reason")]
+        if reasons:
+            return f"{message} (reason: {', '.join(reasons)})"
+        return message
+    except ValueError:
+        return response.text[:500]
+
+
 def _get_session() -> AuthorizedSession:
     global _session
     if _session is None:
@@ -84,6 +101,8 @@ def _find_folder_by_ma_xa(session: AuthorizedSession, parent_id: str, ma_xa: str
             timeout=15,
         )
         response.raise_for_status()
+    except requests.HTTPError as exc:
+        raise RuntimeError(f"Tìm thư mục Google Drive theo mã xã thất bại: {_drive_error_detail(exc.response)}") from exc
     except requests.RequestException as exc:
         raise RuntimeError(f"Tìm thư mục Google Drive theo mã xã thất bại: {exc}") from exc
     files = response.json().get("files") or []
@@ -103,6 +122,8 @@ def _create_folder(session: AuthorizedSession, parent_id: str, name: str) -> str
             timeout=15,
         )
         response.raise_for_status()
+    except requests.HTTPError as exc:
+        raise RuntimeError(f"Tạo thư mục Google Drive thất bại: {_drive_error_detail(exc.response)}") from exc
     except requests.RequestException as exc:
         raise RuntimeError(f"Tạo thư mục Google Drive thất bại: {exc}") from exc
     return response.json()["id"]
@@ -155,6 +176,8 @@ def upload_pdf(folder_id: str, filename: str, content: bytes) -> dict:
             timeout=60,
         )
         response.raise_for_status()
+    except requests.HTTPError as exc:
+        raise RuntimeError(f"Upload file lên Google Drive thất bại: {_drive_error_detail(exc.response)}") from exc
     except requests.RequestException as exc:
         raise RuntimeError(f"Upload file lên Google Drive thất bại: {exc}") from exc
 
