@@ -1,6 +1,8 @@
-// Số thửa mỗi lô. Giữ dưới MAX_PAGE_SIZE của backend (4000), vượt qua thì
+// Số thửa mỗi lô. Giữ dưới MAX_PAGE_SIZE của backend (1000), vượt qua thì
 // backend tự kẹp lại và vòng lặp phân trang hiểu nhầm là đã hết dữ liệu.
-export const PAGE_SIZE = 4000;
+// Từng thử 4000 để giảm số vòng phân trang nhưng gây tốn tài nguyên
+// Supabase rõ rệt — đã revert.
+export const PAGE_SIZE = 1000;
 
 // Chốt an toàn cho vòng lặp phân trang. Không phải giới hạn hiển thị: chỉ
 // để phòng trường hợp server phân trang sai và lặp vô tận.

@@ -7,10 +7,11 @@ from ..utils.geometry import simplify_for_zoom
 from ..utils.validators import read_bbox, read_nhom_list, read_optional_int
 
 # Trần cứng số thửa mỗi lô. Vượt mức này Supabase dễ chạm statement_timeout
-# khi phải sinh GeoJSON cho quá nhiều hình học trong một câu lệnh — nâng lên
-# thì phải nâng kèm statement_timeout riêng của get_parcels_in_view/
-# search_parcels trong supabase/schema.sql (đã làm, 20s).
-MAX_PAGE_SIZE = 4000
+# khi phải sinh GeoJSON cho quá nhiều hình học trong một câu lệnh — từng
+# thử nâng lên 4000 (kèm statement_timeout riêng 20s) để giảm số vòng phân
+# trang, nhưng gây tốn tài nguyên Supabase rõ rệt (cảnh báo project vượt
+# mức compute) — đã revert về 1000, không nâng lại nếu chưa nâng gói.
+MAX_PAGE_SIZE = 1000
 DEFAULT_PAGE_SIZE = 1000
 
 

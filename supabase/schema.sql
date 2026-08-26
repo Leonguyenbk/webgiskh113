@@ -378,10 +378,6 @@ language sql
 stable
 security definer
 set search_path = public, extensions
--- p_limit tối đa 4000 (xem MAX_PAGE_SIZE ở backend/app/services/
--- parcel_service.py) — statement_timeout mặc định (~8s) không đủ dư cho
--- lô lớn nhất, gắn riêng timeout dài hơn cho hàm này.
-set statement_timeout = '20s'
 as $$
     select jsonb_build_object(
         'type', 'FeatureCollection',
@@ -523,10 +519,6 @@ language sql
 stable
 security definer
 set search_path = public, extensions
--- p_limit tối đa 4000 (xem MAX_PAGE_SIZE ở backend/app/services/
--- parcel_service.py) — statement_timeout mặc định (~8s) không đủ dư cho
--- lô lớn nhất, gắn riêng timeout dài hơn cho hàm này.
-set statement_timeout = '20s'
 as $$
     select jsonb_build_object(
         'type', 'FeatureCollection',
