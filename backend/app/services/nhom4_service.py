@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
+import threading
 import uuid
 
-from flask import jsonify
+from flask import current_app, jsonify
 
 from ..repositories import google_drive_client, nhom4_repository
 from ..repositories.nhom4_repository import NHOM4_MA_NGUON, NHOM4_TEN_NGUON
@@ -232,43 +233,74 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
                 409,
             )
 
-    try:
-        folder_id = google_drive_client.resolve_xa_folder(ma_xa, payload.get("ten_xa"))
-    except RuntimeError as exc:
-        return None, (jsonify({"error": str(exc)}), 500)
-
     first_thua = (parcels[0].get("thua") or {}) if parcels else {}
     base_name = _sanitize_filename(f"{ma_xa}_{first_thua.get('so_to')}_{first_thua.get('so_thua')}")
     che_do = payload.get("che_do") or ""
     chinh_suffix = "GCN" if che_do == "Đã có GCN" else "DDK"
 
-    file_info: dict = {}
-    try:
-        uploaded_chinh = google_drive_client.upload_pdf(
-            folder_id, f"{base_name}-{chinh_suffix}.pdf", file_chinh.read()
-        )
-        file_info["chinh_id"] = uploaded_chinh["id"]
-        file_info["chinh_name"] = uploaded_chinh["name"]
-
-        if file_phu and file_phu.filename:
-            uploaded_phu = google_drive_client.upload_pdf(
-                folder_id, f"{base_name}-GT.pdf", file_phu.read()
-            )
-            file_info["phu_id"] = uploaded_phu["id"]
-            file_info["phu_name"] = uploaded_phu["name"]
-    except RuntimeError as exc:
-        return None, (jsonify({"error": str(exc)}), 502)
+    # Đọc nội dung file NGAY (trong request), vì FileStorage của Flask
+    # không dùng được nữa sau khi request kết thúc — bytes đọc ra thì
+    # thread nền phía dưới dùng lại được bình thường.
+    chinh_bytes = file_chinh.read()
+    phu_bytes = file_phu.read() if (file_phu and file_phu.filename) else None
 
     submission_id = str(uuid.uuid4())
-    rows = _build_rows(payload, submission_id, file_info)
+    # file_info để trống lúc ghi — không chờ Drive để trả lời người nộp
+    # ngay (upload PDF lên Drive là bước chậm nhất, ~vài giây tới cả phút
+    # tùy dung lượng/mạng). Cột file_*/tenfilequet được cập nhật SAU bởi
+    # _upload_files_background() khi upload xong.
+    rows = _build_rows(payload, submission_id, {})
 
     _, error_response = nhom4_repository.insert_rows(rows)
     if error_response:
         return None, error_response
 
+    # current_app là proxy theo request/app context hiện tại — phải lấy
+    # object app THẬT ở đây (còn trong request) để thread nền tự mở lại
+    # app context riêng (xem _upload_files_background), vì current_app sẽ
+    # không dùng được nữa sau khi request này kết thúc.
+    app = current_app._get_current_object()
+    threading.Thread(
+        target=_upload_files_background,
+        args=(app, ma_xa, payload.get("ten_xa"), base_name, chinh_suffix, chinh_bytes, phu_bytes, submission_id),
+        daemon=True,
+    ).start()
+
     return {
         "ok": True,
-        "message": f"Đã lưu {len(parcels)} thửa, tổng {len(rows)} dòng.",
+        "message": f"Đã lưu {len(parcels)} thửa, tổng {len(rows)} dòng. File quét đang tải lên Drive ở nền.",
         "so_thua": len(parcels),
         "so_dong": len(rows),
     }, None
+
+
+def _upload_files_background(
+    app, ma_xa: str, ten_xa, base_name: str, chinh_suffix: str,
+    chinh_bytes: bytes, phu_bytes: bytes | None, submission_id: str,
+) -> None:
+    with app.app_context():
+        file_info: dict = {}
+        try:
+            folder_id = google_drive_client.resolve_xa_folder(ma_xa, ten_xa)
+            uploaded_chinh = google_drive_client.upload_pdf(
+                folder_id, f"{base_name}-{chinh_suffix}.pdf", chinh_bytes
+            )
+            file_info["chinh_id"] = uploaded_chinh["id"]
+            file_info["chinh_name"] = uploaded_chinh["name"]
+
+            if phu_bytes:
+                uploaded_phu = google_drive_client.upload_pdf(folder_id, f"{base_name}-GT.pdf", phu_bytes)
+                file_info["phu_id"] = uploaded_phu["id"]
+                file_info["phu_name"] = uploaded_phu["name"]
+        except Exception:
+            current_app.logger.exception(
+                "Upload Drive nền cho submission %s thất bại — dòng đã lưu nhưng thiếu file quét.",
+                submission_id,
+            )
+            return
+
+        _, error_response = nhom4_repository.update_file_info_by_submission(submission_id, file_info)
+        if error_response:
+            current_app.logger.error(
+                "Cập nhật file_info nền cho submission %s thất bại: %s", submission_id, error_response
+            )
