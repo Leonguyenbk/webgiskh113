@@ -69,28 +69,34 @@ def _find_folder_by_ma_xa(session: AuthorizedSession, parent_id: str, ma_xa: str
         f"'{parent_id}' in parents and name contains '{escaped_ma_xa}' "
         "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
     )
-    response = session.get(
-        f"{DRIVE_API_BASE}/files",
-        params={"q": query, "fields": "files(id,name)", "pageSize": 5},
-        timeout=15,
-    )
-    response.raise_for_status()
+    try:
+        response = session.get(
+            f"{DRIVE_API_BASE}/files",
+            params={"q": query, "fields": "files(id,name)", "pageSize": 5},
+            timeout=15,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Tìm thư mục Google Drive theo mã xã thất bại: {exc}") from exc
     files = response.json().get("files") or []
     return files[0]["id"] if files else None
 
 
 def _create_folder(session: AuthorizedSession, parent_id: str, name: str) -> str:
-    response = session.post(
-        f"{DRIVE_API_BASE}/files",
-        params={"fields": "id"},
-        json={
-            "name": name,
-            "mimeType": "application/vnd.google-apps.folder",
-            "parents": [parent_id],
-        },
-        timeout=15,
-    )
-    response.raise_for_status()
+    try:
+        response = session.post(
+            f"{DRIVE_API_BASE}/files",
+            params={"fields": "id"},
+            json={
+                "name": name,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [parent_id],
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Tạo thư mục Google Drive thất bại: {exc}") from exc
     return response.json()["id"]
 
 
@@ -132,16 +138,16 @@ def upload_pdf(folder_id: str, filename: str, content: bytes) -> dict:
         "Content-Type: application/pdf\r\n\r\n"
     ).encode("utf-8") + content + f"\r\n--{boundary}--".encode("utf-8")
 
-    response = session.post(
-        f"{DRIVE_UPLOAD_BASE}/files",
-        params={"uploadType": "multipart", "fields": "id,name"},
-        headers={"Content-Type": f"multipart/related; boundary={boundary}"},
-        data=body,
-        timeout=60,
-    )
     try:
+        response = session.post(
+            f"{DRIVE_UPLOAD_BASE}/files",
+            params={"uploadType": "multipart", "fields": "id,name"},
+            headers={"Content-Type": f"multipart/related; boundary={boundary}"},
+            data=body,
+            timeout=60,
+        )
         response.raise_for_status()
-    except requests.HTTPError as exc:
+    except requests.RequestException as exc:
         raise RuntimeError(f"Upload file lên Google Drive thất bại: {exc}") from exc
 
     return response.json()
