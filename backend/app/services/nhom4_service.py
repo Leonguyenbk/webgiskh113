@@ -166,7 +166,6 @@ def _build_rows(payload: dict, submission_id: str, file_info: dict) -> list[dict
                     else dat2.get("thoi_han_su_dung"),
                     "ghichu": thua.get("ghi_chu") or payload.get("ghi_chu"),
                     "tenchusudunghientai": nguoi_hien_tai.get("ho_ten") or None,
-                    "ngaysinh_chusudunghientai": nguoi_hien_tai.get("nam_sinh") or None,
                     "sodinhdanh_chusudunghientai": nguoi_hien_tai.get("cccd") or None,
                     "diachi_chusudunghientai": nguoi_hien_tai.get("dia_chi_thuong_tru") or None,
                     "lydothaydoi": nguoi_hien_tai.get("ly_do_thay_doi") or None,

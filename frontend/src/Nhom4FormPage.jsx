@@ -55,7 +55,6 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     hoTen: "",
     cccd: "",
     diaChiThuongTru: "",
-    namSinh: "",
     lyDoThayDoi: "",
   });
 
@@ -230,11 +229,8 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         `Vui lòng chọn file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"}.`,
       );
     }
-    if (nguoiHienTai.hoTen && (!nguoiHienTai.cccd || !nguoiHienTai.namSinh)) {
-      return setError("Đã nhập tên người sử dụng đất hiện tại thì phải nhập đủ CCCD và năm sinh.");
-    }
-    if (nguoiHienTai.hoTen && !/^\d{4}$/.test(nguoiHienTai.namSinh)) {
-      return setError("Năm sinh người sử dụng đất hiện tại phải là 4 chữ số (VD: 1990).");
+    if (nguoiHienTai.hoTen && !nguoiHienTai.cccd) {
+      return setError("Đã nhập tên người sử dụng đất hiện tại thì phải nhập CCCD.");
     }
 
     const payload = {
@@ -250,7 +246,6 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       nguoi_su_dung_hien_tai: {
         ho_ten: nguoiHienTai.hoTen,
         cccd: nguoiHienTai.cccd,
-        nam_sinh: nguoiHienTai.namSinh,
         dia_chi_thuong_tru: nguoiHienTai.diaChiThuongTru,
         ly_do_thay_doi: nguoiHienTai.lyDoThayDoi,
       },
@@ -322,7 +317,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setCoDat2(false);
       setFileChinh(null);
       setFilePhu(null);
-      setNguoiHienTai({ hoTen: "", cccd: "", diaChiThuongTru: "", namSinh: "", lyDoThayDoi: "" });
+      setNguoiHienTai({ hoTen: "", cccd: "", diaChiThuongTru: "", lyDoThayDoi: "" });
     } catch (err) {
       setError(err.message);
       setStatus("error");
@@ -559,7 +554,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
             Không bắt buộc — chỉ điền nếu người đang thực tế sử dụng đất khác
             với chủ sử dụng ghi trên GCN (do thừa kế, tặng cho, chuyển
             nhượng... nhưng chưa cập nhật GCN). Đã điền họ tên thì bắt buộc
-            có CCCD và năm sinh.
+            có CCCD.
           </p>
           <div className="nhom4Subcard">
             <div className="nhom4Grid2">
@@ -579,25 +574,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
                 />
               </div>
             </div>
-            <div className="nhom4Grid2">
-              <div>
-                <label>Năm sinh{nguoiHienTai.hoTen ? " *" : ""}</label>
-                <input
-                  maxLength={4}
-                  placeholder="VD: 1990"
-                  value={nguoiHienTai.namSinh}
-                  onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, namSinh: e.target.value })}
-                />
-              </div>
-              <div>
-                <label>Lý do thay đổi</label>
-                <input
-                  placeholder="VD: thừa kế, tặng cho, chuyển nhượng..."
-                  value={nguoiHienTai.lyDoThayDoi}
-                  onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, lyDoThayDoi: e.target.value })}
-                />
-              </div>
-            </div>
+            <label>Lý do thay đổi</label>
+            <input
+              placeholder="VD: thừa kế, tặng cho, chuyển nhượng..."
+              value={nguoiHienTai.lyDoThayDoi}
+              onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, lyDoThayDoi: e.target.value })}
+            />
             <label>Địa chỉ thường trú (2 cấp)</label>
             <input
               value={nguoiHienTai.diaChiThuongTru}

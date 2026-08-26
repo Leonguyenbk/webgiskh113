@@ -102,13 +102,13 @@ create table if not exists public.du_lieu_gcn (
   phanloai text
 );
 
--- Năm sinh người sử dụng hiện tại (trường hợp không phải chủ sử dụng pháp
--- lý trên GCN — do thừa kế/tặng cho/chuyển nhượng chưa cập nhật GCN).
--- Dữ liệu gốc từ Google Sheet (sync_gcn/) không có cột này, luôn NULL —
--- chỉ biểu Nhóm 4 mới ghi (chỉ nhập NĂM, không phải ngày đầy đủ, khác quy
--- ước "ngày sinh" của chủ sử dụng pháp lý — xem nhom4_service.py).
+-- Dữ liệu gốc không có "Ngày sinh người sử dụng hiện tại" — xóa cột này nếu
+-- bảng đã tồn tại từ trước (an toàn chạy lại nhiều lần). ĐÃ THỬ thêm lại
+-- cột này cho biểu Nhóm 4 rồi bỏ — gây lỗi đồng bộ Sheet giống các phiên
+-- bản đầu (script sync_gcn/ ánh xạ cột Sheet theo đúng vị trí cố định
+-- B..BE, thêm/bớt cột giữa chừng dễ làm lệch vị trí các cột sau nó).
 alter table public.du_lieu_gcn
-  add column if not exists ngaysinh_chusudunghientai text;
+  drop column if exists ngaysinh_chusudunghientai;
 
 -- Khóa ghép madvhc + số tờ + số thửa (đã chuẩn hóa) để đối chiếu 1-1 với
 -- (ma_xa, so_to, so_thua) bên bảng thua_dat — dùng kiểm tra thửa nào đã
