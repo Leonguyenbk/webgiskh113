@@ -11,6 +11,7 @@ import {
   taoChuRong,
   taoDatRong,
   taoThuaRong,
+  tinhPhapNhanVaiTro,
 } from "./utils/nhom4Constants";
 
 const LOAI_DAT_LAU_DAI = new Set(["ONT", "ODT"]);
@@ -232,15 +233,18 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         ngay_cap: gcn.ngayCap,
         so_vao_so: gcn.soVaoSo,
       },
-      owners: owners.map((o) => ({
-        ho_ten: o.hoTen,
-        ngay_sinh: o.ngaySinh,
-        gioi_tinh: o.gioiTinh,
-        cccd: o.cccd,
-        dia_chi_thuong_tru: o.diaChiThuongTru,
-        phap_nhan: o.phapNhan,
-        vai_tro_phap_nhan: o.vaiTroPhapNhan,
-      })),
+      owners: owners.map((o, index) => {
+        const { phapNhan, vaiTroPhapNhan } = tinhPhapNhanVaiTro(loaiChu, owners, index);
+        return {
+          ho_ten: o.hoTen,
+          ngay_sinh: o.ngaySinh,
+          gioi_tinh: o.gioiTinh,
+          cccd: o.cccd,
+          dia_chi_thuong_tru: o.diaChiThuongTru,
+          phap_nhan: phapNhan,
+          vai_tro_phap_nhan: vaiTroPhapNhan,
+        };
+      }),
       to_chuc: {
         ten_to_chuc: toChuc.tenToChuc,
         ma_dinh_danh_to_chuc: toChuc.maDinhDanhToChuc,
@@ -455,14 +459,11 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
                   <div className="nhom4Grid2">
                     <div>
                       <label>Pháp nhân</label>
-                      <input value={owner.phapNhan} onChange={(e) => capNhatNguoi(index, "phapNhan", e.target.value)} />
+                      <input readOnly value={tinhPhapNhanVaiTro(loaiChu, owners, index).phapNhan} />
                     </div>
                     <div>
                       <label>Vai trò pháp nhân</label>
-                      <input
-                        value={owner.vaiTroPhapNhan}
-                        onChange={(e) => capNhatNguoi(index, "vaiTroPhapNhan", e.target.value)}
-                      />
+                      <input readOnly value={tinhPhapNhanVaiTro(loaiChu, owners, index).vaiTroPhapNhan} />
                     </div>
                   </div>
                 </div>

@@ -46,9 +46,40 @@ export function taoChuRong() {
     gioiTinh: "",
     cccd: "",
     diaChiThuongTru: "",
-    phapNhan: "",
-    vaiTroPhapNhan: "",
   };
+}
+
+// Pháp nhân/vai trò pháp nhân trên GCN suy thẳng từ tab "loại chủ" đang chọn
+// + giới tính/thứ tự nhập — không để người dùng gõ tay (dễ sai/thiếu, 2
+// trường này bắt buộc). Quy ước lấy từ dữ liệu GCN thật đã đồng bộ:
+// - "Cá nhân": 1 người, cả 2 cột đều là "Cá nhân".
+// - "Đồng sử dụng": nhiều người, mỗi người đều là "Cá nhân" (không phân
+//   biệt vai trò riêng, "đồng" nằm ở cột pháp nhân).
+// - "Vợ chồng": pháp nhân "Vợ chồng", vai trò suy từ giới tính (Nam ->
+//   Chồng, Nữ -> Vợ) — dự phòng theo thứ tự nhập (người 1 -> Chồng, người
+//   2 -> Vợ) nếu chưa chọn giới tính.
+// - "Hộ gia đình": pháp nhân "Hộ gia đình", vai trò theo thứ tự nhập:
+//   người 1 = Chủ hộ, người 2 = Vợ/chồng chủ hộ, còn lại = Thành viên hộ
+//   gia đình.
+export function tinhPhapNhanVaiTro(loaiChu, owners, index) {
+  if (loaiChu === "Cá nhân") {
+    return { phapNhan: "Cá nhân", vaiTroPhapNhan: "Cá nhân" };
+  }
+  if (loaiChu === "Đồng sử dụng") {
+    return { phapNhan: "Đồng sử dụng", vaiTroPhapNhan: "Cá nhân" };
+  }
+  if (loaiChu === "Vợ chồng") {
+    const gioiTinh = owners[index]?.gioiTinh;
+    const vaiTroPhapNhan =
+      gioiTinh === "Nam" ? "Chồng" : gioiTinh === "Nữ" ? "Vợ" : index === 0 ? "Chồng" : "Vợ";
+    return { phapNhan: "Vợ chồng", vaiTroPhapNhan };
+  }
+  if (loaiChu === "Hộ gia đình") {
+    const vaiTroPhapNhan =
+      index === 0 ? "Chủ hộ" : index === 1 ? "Vợ/chồng chủ hộ" : "Thành viên hộ gia đình";
+    return { phapNhan: "Hộ gia đình", vaiTroPhapNhan };
+  }
+  return { phapNhan: "", vaiTroPhapNhan: "" };
 }
 
 export function taoThuaRong() {

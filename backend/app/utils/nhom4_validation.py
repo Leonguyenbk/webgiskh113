@@ -174,6 +174,8 @@ def validate_payload(payload: dict) -> str | None:
                     owner.get("gioi_tinh"),
                     owner.get("cccd"),
                     owner.get("dia_chi_thuong_tru"),
+                    owner.get("phap_nhan"),
+                    owner.get("vai_tro_phap_nhan"),
                 ]
             ):
                 return f"Vui lòng nhập đủ thông tin chủ sử dụng thứ {i + 1}."
