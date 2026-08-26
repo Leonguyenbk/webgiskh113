@@ -6,18 +6,31 @@ import { getBanDoNenInView } from "../../services/mapSheetService";
 
 const DEBOUNCE_MS = 400;
 
+// Phải khớp CHÍNH XÁC name="..." của LayersControl.Overlay bọc lớp này
+// trong App.jsx — Leaflet phát sự kiện overlayadd/overlayremove kèm đúng
+// chuỗi name đó khi người dùng bật/tắt checkbox.
+const OVERLAY_NAME = "Bản đồ địa chính";
+
 // Tải danh sách tờ bản đồ nền (metadata: tile_url/bbox/trạng thái) giao
 // khung nhìn hiện tại, tải lại khi pan/zoom (debounce 400ms) — khác các
 // loader khác trong file này (đều chỉ tải khi người dùng bấm nút), vì lớp
 // raster/ranh tờ phải tự động hiện đúng khu vực đang xem, không cần bấm
 // "Tra cứu". Không tải ảnh tile ở đây — chỉ tải metadata nhẹ (JSON), ảnh
-// tile do <TileLayer> tự yêu cầu khi lớp "Bản đồ địa chính (DGN)" đang bật.
+// tile do <TileLayer> tự yêu cầu khi lớp "Bản đồ địa chính" đang bật.
+//
+// CHỈ chạy khi overlay đang BẬT (theo dõi qua sự kiện overlayadd/
+// overlayremove) — trước đây chạy vô điều kiện ngay từ lúc mở trang, kể
+// cả với người chưa từng bật lớp này, tạo request bbox thừa trên mọi lần
+// pan/zoom cho MỌI khách xem bản đồ (đã thấy thực tế qua log truy cập từ
+// điện thoại) — không cần thiết và tốn tài nguyên Supabase vô ích.
 export default function MapSheetTilesLoader({ onData }) {
   const map = useMap();
   const timerRef = useRef(null);
   const abortRef = useRef(null);
+  const enabledRef = useRef(false);
 
   const load = () => {
+    if (!enabledRef.current) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -39,6 +52,7 @@ export default function MapSheetTilesLoader({ onData }) {
   };
 
   const scheduleLoad = () => {
+    if (!enabledRef.current) return;
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(load, DEBOUNCE_MS);
   };
@@ -46,6 +60,18 @@ export default function MapSheetTilesLoader({ onData }) {
   useMapEvents({
     moveend: scheduleLoad,
     zoomend: scheduleLoad,
+    overlayadd: (event) => {
+      if (event.name !== OVERLAY_NAME) return;
+      enabledRef.current = true;
+      load();
+    },
+    overlayremove: (event) => {
+      if (event.name !== OVERLAY_NAME) return;
+      enabledRef.current = false;
+      window.clearTimeout(timerRef.current);
+      abortRef.current?.abort();
+      onData([]);
+    },
   });
 
   useEffect(() => {
@@ -61,7 +87,6 @@ export default function MapSheetTilesLoader({ onData }) {
       map.createPane("banDoNenPane").style.zIndex = 250;
     }
 
-    load();
     return () => {
       window.clearTimeout(timerRef.current);
       abortRef.current?.abort();
