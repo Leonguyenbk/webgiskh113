@@ -88,6 +88,7 @@ def _build_rows(payload: dict, submission_id: str, file_info: dict) -> list[dict
     doi_tuong = payload.get("doi_tuong") or "Hộ gia đình, cá nhân"
     gcn = payload.get("gcn") or {}
     to_chuc = payload.get("to_chuc") or {}
+    nguoi_hien_tai = payload.get("nguoi_su_dung_hien_tai") or {}
     parcels = payload.get("thua_list") or []
     da_co_gcn = che_do == "Đã có GCN"
     la_to_chuc = doi_tuong == "Tổ chức"
@@ -164,6 +165,11 @@ def _build_rows(payload: dict, submission_id: str, file_info: dict) -> list[dict
                     if dat2.get("loai_dat")
                     else dat2.get("thoi_han_su_dung"),
                     "ghichu": thua.get("ghi_chu") or payload.get("ghi_chu"),
+                    "tenchusudunghientai": nguoi_hien_tai.get("ho_ten") or None,
+                    "ngaysinh_chusudunghientai": nguoi_hien_tai.get("nam_sinh") or None,
+                    "sodinhdanh_chusudunghientai": nguoi_hien_tai.get("cccd") or None,
+                    "diachi_chusudunghientai": nguoi_hien_tai.get("dia_chi_thuong_tru") or None,
+                    "lydothaydoi": nguoi_hien_tai.get("ly_do_thay_doi") or None,
                     "tenfilequet": ten_file_quet or None,
                     "file_chinh_drive_id": file_info.get("chinh_id"),
                     "file_chinh_ten_file": file_info.get("chinh_name"),
@@ -233,6 +239,14 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
                 409,
             )
 
+    # Giữ chỗ nguyên tử cho các thửa sắp nộp NGAY TRƯỚC khi ghi thật —
+    # chặn race 2 request nộp cùng 1 thửa gần như đồng thời lọt qua kiểm
+    # tra list_existing_keys() ở trên (đọc-rồi-quyết, không an toàn khi
+    # chạy song song) — xem chi tiết trong nhom4_repository.claim_keys().
+    _, error_response = nhom4_repository.claim_keys(list(seen_in_payload))
+    if error_response:
+        return None, error_response
+
     first_thua = (parcels[0].get("thua") or {}) if parcels else {}
     base_name = _sanitize_filename(f"{ma_xa}_{first_thua.get('so_to')}_{first_thua.get('so_thua')}")
     che_do = payload.get("che_do") or ""
@@ -253,6 +267,7 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
 
     _, error_response = nhom4_repository.insert_rows(rows)
     if error_response:
+        nhom4_repository.release_keys(list(seen_in_payload))
         return None, error_response
 
     # current_app là proxy theo request/app context hiện tại — phải lấy

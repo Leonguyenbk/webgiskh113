@@ -97,6 +97,34 @@ def insert_rows(rows: list[dict]):
     return True, None
 
 
+def claim_keys(keys: list[str]):
+    """Giữ chỗ nguyên tử cho danh sách khóa (madvhc_soto_sothua) TRƯỚC KHI
+    insert_rows() — xem giải thích đầy đủ trong sync_gcn/create_du_lieu_gcn.sql
+    (bảng nhom4_thua_da_nop + RPC nhom4_claim_keys). Trả lỗi 409 nếu có
+    khóa nào đã bị request khác giữ chỗ trước (race 2 request nộp cùng lúc
+    1 thửa)."""
+    if not keys:
+        return True, None
+    _, error_response = supabase_client.call_rpc("nhom4_claim_keys", {"p_keys": keys})
+    if error_response:
+        body, _status = error_response
+        return None, (body, 409)
+    return True, None
+
+
+def release_keys(keys: list[str]) -> None:
+    """Bỏ giữ chỗ (dùng khi claim_keys() thành công nhưng insert_rows() sau
+    đó lại lỗi vì lý do khác — tránh khóa vĩnh viễn 1 thửa không có dữ liệu
+    thật nào được ghi). Best-effort, không chặn luồng nếu tự nó lỗi."""
+    if not keys:
+        return
+    supabase_client.rest_request(
+        "DELETE",
+        "nhom4_thua_da_nop",
+        params={"khoa": f"in.({','.join(keys)})"},
+    )
+
+
 def update_file_info_by_submission(submission_id: str, file_info: dict):
     """Cập nhật các cột file_*/tenfilequet SAU KHI upload Drive nền hoàn
     tất (xem nhom4_service._upload_files_background) — insert_rows() ghi

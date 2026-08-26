@@ -193,6 +193,17 @@ def validate_payload(payload: dict) -> str | None:
         if not validate_so_phat_hanh_gcn(gcn.get("so_phat_hanh")):
             return "Số phát hành GCN nhập không đúng định dạng."
 
+    # Người sử dụng đất hiện tại (không phải chủ sử dụng pháp lý trên GCN)
+    # — không bắt buộc, nhưng đã điền họ tên thì phải có đủ CCCD + năm sinh.
+    nguoi_hien_tai = payload.get("nguoi_su_dung_hien_tai") or {}
+    if nguoi_hien_tai.get("ho_ten"):
+        if not nguoi_hien_tai.get("cccd") or not nguoi_hien_tai.get("nam_sinh"):
+            return "Đã nhập tên người sử dụng đất hiện tại thì phải nhập đủ CCCD và năm sinh."
+        if not CCCD_PATTERN.match(str(nguoi_hien_tai.get("cccd") or "")):
+            return "Số CCCD người sử dụng đất hiện tại phải đủ 12 số."
+        if not _NAM_ONLY.match(str(nguoi_hien_tai.get("nam_sinh") or "")):
+            return "Năm sinh người sử dụng đất hiện tại phải là 4 chữ số (VD: 1990)."
+
     for i, parcel in enumerate(parcels):
         error = validate_parcel(parcel, i)
         if error:

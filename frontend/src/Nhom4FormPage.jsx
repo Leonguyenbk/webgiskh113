@@ -51,6 +51,14 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     diaChiThuongTruDaiDien: "",
   });
 
+  const [nguoiHienTai, setNguoiHienTai] = useState({
+    hoTen: "",
+    cccd: "",
+    diaChiThuongTru: "",
+    namSinh: "",
+    lyDoThayDoi: "",
+  });
+
   const [thua, setThua] = useState(taoThuaRong());
   const [dat1, setDat1] = useState(taoDatRong());
   const [coDat2, setCoDat2] = useState(false);
@@ -222,6 +230,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         `Vui lòng chọn file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"}.`,
       );
     }
+    if (nguoiHienTai.hoTen && (!nguoiHienTai.cccd || !nguoiHienTai.namSinh)) {
+      return setError("Đã nhập tên người sử dụng đất hiện tại thì phải nhập đủ CCCD và năm sinh.");
+    }
+    if (nguoiHienTai.hoTen && !/^\d{4}$/.test(nguoiHienTai.namSinh)) {
+      return setError("Năm sinh người sử dụng đất hiện tại phải là 4 chữ số (VD: 1990).");
+    }
 
     const payload = {
       ma_xa: maXa,
@@ -232,6 +246,13 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         so_phat_hanh: gcn.soPhatHanh,
         ngay_cap: gcn.ngayCap,
         so_vao_so: gcn.soVaoSo,
+      },
+      nguoi_su_dung_hien_tai: {
+        ho_ten: nguoiHienTai.hoTen,
+        cccd: nguoiHienTai.cccd,
+        nam_sinh: nguoiHienTai.namSinh,
+        dia_chi_thuong_tru: nguoiHienTai.diaChiThuongTru,
+        ly_do_thay_doi: nguoiHienTai.lyDoThayDoi,
       },
       owners: owners.map((o, index) => {
         const { phapNhan, vaiTroPhapNhan } = tinhPhapNhanVaiTro(loaiChu, owners, index);
@@ -301,6 +322,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setCoDat2(false);
       setFileChinh(null);
       setFilePhu(null);
+      setNguoiHienTai({ hoTen: "", cccd: "", diaChiThuongTru: "", namSinh: "", lyDoThayDoi: "" });
     } catch (err) {
       setError(err.message);
       setStatus("error");
@@ -531,6 +553,57 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               />
             </div>
           )}
+
+          <h2 className="nhom4SectionTitle">Người sử dụng đất hiện tại</h2>
+          <p className="importHint">
+            Không bắt buộc — chỉ điền nếu người đang thực tế sử dụng đất khác
+            với chủ sử dụng ghi trên GCN (do thừa kế, tặng cho, chuyển
+            nhượng... nhưng chưa cập nhật GCN). Đã điền họ tên thì bắt buộc
+            có CCCD và năm sinh.
+          </p>
+          <div className="nhom4Subcard">
+            <div className="nhom4Grid2">
+              <div>
+                <label>Tên người sử dụng hiện tại</label>
+                <input
+                  value={nguoiHienTai.hoTen}
+                  onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, hoTen: e.target.value })}
+                />
+              </div>
+              <div>
+                <label>Số định danh cá nhân (CCCD){nguoiHienTai.hoTen ? " *" : ""}</label>
+                <input
+                  maxLength={12}
+                  value={nguoiHienTai.cccd}
+                  onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, cccd: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="nhom4Grid2">
+              <div>
+                <label>Năm sinh{nguoiHienTai.hoTen ? " *" : ""}</label>
+                <input
+                  maxLength={4}
+                  placeholder="VD: 1990"
+                  value={nguoiHienTai.namSinh}
+                  onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, namSinh: e.target.value })}
+                />
+              </div>
+              <div>
+                <label>Lý do thay đổi</label>
+                <input
+                  placeholder="VD: thừa kế, tặng cho, chuyển nhượng..."
+                  value={nguoiHienTai.lyDoThayDoi}
+                  onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, lyDoThayDoi: e.target.value })}
+                />
+              </div>
+            </div>
+            <label>Địa chỉ thường trú (2 cấp)</label>
+            <input
+              value={nguoiHienTai.diaChiThuongTru}
+              onChange={(e) => setNguoiHienTai({ ...nguoiHienTai, diaChiThuongTru: e.target.value })}
+            />
+          </div>
 
           <h2 className="nhom4SectionTitle">Thông tin thửa đất</h2>
           <div className="nhom4Grid2">

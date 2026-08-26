@@ -102,10 +102,13 @@ create table if not exists public.du_lieu_gcn (
   phanloai text
 );
 
--- Dữ liệu gốc không có "Ngày sinh người sử dụng hiện tại" — xóa cột này nếu
--- bảng đã tồn tại từ trước (an toàn chạy lại nhiều lần).
+-- Năm sinh người sử dụng hiện tại (trường hợp không phải chủ sử dụng pháp
+-- lý trên GCN — do thừa kế/tặng cho/chuyển nhượng chưa cập nhật GCN).
+-- Dữ liệu gốc từ Google Sheet (sync_gcn/) không có cột này, luôn NULL —
+-- chỉ biểu Nhóm 4 mới ghi (chỉ nhập NĂM, không phải ngày đầy đủ, khác quy
+-- ước "ngày sinh" của chủ sử dụng pháp lý — xem nhom4_service.py).
 alter table public.du_lieu_gcn
-  drop column if exists ngaysinh_chusudunghientai;
+  add column if not exists ngaysinh_chusudunghientai text;
 
 -- Khóa ghép madvhc + số tờ + số thửa (đã chuẩn hóa) để đối chiếu 1-1 với
 -- (ma_xa, so_to, so_thua) bên bảng thua_dat — dùng kiểm tra thửa nào đã
@@ -168,3 +171,45 @@ alter table public.du_lieu_gcn enable row level security;
 --   for select
 --   to anon, authenticated
 --   using (true);
+
+-- Bảng "giữ chỗ" nguyên tử cho biểu Nhóm 4 — chặn race 2 request nộp
+-- CÙNG 1 thửa gần như đồng thời (double-click, mở 2 tab, nộp lại khi
+-- chưa chắc lần trước có thành công...) lọt qua kiểm tra
+-- list_existing_keys() trong nhom4_service.py: kiểm tra đó đọc rồi mới
+-- quyết định, KHÔNG an toàn khi 2 request chạy song song (cả 2 có thể
+-- cùng đọc thấy "chưa có" trước khi request nào kịp ghi) — dẫn tới 1 bộ
+-- hồ sơ bị ghi 2 lần + PDF bị đẩy lên Drive 2 lần. UNIQUE constraint +
+-- xử lý trong 1 transaction Postgres (RPC dưới đây) đảm bảo chỉ 1 request
+-- thắng, request còn lại nhận lỗi rõ ràng.
+create table if not exists public.nhom4_thua_da_nop (
+  khoa text primary key,
+  created_at timestamptz not null default now()
+);
+alter table public.nhom4_thua_da_nop enable row level security;
+-- Không tạo policy: chỉ Service Role Key mới đọc/ghi được.
+
+create or replace function public.nhom4_claim_keys(p_keys text[])
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_distinct_count int;
+  v_inserted_count int;
+begin
+  select count(distinct k) into v_distinct_count from unnest(p_keys) as k;
+
+  insert into public.nhom4_thua_da_nop (khoa)
+  select distinct k from unnest(p_keys) as k
+  on conflict (khoa) do nothing;
+
+  get diagnostics v_inserted_count = row_count;
+
+  if v_inserted_count <> v_distinct_count then
+    raise exception 'Một hoặc nhiều thửa trong hồ sơ này vừa được nộp trùng lúc — vui lòng tải lại trang và kiểm tra trước khi nộp lại.';
+  end if;
+end;
+$$;
+revoke all on function public.nhom4_claim_keys(text[]) from public;
+grant execute on function public.nhom4_claim_keys(text[]) to service_role;
