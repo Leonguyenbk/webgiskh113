@@ -8,15 +8,13 @@ import re
 
 _SO_PHAT_HANH_10_SO = re.compile(r"^\d{10}$")
 _SO_PHAT_HANH_CHU_SO = re.compile(r"^[A-ZĐ]{1,2} \d+$")
-_NGAY_DDMMYYYY = re.compile(r"^\d{2}/\d{2}/\d{4}$")
-_NAM_ONLY = re.compile(r"^\d{4}$")
+_SO_NAM = re.compile(r"^(\d{1,3})\s*(?:năm)?$", re.IGNORECASE)
 
 CCCD_PATTERN = re.compile(r"^\d{12}$")
 
 # ONT/ODT (đất ở) mặc định thời hạn "Lâu dài"; loại đất khác bắt buộc nhập
-# ngày hết hạn dd/mm/yyyy (hoặc chỉ 1 năm, hiểu là 31/12 năm đó — xem
-# normalize_thoi_han_su_dung) — khớp đúng logic ở frontend
-# (nhom4Constants/Nhom4FormPage.jsx, hằng số LOAI_DAT_LAU_DAI).
+# SỐ NĂM sử dụng (VD "50") — không còn nhập ngày dd/mm/yyyy. Khớp đúng
+# logic ở frontend (Nhom4FormPage.jsx, hằng số LOAI_DAT_LAU_DAI / SO_NAM).
 LOAI_DAT_LAU_DAI = {"ONT", "ODT"}
 
 
@@ -24,17 +22,18 @@ def validate_thoi_han_su_dung(loai_dat: str, thoi_han: str) -> bool:
     if str(loai_dat or "").strip().upper() in LOAI_DAT_LAU_DAI:
         return True
     s = str(thoi_han or "").strip()
-    return bool(_NGAY_DDMMYYYY.match(s) or _NAM_ONLY.match(s))
+    return bool(_SO_NAM.match(s))
 
 
 def normalize_thoi_han_su_dung(loai_dat: str, thoi_han: str) -> str:
-    """Chuẩn hoá trước khi lưu: chỉ nhập năm (VD "2050") thì coi là hết hạn
-    31/12 năm đó — phòng trường hợp frontend chưa kịp tự chuẩn hoá lúc blur."""
+    """Chuẩn hoá trước khi lưu: "50" hoặc "50 năm" -> "50 năm". Loại đất
+    ONT/ODT giữ nguyên giá trị (thường là "Lâu dài")."""
     s = str(thoi_han or "").strip()
     if str(loai_dat or "").strip().upper() in LOAI_DAT_LAU_DAI:
         return s
-    if _NAM_ONLY.match(s):
-        return f"31/12/{s}"
+    match = _SO_NAM.match(s)
+    if match:
+        return f"{match.group(1)} năm"
     return s
 
 
@@ -101,7 +100,7 @@ def validate_parcel(parcel: dict, index: int) -> str | None:
     ):
         return f"Vui lòng nhập đủ thông tin loại đất 1 cho thửa thứ {stt}."
     if not validate_thoi_han_su_dung(dat1.get("loai_dat"), dat1.get("thoi_han_su_dung")):
-        return f"Thời hạn sử dụng loại đất 1 phải nhập theo dạng dd/mm/yyyy ở thửa thứ {stt}."
+        return f"Thời hạn sử dụng loại đất 1 phải nhập là số năm (VD: 50) ở thửa thứ {stt}."
 
     co_dat2 = any(
         [
@@ -124,7 +123,7 @@ def validate_parcel(parcel: dict, index: int) -> str | None:
         ):
             return f"Vui lòng nhập đủ thông tin loại đất 2 cho thửa thứ {stt}."
         if not validate_thoi_han_su_dung(dat2.get("loai_dat"), dat2.get("thoi_han_su_dung")):
-            return f"Thời hạn sử dụng loại đất 2 phải nhập theo dạng dd/mm/yyyy ở thửa thứ {stt}."
+            return f"Thời hạn sử dụng loại đất 2 phải nhập là số năm (VD: 50) ở thửa thứ {stt}."
 
         tong = parse_number_vn(thua.get("dien_tich_thua_dat"))
         dt1 = parse_number_vn(dat1.get("dien_tich"))

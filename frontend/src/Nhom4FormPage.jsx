@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getXaList, searchParcels } from "./services/parcelService";
 import { checkTrungThua, submitHoSo } from "./services/nhom4Service";
@@ -15,13 +15,15 @@ import {
 } from "./utils/nhom4Constants";
 
 const LOAI_DAT_LAU_DAI = new Set(["ONT", "ODT"]);
-const DATE_DDMMYYYY = /^\d{2}\/\d{2}\/\d{4}$/;
-const NAM_ONLY = /^\d{4}$/;
+// Thời hạn sử dụng nhập bằng SỐ NĂM (VD "50"), không còn nhập ngày
+// dd/mm/yyyy. Loại đất ONT/ODT vẫn mặc định "Lâu dài".
+const SO_NAM = /^\d{1,3}\s*(năm)?$/i;
 
-// Chỉ gõ năm (VD "2050") thì tự hiểu là hết hạn ngày 31/12 năm đó.
+// Chuẩn hoá "50" hoặc "50 năm" -> "50 năm"; loại đất "Lâu dài" giữ nguyên.
 function chuanHoaThoiHan(value) {
   const s = String(value ?? "").trim();
-  return NAM_ONLY.test(s) ? `31/12/${s}` : s;
+  const m = s.match(/^(\d{1,3})\s*(năm)?$/i);
+  return m ? `${m[1]} năm` : s;
 }
 
 function parseSoVN(value) {
@@ -70,6 +72,11 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
   const [status, setStatus] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+
+  // Khóa chống double-click: đặt đồng bộ NGAY khi bắt đầu gửi, không đợi
+  // re-render như thuộc tính disabled của nút — chặn request thứ 2 lọt qua
+  // khi người dùng bấm Nộp 2 lần thật nhanh.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     getXaList()
@@ -163,8 +170,8 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
   };
 
   // ONT/ODT (đất ở) mặc định thời hạn sử dụng "Lâu dài" và không cho sửa;
-  // loại đất khác bắt buộc nhập ngày hết hạn dạng dd/mm/yyyy — nếu vừa đổi
-  // từ ONT/ODT sang loại khác thì xóa "Lâu dài" cũ để buộc nhập lại ngày.
+  // loại đất khác bắt buộc nhập SỐ NĂM sử dụng — nếu vừa đổi từ ONT/ODT
+  // sang loại khác thì xóa "Lâu dài" cũ để buộc nhập lại số năm.
   const chonLoaiDat1 = (loaiDat) => {
     setDat1((prev) => ({
       ...prev,
@@ -213,6 +220,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submittingRef.current) return;
     setError("");
 
     const parcels =
@@ -305,6 +313,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       })),
     };
 
+    submittingRef.current = true;
     setStatus("submitting");
     try {
       const body = await submitHoSo(payload, fileChinh, filePhu);
@@ -321,6 +330,8 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     } catch (err) {
       setError(err.message);
       setStatus("error");
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -607,7 +618,9 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
             </div>
           </div>
           {trungThuaStatus === "checking" && <div className="notice">Đang kiểm tra trùng thửa…</div>}
-          {trungThuaStatus === "trung" && <div className="notice error">Thửa này đã được nhập rồi.</div>}
+          {trungThuaStatus === "trung" && (
+            <div className="notice error">Thửa này đã có dữ liệu GCN — không được nộp lại.</div>
+          )}
           {trungThuaStatus === "nhom12" && (
             <div className="notice error">
               Thửa này đã thuộc Nhóm 1/Nhóm 2 — coi như đã có dữ liệu từ trước, không cần nhập biểu nữa.
@@ -695,13 +708,13 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
             <label>Thời hạn sử dụng *</label>
             <input
               value={dat1.thoiHanSuDung}
-              placeholder={LOAI_DAT_LAU_DAI.has(dat1.loaiDat) ? "" : "dd/mm/yyyy"}
+              placeholder={LOAI_DAT_LAU_DAI.has(dat1.loaiDat) ? "" : "Số năm, VD: 50"}
               readOnly={LOAI_DAT_LAU_DAI.has(dat1.loaiDat)}
               onChange={(e) => setDat1({ ...dat1, thoiHanSuDung: e.target.value })}
               onBlur={() => setDat1((prev) => ({ ...prev, thoiHanSuDung: chuanHoaThoiHan(prev.thoiHanSuDung) }))}
             />
-            {!LOAI_DAT_LAU_DAI.has(dat1.loaiDat) && dat1.thoiHanSuDung && !DATE_DDMMYYYY.test(dat1.thoiHanSuDung) && (
-              <p className="nhom4FieldError">Nhập ngày hết hạn theo định dạng dd/mm/yyyy.</p>
+            {!LOAI_DAT_LAU_DAI.has(dat1.loaiDat) && dat1.thoiHanSuDung && !SO_NAM.test(dat1.thoiHanSuDung) && (
+              <p className="nhom4FieldError">Nhập thời hạn sử dụng là số năm (VD: 50).</p>
             )}
           </div>
 
@@ -757,13 +770,13 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               <label>Thời hạn sử dụng 2 *</label>
               <input
                 value={dat2.thoiHanSuDung}
-                placeholder={LOAI_DAT_LAU_DAI.has(dat2.loaiDat) ? "" : "dd/mm/yyyy"}
+                placeholder={LOAI_DAT_LAU_DAI.has(dat2.loaiDat) ? "" : "Số năm, VD: 50"}
                 readOnly={LOAI_DAT_LAU_DAI.has(dat2.loaiDat)}
                 onChange={(e) => setDat2({ ...dat2, thoiHanSuDung: e.target.value })}
                 onBlur={() => setDat2((prev) => ({ ...prev, thoiHanSuDung: chuanHoaThoiHan(prev.thoiHanSuDung) }))}
               />
-              {!LOAI_DAT_LAU_DAI.has(dat2.loaiDat) && dat2.thoiHanSuDung && !DATE_DDMMYYYY.test(dat2.thoiHanSuDung) && (
-                <p className="nhom4FieldError">Nhập ngày hết hạn theo định dạng dd/mm/yyyy.</p>
+              {!LOAI_DAT_LAU_DAI.has(dat2.loaiDat) && dat2.thoiHanSuDung && !SO_NAM.test(dat2.thoiHanSuDung) && (
+                <p className="nhom4FieldError">Nhập thời hạn sử dụng là số năm (VD: 50).</p>
               )}
             </div>
           )}

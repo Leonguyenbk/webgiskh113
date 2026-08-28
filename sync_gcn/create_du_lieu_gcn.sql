@@ -172,44 +172,17 @@ alter table public.du_lieu_gcn enable row level security;
 --   to anon, authenticated
 --   using (true);
 
--- Bảng "giữ chỗ" nguyên tử cho biểu Nhóm 4 — chặn race 2 request nộp
--- CÙNG 1 thửa gần như đồng thời (double-click, mở 2 tab, nộp lại khi
--- chưa chắc lần trước có thành công...) lọt qua kiểm tra
--- list_existing_keys() trong nhom4_service.py: kiểm tra đó đọc rồi mới
--- quyết định, KHÔNG an toàn khi 2 request chạy song song (cả 2 có thể
--- cùng đọc thấy "chưa có" trước khi request nào kịp ghi) — dẫn tới 1 bộ
--- hồ sơ bị ghi 2 lần + PDF bị đẩy lên Drive 2 lần. UNIQUE constraint +
--- xử lý trong 1 transaction Postgres (RPC dưới đây) đảm bảo chỉ 1 request
--- thắng, request còn lại nhận lỗi rõ ràng.
-create table if not exists public.nhom4_thua_da_nop (
-  khoa text primary key,
-  created_at timestamptz not null default now()
-);
-alter table public.nhom4_thua_da_nop enable row level security;
--- Không tạo policy: chỉ Service Role Key mới đọc/ghi được.
-
-create or replace function public.nhom4_claim_keys(p_keys text[])
-returns void
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare
-  v_distinct_count int;
-  v_inserted_count int;
-begin
-  select count(distinct k) into v_distinct_count from unnest(p_keys) as k;
-
-  insert into public.nhom4_thua_da_nop (khoa)
-  select distinct k from unnest(p_keys) as k
-  on conflict (khoa) do nothing;
-
-  get diagnostics v_inserted_count = row_count;
-
-  if v_inserted_count <> v_distinct_count then
-    raise exception 'Một hoặc nhiều thửa trong hồ sơ này vừa được nộp trùng lúc — vui lòng tải lại trang và kiểm tra trước khi nộp lại.';
-  end if;
-end;
-$$;
-revoke all on function public.nhom4_claim_keys(text[]) from public;
-grant execute on function public.nhom4_claim_keys(text[]) to service_role;
+-- ĐÃ BỎ cơ chế "giữ chỗ" nhom4_thua_da_nop + RPC nhom4_claim_keys.
+--
+-- Lý do: bảng khóa phụ này có thể giữ lại khóa cũ (khi insert du_lieu_gcn
+-- lỗi giữa chừng mà bước gỡ khóa best-effort không chạy được), khiến một
+-- thửa KHÔNG hề có dữ liệu trong du_lieu_gcn vẫn bị báo "đã nộp trùng".
+--
+-- Flow mới: public.du_lieu_gcn là NGUỒN DUY NHẤT xác định thửa đã có dữ
+-- liệu GCN. Backend query trực tiếp du_lieu_gcn theo khóa
+-- madvhc_soto_sothua (kể cả một lần nữa ngay trước khi INSERT), frontend
+-- khóa nút Nộp đồng bộ ngay khi bắt đầu gửi để chặn double-click. Xem
+-- backend/app/services/nhom4_service.py + nhom4_repository.filter_existing_keys().
+--
+-- Nếu database đã tồn tại bảng/RPC cũ, chạy THỦ CÔNG (không tự chạy ở
+-- runtime): sync_gcn/drop_nhom4_thua_da_nop.sql

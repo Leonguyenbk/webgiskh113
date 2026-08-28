@@ -1,3 +1,10 @@
+# Mã khôi phục 2 lớp / recovery codes — KHÔNG đẩy lên git
+recovery-codes.txt
+
+__pycache__/
+*.pyc
+.venv/
+
 backend/.env
 backend/.venv/
 backend/venv/

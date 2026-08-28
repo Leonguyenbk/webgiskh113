@@ -10,6 +10,7 @@ export const LOAI_DAT_OPTIONS = [
   "LUK",
   "BHK",
   "NHK",
+  "NTS",
   "RSX",
   "RPH",
   "SKC",

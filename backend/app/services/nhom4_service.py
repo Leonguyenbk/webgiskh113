@@ -197,24 +197,56 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
     ma_xa = payload["ma_xa"]
     parcels = payload.get("thua_list") or []
 
+    # 1) Chuẩn hóa số tờ/số thửa + tạo khóa madvhc_soto_sothua cho từng
+    #    thửa. Chặn trùng ngay trong danh sách nhập.
     seen_in_payload: set[str] = set()
+    parcel_keys: list[tuple[int, int, str]] = []
     for parcel in parcels:
         thua = parcel.get("thua") or {}
-        key = _make_key(ma_xa, _to_int(thua.get("so_to")), _to_int(thua.get("so_thua")))
+        so_to = _to_int(thua.get("so_to"))
+        so_thua = _to_int(thua.get("so_thua"))
+        if so_to is None or so_thua is None:
+            return None, (
+                jsonify(
+                    {"error": f"Số tờ/số thửa không hợp lệ: {thua.get('so_to')}/{thua.get('so_thua')}"}
+                ),
+                400,
+            )
+        key = _make_key(ma_xa, so_to, so_thua)
         if key in seen_in_payload:
             return None, (
-                jsonify({"error": f"Danh sách thửa nhập bị trùng: {thua.get('so_to')}_{thua.get('so_thua')}"}),
+                jsonify({"error": f"Danh sách thửa nhập bị trùng: thửa {so_thua}, tờ {so_to}"}),
                 400,
             )
         seen_in_payload.add(key)
+        parcel_keys.append((so_to, so_thua, key))
 
-    existing_keys, error_response = nhom4_repository.list_existing_keys(ma_xa)
+    # 2-4) public.du_lieu_gcn là NGUỒN DUY NHẤT xác định thửa đã có dữ liệu
+    #      GCN. EXISTS 1 bản ghi cùng khóa madvhc_soto_sothua => thửa đã có
+    #      dữ liệu (dù thửa đó có nhiều dòng do nhiều chủ) => không cho nộp.
+    #      KHÔNG dùng bảng khóa phụ (nhom4_thua_da_nop đã bỏ) để quyết định.
+    def _reject_existing():
+        existing, err = nhom4_repository.filter_existing_keys(list(seen_in_payload))
+        if err:
+            return err
+        for _so_to, _so_thua, _key in parcel_keys:
+            if _key in existing:
+                return (
+                    jsonify(
+                        {
+                            "error": (
+                                f"Thửa {_so_thua}, tờ {_so_to} đã có dữ liệu GCN "
+                                "và không được nộp lại."
+                            )
+                        }
+                    ),
+                    409,
+                )
+        return None
+
+    error_response = _reject_existing()
     if error_response:
         return None, error_response
-
-    for key in seen_in_payload:
-        if key in existing_keys:
-            return None, (jsonify({"error": f"Thửa này đã có dữ liệu GCN rồi: {key}"}), 409)
 
     phan_loai_by_xa, error_response = nhom4_repository.list_phan_loai_by_xa(ma_xa)
     if error_response:
@@ -238,14 +270,6 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
                 409,
             )
 
-    # Giữ chỗ nguyên tử cho các thửa sắp nộp NGAY TRƯỚC khi ghi thật —
-    # chặn race 2 request nộp cùng 1 thửa gần như đồng thời lọt qua kiểm
-    # tra list_existing_keys() ở trên (đọc-rồi-quyết, không an toàn khi
-    # chạy song song) — xem chi tiết trong nhom4_repository.claim_keys().
-    _, error_response = nhom4_repository.claim_keys(list(seen_in_payload))
-    if error_response:
-        return None, error_response
-
     first_thua = (parcels[0].get("thua") or {}) if parcels else {}
     base_name = _sanitize_filename(f"{ma_xa}_{first_thua.get('so_to')}_{first_thua.get('so_thua')}")
     che_do = payload.get("che_do") or ""
@@ -264,9 +288,15 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
     # _upload_files_background() khi upload xong.
     rows = _build_rows(payload, submission_id, {})
 
+    # Kiểm tra lại public.du_lieu_gcn NGAY TRƯỚC KHI INSERT — thu hẹp khe
+    # race khi 2 request nộp gần đồng thời cùng 1 thửa (frontend đã khóa
+    # nút Nộp, đây là lớp chặn cuối phía backend).
+    error_response = _reject_existing()
+    if error_response:
+        return None, error_response
+
     _, error_response = nhom4_repository.insert_rows(rows)
     if error_response:
-        nhom4_repository.release_keys(list(seen_in_payload))
         return None, error_response
 
     # current_app là proxy theo request/app context hiện tại — phải lấy

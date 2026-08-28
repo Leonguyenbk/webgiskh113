@@ -23,18 +23,32 @@ def _json_or_error(response, error_response):
     return response.json(), None
 
 
-def list_existing_keys(ma_xa: str) -> tuple[set[str] | None, tuple | None]:
+def filter_existing_keys(keys: list[str]) -> tuple[set[str] | None, tuple | None]:
+    """Trả về tập các khóa (madvhc_soto_sothua) ĐÃ CÓ ít nhất 1 bản ghi
+    trong public.du_lieu_gcn.
+
+    Đây là NGUỒN DUY NHẤT để xác định thửa đã có dữ liệu GCN (hiển thị màu
+    xanh trên WebGIS, chặn nộp lại biểu Nhóm 4). Chỉ cần EXISTS 1 bản ghi
+    cùng khóa là coi cả thửa đã có dữ liệu — 1 thửa có thể có nhiều dòng
+    (nhiều chủ sử dụng/đồng sử dụng), không đặt UNIQUE trên khóa này.
+
+    Query trực tiếp theo danh sách khóa cần kiểm (in.(...)) thay vì tải hết
+    khóa của cả xã — nhẹ hơn và dùng lại được ngay trước khi INSERT."""
+    unique_keys = sorted({k for k in keys if k})
+    if not unique_keys:
+        return set(), None
+
+    in_list = ",".join(f'"{k}"' for k in unique_keys)
     response, error_response = supabase_client.rest_request(
         "GET",
         GCN_TABLE,
-        params={"select": "madvhc_soto_sothua", "madvhc": f"eq.{ma_xa}"},
+        params={"select": "madvhc_soto_sothua", "madvhc_soto_sothua": f"in.({in_list})"},
     )
     rows, error_response = _json_or_error(response, error_response)
     if error_response:
         return None, error_response
 
-    keys = {row["madvhc_soto_sothua"] for row in rows if row.get("madvhc_soto_sothua")}
-    return keys, None
+    return {row["madvhc_soto_sothua"] for row in rows if row.get("madvhc_soto_sothua")}, None
 
 
 def exists_key(key: str):
@@ -95,34 +109,6 @@ def insert_rows(rows: list[dict]):
     if not response.ok:
         return None, (jsonify({"error": response.text}), response.status_code)
     return True, None
-
-
-def claim_keys(keys: list[str]):
-    """Giữ chỗ nguyên tử cho danh sách khóa (madvhc_soto_sothua) TRƯỚC KHI
-    insert_rows() — xem giải thích đầy đủ trong sync_gcn/create_du_lieu_gcn.sql
-    (bảng nhom4_thua_da_nop + RPC nhom4_claim_keys). Trả lỗi 409 nếu có
-    khóa nào đã bị request khác giữ chỗ trước (race 2 request nộp cùng lúc
-    1 thửa)."""
-    if not keys:
-        return True, None
-    _, error_response = supabase_client.call_rpc("nhom4_claim_keys", {"p_keys": keys})
-    if error_response:
-        body, _status = error_response
-        return None, (body, 409)
-    return True, None
-
-
-def release_keys(keys: list[str]) -> None:
-    """Bỏ giữ chỗ (dùng khi claim_keys() thành công nhưng insert_rows() sau
-    đó lại lỗi vì lý do khác — tránh khóa vĩnh viễn 1 thửa không có dữ liệu
-    thật nào được ghi). Best-effort, không chặn luồng nếu tự nó lỗi."""
-    if not keys:
-        return
-    supabase_client.rest_request(
-        "DELETE",
-        "nhom4_thua_da_nop",
-        params={"khoa": f"in.({','.join(keys)})"},
-    )
 
 
 def update_file_info_by_submission(submission_id: str, file_info: dict):
