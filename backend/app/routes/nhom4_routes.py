@@ -31,8 +31,9 @@ def submit_ho_so():
 
     file_chinh = request.files.get("file_chinh")
     file_phu = request.files.get("file_phu")
+    file_tbxn = request.files.get("file_tbxn")
 
-    data, error_response = nhom4_service.submit_ho_so(payload, file_chinh, file_phu)
+    data, error_response = nhom4_service.submit_ho_so(payload, file_chinh, file_phu, file_tbxn)
     if error_response:
         return error_response
     return jsonify(data)

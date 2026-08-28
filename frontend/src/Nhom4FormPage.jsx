@@ -69,6 +69,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
   const [fileChinh, setFileChinh] = useState(null);
   const [filePhu, setFilePhu] = useState(null);
+  const [fileTbxn, setFileTbxn] = useState(null);
   const [status, setStatus] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -88,6 +89,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     const soNguoi = SO_NGUOI_MAC_DINH[loaiChu] || 1;
     setOwners(Array.from({ length: soNguoi }, taoChuRong));
   }, [loaiChu]);
+
+  // "Thông báo xác nhận" chỉ có ở chế độ "Chưa được cấp GCN" — đổi sang
+  // "Đã có GCN" thì bỏ file đã chọn để không gửi kèm nhầm.
+  useEffect(() => {
+    if (cheDo === "Đã có GCN") setFileTbxn(null);
+  }, [cheDo]);
 
   // Kiểm tra trùng thửa + đã thuộc Nhóm 1/2 hay chưa — Nhóm 1/2 coi như đã
   // có dữ liệu từ trước, không cần nhập biểu Nhóm 4 nữa (giống quy ước ở
@@ -316,7 +323,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     submittingRef.current = true;
     setStatus("submitting");
     try {
-      const body = await submitHoSo(payload, fileChinh, filePhu);
+      const body = await submitHoSo(payload, fileChinh, filePhu, fileTbxn);
       setResult(body);
       setStatus("done");
       setThuaList([]);
@@ -326,6 +333,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setCoDat2(false);
       setFileChinh(null);
       setFilePhu(null);
+      setFileTbxn(null);
       setNguoiHienTai({ hoTen: "", cccd: "", diaChiThuongTru: "", lyDoThayDoi: "" });
     } catch (err) {
       setError(err.message);
@@ -825,6 +833,16 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
           <input type="file" accept="application/pdf" onChange={(e) => setFileChinh(e.target.files?.[0] || null)} />
           <label>File PDF Giấy tờ (tùy chọn)</label>
           <input type="file" accept="application/pdf" onChange={(e) => setFilePhu(e.target.files?.[0] || null)} />
+          {cheDo !== "Đã có GCN" && (
+            <>
+              <label>File PDF Thông báo xác nhận (tùy chọn)</label>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setFileTbxn(e.target.files?.[0] || null)}
+              />
+            </>
+          )}
 
           <button type="submit" className="importButton" disabled={status === "submitting"}>
             {status === "submitting" ? "Đang lưu…" : "Lưu hồ sơ"}

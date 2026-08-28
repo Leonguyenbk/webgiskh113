@@ -94,7 +94,13 @@ def _build_rows(payload: dict, submission_id: str, file_info: dict) -> list[dict
     la_to_chuc = doi_tuong == "Tổ chức"
 
     ten_file_quet = ", ".join(
-        name for name in (file_info.get("chinh_name"), file_info.get("phu_name")) if name
+        name
+        for name in (
+            file_info.get("chinh_name"),
+            file_info.get("phu_name"),
+            file_info.get("tbxn_name"),
+        )
+        if name
     )
 
     if la_to_chuc:
@@ -174,13 +180,15 @@ def _build_rows(payload: dict, submission_id: str, file_info: dict) -> list[dict
                     "file_chinh_ten_file": file_info.get("chinh_name"),
                     "file_phu_drive_id": file_info.get("phu_id"),
                     "file_phu_ten_file": file_info.get("phu_name"),
+                    "file_tbxn_drive_id": file_info.get("tbxn_id"),
+                    "file_tbxn_ten_file": file_info.get("tbxn_name"),
                 }
             )
 
     return rows
 
 
-def submit_ho_so(payload: dict, file_chinh, file_phu):
+def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
     error = validate_payload(payload)
     if error:
         return None, (jsonify({"error": error}), 400)
@@ -189,7 +197,11 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
         label = "Đơn đăng ký" if payload.get("che_do") != "Đã có GCN" else "Giấy chứng nhận"
         return None, (jsonify({"error": f"Vui lòng chọn file PDF {label}."}), 400)
 
-    for storage, label in ((file_chinh, "File chính"), (file_phu, "Giấy tờ")):
+    for storage, label in (
+        (file_chinh, "File chính"),
+        (file_phu, "Giấy tờ"),
+        (file_tbxn, "Thông báo xác nhận"),
+    ):
         pdf_error = _validate_pdf(storage, label)
         if pdf_error:
             return None, (jsonify({"error": pdf_error}), 400)
@@ -280,6 +292,13 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
     # thread nền phía dưới dùng lại được bình thường.
     chinh_bytes = file_chinh.read()
     phu_bytes = file_phu.read() if (file_phu and file_phu.filename) else None
+    # Thông báo xác nhận (-TBXN) chỉ dùng ở chế độ "Chưa được cấp GCN" và
+    # luôn là tùy chọn — không có thì bỏ qua, không chặn nộp.
+    tbxn_bytes = (
+        file_tbxn.read()
+        if (file_tbxn and file_tbxn.filename and che_do != "Đã có GCN")
+        else None
+    )
 
     submission_id = str(uuid.uuid4())
     # file_info để trống lúc ghi — không chờ Drive để trả lời người nộp
@@ -306,7 +325,10 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
     app = current_app._get_current_object()
     threading.Thread(
         target=_upload_files_background,
-        args=(app, ma_xa, payload.get("ten_xa"), base_name, chinh_suffix, chinh_bytes, phu_bytes, submission_id),
+        args=(
+            app, ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
+            chinh_bytes, phu_bytes, tbxn_bytes, submission_id,
+        ),
         daemon=True,
     ).start()
 
@@ -320,7 +342,8 @@ def submit_ho_so(payload: dict, file_chinh, file_phu):
 
 def _upload_files_background(
     app, ma_xa: str, ten_xa, base_name: str, chinh_suffix: str,
-    chinh_bytes: bytes, phu_bytes: bytes | None, submission_id: str,
+    chinh_bytes: bytes, phu_bytes: bytes | None, tbxn_bytes: bytes | None,
+    submission_id: str,
 ) -> None:
     with app.app_context():
         file_info: dict = {}
@@ -336,6 +359,11 @@ def _upload_files_background(
                 uploaded_phu = google_drive_client.upload_pdf(folder_id, f"{base_name}-GT.pdf", phu_bytes)
                 file_info["phu_id"] = uploaded_phu["id"]
                 file_info["phu_name"] = uploaded_phu["name"]
+
+            if tbxn_bytes:
+                uploaded_tbxn = google_drive_client.upload_pdf(folder_id, f"{base_name}-TBXN.pdf", tbxn_bytes)
+                file_info["tbxn_id"] = uploaded_tbxn["id"]
+                file_info["tbxn_name"] = uploaded_tbxn["name"]
         except Exception:
             current_app.logger.exception(
                 "Upload Drive nền cho submission %s thất bại — dòng đã lưu nhưng thiếu file quét.",

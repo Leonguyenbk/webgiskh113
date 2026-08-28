@@ -143,6 +143,14 @@ alter table public.du_lieu_gcn
 alter table public.du_lieu_gcn
   add column if not exists file_phu_ten_file text;
 
+-- File "Thông báo xác nhận" (-TBXN.pdf) — chỉ dùng ở chế độ "Chưa được
+-- cấp GCN", luôn tùy chọn (xem backend/app/services/nhom4_service.py).
+alter table public.du_lieu_gcn
+  add column if not exists file_tbxn_drive_id text;
+
+alter table public.du_lieu_gcn
+  add column if not exists file_tbxn_ten_file text;
+
 create index if not exists idx_du_lieu_gcn_ma_nguon
   on public.du_lieu_gcn (ma_nguon);
 

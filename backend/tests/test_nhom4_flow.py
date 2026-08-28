@@ -259,6 +259,124 @@ class Nhom4FlowTest(unittest.TestCase):
         self.assertNotRegex(main_src, r"NHOM4_FORM")
 
 
+class FakeDrive:
+    """google_drive_client giả: ghi lại các lần upload_pdf để kiểm tên file."""
+
+    def __init__(self):
+        self.uploads: list[tuple[str, bytes]] = []
+
+    def resolve_xa_folder(self, ma_xa, ten_xa):
+        return "folder-123"
+
+    def upload_pdf(self, folder_id, filename, content):
+        self.uploads.append((filename, content))
+        return {"id": f"id-{filename}", "name": filename}
+
+
+class Nhom4FileUploadTest(unittest.TestCase):
+    """Đặt tên file quét trên Drive: -DDK/-GCN (file chính), -GT (giấy tờ),
+    -TBXN (thông báo xác nhận, chỉ chế độ "Chưa được cấp GCN", tùy chọn)."""
+
+    class _FakeResp:
+        ok = True
+        text = ""
+
+    def setUp(self):
+        self.app = Flask(__name__)
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+
+        self.drive = FakeDrive()
+        self._orig_drive = nhom4_service.google_drive_client
+        nhom4_service.google_drive_client = self.drive
+
+        # Bắt patch THẬT mà nhom4_repository.update_file_info_by_submission
+        # dựng (gồm cả ánh xạ cột file_tbxn_* + ghép tenfilequet).
+        self.patches: list[dict] = []
+        self._orig_rest = nhom4_repository.supabase_client.rest_request
+
+        def fake_rest(method, table, params=None, json_body=None, extra_headers=None):
+            self.patches.append(json_body)
+            return self._FakeResp(), None
+
+        nhom4_repository.supabase_client.rest_request = fake_rest
+
+    def tearDown(self):
+        nhom4_service.google_drive_client = self._orig_drive
+        nhom4_repository.supabase_client.rest_request = self._orig_rest
+        self.ctx.pop()
+
+    def _run(self, tbxn_bytes):
+        nhom4_service._upload_files_background(
+            self.app, "26317", "Xa Test", "26317_10_200", "DDK",
+            b"chinh", b"phu", tbxn_bytes, "sub-1",
+        )
+
+    def test_tbxn_uploaded_with_suffix(self):
+        self._run(b"tbxn-body")
+        names = [name for name, _ in self.drive.uploads]
+        self.assertEqual(
+            names, ["26317_10_200-DDK.pdf", "26317_10_200-GT.pdf", "26317_10_200-TBXN.pdf"]
+        )
+        self.assertEqual(self.patches[0]["file_tbxn_drive_id"], "id-26317_10_200-TBXN.pdf")
+        self.assertEqual(self.patches[0]["file_tbxn_ten_file"], "26317_10_200-TBXN.pdf")
+        self.assertIn("26317_10_200-TBXN.pdf", self.patches[0]["tenfilequet"])
+
+    def test_no_tbxn_skips_upload(self):
+        self._run(None)
+        names = [name for name, _ in self.drive.uploads]
+        self.assertEqual(names, ["26317_10_200-DDK.pdf", "26317_10_200-GT.pdf"])
+        self.assertIsNone(self.patches[0]["file_tbxn_drive_id"])
+        self.assertNotIn("TBXN", self.patches[0]["tenfilequet"])
+
+
+class Nhom4SubmitTbxnTest(unittest.TestCase):
+    """submit_ho_so nhận file_tbxn (tùy chọn) mà không phá luồng cũ."""
+
+    def setUp(self):
+        self.app = Flask(__name__)
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        self.store = FakeDuLieuGcn()
+        self._orig = {}
+        for name, fn in {
+            "filter_existing_keys": self.store.filter_existing_keys,
+            "insert_rows": self.store.insert_rows,
+        }.items():
+            self._orig[name] = getattr(nhom4_repository, name)
+            setattr(nhom4_repository, name, fn)
+        self._orig["list_phan_loai_by_xa"] = nhom4_repository.list_phan_loai_by_xa
+        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa: ({}, None)
+        self._orig_bg = nhom4_service._upload_files_background
+        self.bg_calls: list[tuple] = []
+        nhom4_service._upload_files_background = lambda *a, **k: self.bg_calls.append(a)
+
+    def tearDown(self):
+        for name, fn in self._orig.items():
+            setattr(nhom4_repository, name, fn)
+        nhom4_service._upload_files_background = self._orig_bg
+        self.ctx.pop()
+
+    def test_submit_with_tbxn_ok_and_bytes_forwarded(self):
+        data, err = nhom4_service.submit_ho_so(
+            build_payload(), FakePdf("chinh.pdf"), None, FakePdf("tbxn.pdf")
+        )
+        self.assertIsNone(err, err)
+        self.assertTrue(data["ok"])
+        # tham số thứ 8 của _upload_files_background là tbxn_bytes.
+        self.assertEqual(self.bg_calls[0][7], b"%PDF-1.4 fake body")
+
+    def test_tbxn_ignored_when_da_co_gcn(self):
+        payload = build_payload()
+        payload["che_do"] = "Đã có GCN"
+        payload["gcn"] = {"so_phat_hanh": "1234567890", "ngay_cap": "01/01/2020", "so_vao_so": "1"}
+        data, err = nhom4_service.submit_ho_so(
+            payload, FakePdf("gcn.pdf"), None, FakePdf("tbxn.pdf")
+        )
+        self.assertIsNone(err, err)
+        self.assertIsNone(self.bg_calls[0][7])  # tbxn_bytes = None
+
+
 class ThoiHanSoNamTest(unittest.TestCase):
     """Thời hạn sử dụng nhập bằng SỐ NĂM, không còn dd/mm/yyyy. Thêm NTS."""
 
