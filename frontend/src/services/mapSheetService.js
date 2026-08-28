@@ -54,11 +54,3 @@ export function searchBanDoNen({ maXa, soTo } = {}, { signal } = {}) {
   });
 }
 
-// Danh sách xã đang có tờ bản đồ nền (ready) — đổ vào dropdown "Tìm bản
-// đồ nền theo xã" trên bản đồ chính. Trả { items: [{ma_xa, ten_xa, so_luong}] }.
-export function listBanDoNenXa({ signal } = {}) {
-  return request("/api/ban-do-nen/xa-list", {
-    signal,
-    errorFallback: "Không tải được danh sách xã có bản đồ nền",
-  });
-}

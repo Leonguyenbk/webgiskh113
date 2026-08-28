@@ -997,26 +997,4 @@ $$;
 revoke all on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) from public;
 grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) to service_role;
 
--- Danh sách xã/phường ĐANG CÓ tờ bản đồ nền (ready + kich_hoat) — đổ vào
--- dropdown "Tìm bản đồ nền theo xã" trên bản đồ chính. Kèm tên xã
--- (danhsachxaphuong) và số tờ để người dùng biết chọn xã nào.
-create or replace function public.list_ban_do_nen_xa()
-returns table (ma_xa text, ten_xa text, so_luong bigint)
-language sql
-stable
-security definer
-set search_path = public, extensions
-as $$
-    select b.ma_xa,
-           coalesce(x.ten_xa, b.ma_xa) as ten_xa,
-           count(*) as so_luong
-    from public.ban_do_nen b
-    left join public.danhsachxaphuong x on x.ma_xa = b.ma_xa
-    where b.trang_thai = 'ready' and b.kich_hoat
-    group by b.ma_xa, x.ten_xa
-    order by ten_xa;
-$$;
-
-revoke all on function public.list_ban_do_nen_xa() from public;
-grant execute on function public.list_ban_do_nen_xa() to service_role;
 

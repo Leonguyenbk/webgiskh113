@@ -135,10 +135,3 @@ def search(ma_xa: str, so_to=None):
     if error_response:
         return None, error_response
     return result, None
-
-
-def list_xa():
-    result, error_response = ban_do_nen_repository.list_xa()
-    if error_response:
-        return None, error_response
-    return {"items": result or []}, None

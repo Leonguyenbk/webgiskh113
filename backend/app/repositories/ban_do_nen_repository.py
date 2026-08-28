@@ -74,9 +74,5 @@ def search(ma_xa: str, so_to=None):
     )
 
 
-def list_xa():
-    return supabase_client.call_rpc("list_ban_do_nen_xa", {}, timeout=15)
-
-
 def register(payload: dict):
     return supabase_client.call_rpc("register_ban_do_nen", payload, timeout=20)
