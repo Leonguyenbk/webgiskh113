@@ -137,10 +137,8 @@ def search(ma_xa: str, so_to=None):
     return result, None
 
 
-def get_in_xa(ma_xa: str):
-    if not ma_xa:
-        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
-    result, error_response = ban_do_nen_repository.get_in_xa(ma_xa)
+def list_xa():
+    result, error_response = ban_do_nen_repository.list_xa()
     if error_response:
         return None, error_response
-    return result, None
+    return {"items": result or []}, None

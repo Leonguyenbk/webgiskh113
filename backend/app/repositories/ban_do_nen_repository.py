@@ -74,10 +74,8 @@ def search(ma_xa: str, so_to=None):
     )
 
 
-def get_in_xa(ma_xa: str):
-    return supabase_client.call_rpc(
-        "get_ban_do_nen_in_xa", {"p_ma_xa": ma_xa}, timeout=20
-    )
+def list_xa():
+    return supabase_client.call_rpc("list_ban_do_nen_xa", {}, timeout=15)
 
 
 def register(payload: dict):

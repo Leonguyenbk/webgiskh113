@@ -31,7 +31,7 @@ import MapSheetTilesLoader from "./components/map/MapSheetTilesLoader";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
 import { getXaList } from "./services/parcelService";
 import { getRanhGioiThon } from "./services/ranhThonService";
-import { getBanDoNenInXa } from "./services/mapSheetService";
+import { listBanDoNenXa, searchBanDoNen } from "./services/mapSheetService";
 import {
   GCN_COLOR,
   GCN_LABEL,
@@ -143,26 +143,40 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [banDoNenSheets, setBanDoNenSheets] = useState([]);
   const [banDoNenOpacity, setBanDoNenOpacity] = useState(0.75);
   const [banDoNenSearchError, setBanDoNenSearchError] = useState("");
-  // Khi khác rỗng: lớp "Bản đồ địa chính" bị ghim vào các tờ trong vùng xã
-  // này (không tự tải theo khung nhìn nữa). banDoNenPinnedSheets giữ TRỌN
+  // Dropdown riêng "Tìm bản đồ nền theo xã" — độc lập với ô tra cứu thửa
+  // đất. Danh sách chỉ gồm xã đang CÓ tờ bản đồ nền.
+  const [banDoNenXaOptions, setBanDoNenXaOptions] = useState([]);
+  const [banDoNenXaChoice, setBanDoNenXaChoice] = useState("");
+  // Khi khác rỗng: lớp "Bản đồ địa chính" bị ghim vào các tờ của xã này
+  // (không tự tải theo khung nhìn nữa). banDoNenPinnedSheets giữ TRỌN
   // danh sách tờ của xã; MapSheetTilesLoader lọc lại theo khung nhìn trước
   // khi vẽ để không mount hàng chục TileLayer cùng lúc.
   const [banDoNenFilterMaXa, setBanDoNenFilterMaXa] = useState("");
   const [banDoNenPinnedSheets, setBanDoNenPinnedSheets] = useState([]);
   const [banDoNenLayerOn, setBanDoNenLayerOn] = useState(false);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    listBanDoNenXa({ signal: controller.signal })
+      .then((result) => setBanDoNenXaOptions(result?.items || []))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
   const handleFilterBanDoNen = useCallback(async () => {
-    if (!maXa) return;
+    if (!banDoNenXaChoice) return;
     setBanDoNenSearchError("");
     try {
-      const result = await getBanDoNenInXa(maXa);
-      const features = (result?.features || []).filter((f) => f.properties?.tile_url);
+      const result = await searchBanDoNen({ maXa: banDoNenXaChoice });
+      const features = (result?.features || []).filter(
+        (f) => f.properties?.trang_thai === "ready" && f.properties?.tile_url,
+      );
       if (features.length === 0) {
-        setBanDoNenSearchError("Không có tờ bản đồ nền (đã sẵn sàng) trong vùng xã này.");
+        setBanDoNenSearchError("Xã này chưa có tờ bản đồ nền sẵn sàng.");
         return;
       }
       setBanDoNenPinnedSheets(features);
-      setBanDoNenFilterMaXa(maXa);
+      setBanDoNenFilterMaXa(banDoNenXaChoice);
       if (mapInstance) {
         const bounds = L.geoJSON({ type: "FeatureCollection", features }).getBounds();
         if (bounds.isValid()) mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
@@ -170,7 +184,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     } catch (fetchError) {
       setBanDoNenSearchError(fetchError.message);
     }
-  }, [maXa, mapInstance]);
+  }, [banDoNenXaChoice, mapInstance]);
 
   const handleClearBanDoNenFilter = useCallback(() => {
     setBanDoNenFilterMaXa("");
@@ -178,13 +192,6 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     setBanDoNenSheets([]);
     setBanDoNenSearchError("");
   }, []);
-
-  // Đổi xã tra cứu mà đang ghim lớp nền theo xã cũ thì bỏ ghim cho khỏi lệch.
-  useEffect(() => {
-    if (banDoNenFilterMaXa && banDoNenFilterMaXa !== maXa) {
-      handleClearBanDoNenFilter();
-    }
-  }, [maXa, banDoNenFilterMaXa, handleClearBanDoNenFilter]);
 
   // Đánh dấu lần tìm gần nhất là bấm nút "Tìm thửa quanh đây" (theo khung
   // nhìn bản đồ), để phân biệt với tra cứu theo mã xã / định vị GPS.
@@ -626,14 +633,45 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   Tra cứu
                 </button>
 
+                {hasActiveQuery && (
+                  <button
+                    type="button"
+                    className="resetButton"
+                    onClick={handleResetFilters}
+                  >
+                    Xóa lọc
+                  </button>
+                )}
+              </div>
+
+              <div className="filterDivider">
+                <span>bản đồ nền</span>
+              </div>
+
+              <label htmlFor="banDoNenXa">Xã / phường có bản đồ nền</label>
+              <select
+                id="banDoNenXa"
+                className="filterInput"
+                value={banDoNenXaChoice}
+                onChange={(event) => setBanDoNenXaChoice(event.target.value)}
+              >
+                <option value="">-- Chọn xã --</option>
+                {banDoNenXaOptions.map(({ ma_xa, ten_xa, so_luong }) => (
+                  <option key={ma_xa} value={ma_xa}>
+                    {ten_xa} ({so_luong} tờ)
+                  </option>
+                ))}
+              </select>
+
+              <div className="filterActions">
                 <button
                   type="button"
-                  className="resetButton"
+                  className="searchButton"
                   onClick={handleFilterBanDoNen}
-                  disabled={!maXa}
-                  title="Lọc lớp bản đồ nền theo xã đang chọn và phóng tới khu vực"
+                  disabled={!banDoNenXaChoice}
+                  title="Nạp các tờ bản đồ nền của xã và phóng tới khu vực"
                 >
-                  Lọc bản đồ nền theo xã
+                  Tìm bản đồ nền
                 </button>
 
                 {banDoNenFilterMaXa && (
@@ -646,17 +684,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                     Bỏ lọc bản đồ nền
                   </button>
                 )}
-
-                {hasActiveQuery && (
-                  <button
-                    type="button"
-                    className="resetButton"
-                    onClick={handleResetFilters}
-                  >
-                    Xóa lọc
-                  </button>
-                )}
               </div>
+
+              {banDoNenXaOptions.length === 0 && (
+                <div className="nearMeHint">Chưa có xã nào có bản đồ nền.</div>
+              )}
 
               {banDoNenSearchError && (
                 <div className="notice error">{banDoNenSearchError}</div>
@@ -665,8 +697,9 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               {banDoNenFilterMaXa && !banDoNenLayerOn && (
                 <div className="notice">
                   Đã lọc bản đồ nền theo xã{" "}
-                  {xaNameByCode[banDoNenFilterMaXa] || banDoNenFilterMaXa}. Bật lớp
-                  “Bản đồ địa chính” (góc phải bản đồ) để xem.
+                  {banDoNenXaOptions.find((o) => o.ma_xa === banDoNenFilterMaXa)?.ten_xa ||
+                    banDoNenFilterMaXa}
+                  . Bật lớp “Bản đồ địa chính” (góc phải bản đồ) để xem.
                 </div>
               )}
             </>

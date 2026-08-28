@@ -54,13 +54,11 @@ export function searchBanDoNen({ maXa, soTo } = {}, { signal } = {}) {
   });
 }
 
-// Tờ bản đồ nền nằm trong vùng (bbox thửa đất) của 1 xã — dùng cho bộ lọc
-// "Lọc bản đồ nền theo xã" trên bản đồ chính. Không dựa vào cột ma_xa của
-// ban_do_nen nên bắt được cả tờ gắn sai/thiếu mã xã.
-export function getBanDoNenInXa(maXa, { signal } = {}) {
-  return request("/api/ban-do-nen/in-xa", {
-    params: { ma_xa: maXa },
+// Danh sách xã đang có tờ bản đồ nền (ready) — đổ vào dropdown "Tìm bản
+// đồ nền theo xã" trên bản đồ chính. Trả { items: [{ma_xa, ten_xa, so_luong}] }.
+export function listBanDoNenXa({ signal } = {}) {
+  return request("/api/ban-do-nen/xa-list", {
     signal,
-    errorFallback: "Không tải được bản đồ nền của xã",
+    errorFallback: "Không tải được danh sách xã có bản đồ nền",
   });
 }
