@@ -143,8 +143,9 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [banDoNenSheets, setBanDoNenSheets] = useState([]);
   const [banDoNenOpacity, setBanDoNenOpacity] = useState(0.75);
   const [banDoNenSearchError, setBanDoNenSearchError] = useState("");
-  // Dropdown riêng "Tìm bản đồ nền theo xã" — độc lập với ô tra cứu thửa
-  // đất. Danh sách chỉ gồm xã đang CÓ tờ bản đồ nền.
+  // Dropdown "Tìm bản đồ nền theo xã": danh sách xã đang CÓ tờ bản đồ nền,
+  // và LỌC theo xã đã chọn ở ô "Xã / phường" phía trên (chưa chọn thì
+  // hiện tất cả).
   const [banDoNenXaOptions, setBanDoNenXaOptions] = useState([]);
   const [banDoNenXaChoice, setBanDoNenXaChoice] = useState("");
   // Khi khác rỗng: lớp "Bản đồ địa chính" bị ghim vào các tờ của xã này
@@ -162,6 +163,24 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
       .catch(() => {});
     return () => controller.abort();
   }, []);
+
+  // Đã chọn xã ở ô chính -> dropdown bản đồ nền chỉ còn xã đó (nếu xã đó
+  // có bản đồ nền). Chưa chọn -> hiện tất cả xã có bản đồ nền.
+  const visibleBanDoNenXaOptions = useMemo(() => {
+    if (!maXa) return banDoNenXaOptions;
+    return banDoNenXaOptions.filter((option) => option.ma_xa === maXa);
+  }, [banDoNenXaOptions, maXa]);
+
+  // Đồng bộ lựa chọn dropdown với xã ô chính: có thì tự chọn luôn, không
+  // thì giữ lựa chọn cũ nếu vẫn hợp lệ.
+  useEffect(() => {
+    setBanDoNenXaChoice((prev) => {
+      if (maXa) {
+        return banDoNenXaOptions.some((option) => option.ma_xa === maXa) ? maXa : "";
+      }
+      return banDoNenXaOptions.some((option) => option.ma_xa === prev) ? prev : "";
+    });
+  }, [maXa, banDoNenXaOptions]);
 
   const handleFilterBanDoNen = useCallback(async () => {
     if (!banDoNenXaChoice) return;
@@ -654,9 +673,10 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 className="filterInput"
                 value={banDoNenXaChoice}
                 onChange={(event) => setBanDoNenXaChoice(event.target.value)}
+                disabled={visibleBanDoNenXaOptions.length === 0}
               >
                 <option value="">-- Chọn xã --</option>
-                {banDoNenXaOptions.map(({ ma_xa, ten_xa, so_luong }) => (
+                {visibleBanDoNenXaOptions.map(({ ma_xa, ten_xa, so_luong }) => (
                   <option key={ma_xa} value={ma_xa}>
                     {ten_xa} ({so_luong} tờ)
                   </option>
@@ -686,8 +706,12 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 )}
               </div>
 
-              {banDoNenXaOptions.length === 0 && (
-                <div className="nearMeHint">Chưa có xã nào có bản đồ nền.</div>
+              {visibleBanDoNenXaOptions.length === 0 && (
+                <div className="nearMeHint">
+                  {banDoNenXaOptions.length === 0
+                    ? "Chưa có xã nào có bản đồ nền."
+                    : "Xã đang chọn chưa có bản đồ nền — bỏ chọn xã ở trên để xem các xã khác."}
+                </div>
               )}
 
               {banDoNenSearchError && (
