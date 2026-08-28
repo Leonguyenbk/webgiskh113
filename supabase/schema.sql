@@ -997,3 +997,61 @@ $$;
 revoke all on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) from public;
 grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) to service_role;
 
+-- Lấy tờ bản đồ nền nằm trong VÙNG của một xã (không dựa vào cột
+-- ban_do_nen.ma_xa — cột đó do Tool desktop gắn khi đăng ký, có thể sai
+-- hoặc thiếu). Vùng xã suy từ bbox toàn bộ thửa đất của xã đó
+-- (thua_dat.ma_xa có index), rồi lấy các tờ bản đồ nền giao bbox ấy —
+-- giống get_ban_do_nen_in_view nhưng envelope là của xã thay vì khung
+-- nhìn. Chỉ trả tờ đã 'ready' và đang kich_hoat. Xã không có thửa nào
+-- (hoặc mã sai) => FeatureCollection rỗng.
+create or replace function public.get_ban_do_nen_in_xa(p_ma_xa text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    with bounds as (
+        select ST_Extent(t.geom) as bbox
+        from public.thua_dat t
+        where t.ma_xa = p_ma_xa
+    ),
+    env as (
+        select ST_MakeEnvelope(
+            ST_XMin(bbox), ST_YMin(bbox), ST_XMax(bbox), ST_YMax(bbox), 4326
+        ) as g
+        from bounds
+        where bbox is not null
+    )
+    select jsonb_build_object(
+        'type', 'FeatureCollection',
+        'features', coalesce(jsonb_agg(feature), '[]'::jsonb)
+    )
+    from (
+        select jsonb_build_object(
+            'type', 'Feature',
+            'id', b.id,
+            'geometry', ST_AsGeoJSON(b.geom)::jsonb,
+            'properties', jsonb_build_object(
+                'id', b.id,
+                'ma_xa', b.ma_xa,
+                'so_to', b.so_to,
+                'tile_url', b.tile_url,
+                'tile_version', b.tile_version,
+                'min_zoom', b.min_zoom,
+                'max_zoom', b.max_zoom,
+                'trang_thai', b.trang_thai,
+                'updated_at', b.updated_at
+            )
+        ) as feature
+        from public.ban_do_nen b
+        join env on b.geom && env.g
+        where b.trang_thai = 'ready'
+          and b.kich_hoat
+        order by b.so_to
+    ) features;
+$$;
+
+revoke all on function public.get_ban_do_nen_in_xa(text) from public;
+grant execute on function public.get_ban_do_nen_in_xa(text) to service_role;
+

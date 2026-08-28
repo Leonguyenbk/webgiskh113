@@ -31,7 +31,7 @@ import MapSheetTilesLoader from "./components/map/MapSheetTilesLoader";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
 import { getXaList } from "./services/parcelService";
 import { getRanhGioiThon } from "./services/ranhThonService";
-import { searchBanDoNen } from "./services/mapSheetService";
+import { getBanDoNenInXa } from "./services/mapSheetService";
 import {
   GCN_COLOR,
   GCN_LABEL,
@@ -143,26 +143,25 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [banDoNenSheets, setBanDoNenSheets] = useState([]);
   const [banDoNenOpacity, setBanDoNenOpacity] = useState(0.75);
   const [banDoNenSearchError, setBanDoNenSearchError] = useState("");
-  // Khi khác rỗng: lớp "Bản đồ địa chính" bị ghim vào đúng tờ của xã này
-  // (không tự tải theo khung nhìn nữa). banDoNenLayerOn: lớp overlay đang bật?
+  // Khi khác rỗng: lớp "Bản đồ địa chính" bị ghim vào các tờ trong vùng xã
+  // này (không tự tải theo khung nhìn nữa). banDoNenPinnedSheets giữ TRỌN
+  // danh sách tờ của xã; MapSheetTilesLoader lọc lại theo khung nhìn trước
+  // khi vẽ để không mount hàng chục TileLayer cùng lúc.
   const [banDoNenFilterMaXa, setBanDoNenFilterMaXa] = useState("");
+  const [banDoNenPinnedSheets, setBanDoNenPinnedSheets] = useState([]);
   const [banDoNenLayerOn, setBanDoNenLayerOn] = useState(false);
 
   const handleFilterBanDoNen = useCallback(async () => {
     if (!maXa) return;
     setBanDoNenSearchError("");
     try {
-      const result = await searchBanDoNen({ maXa, soTo: soTo.trim() || undefined });
-      const features = (result?.features || []).filter(
-        (f) => f.properties?.trang_thai === "ready" && f.properties?.tile_url,
-      );
+      const result = await getBanDoNenInXa(maXa);
+      const features = (result?.features || []).filter((f) => f.properties?.tile_url);
       if (features.length === 0) {
-        setBanDoNenSearchError(
-          "Không có tờ bản đồ nền (đã sẵn sàng) cho xã/số tờ này.",
-        );
+        setBanDoNenSearchError("Không có tờ bản đồ nền (đã sẵn sàng) trong vùng xã này.");
         return;
       }
-      setBanDoNenSheets(features);
+      setBanDoNenPinnedSheets(features);
       setBanDoNenFilterMaXa(maXa);
       if (mapInstance) {
         const bounds = L.geoJSON({ type: "FeatureCollection", features }).getBounds();
@@ -171,10 +170,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     } catch (fetchError) {
       setBanDoNenSearchError(fetchError.message);
     }
-  }, [maXa, soTo, mapInstance]);
+  }, [maXa, mapInstance]);
 
   const handleClearBanDoNenFilter = useCallback(() => {
     setBanDoNenFilterMaXa("");
+    setBanDoNenPinnedSheets([]);
     setBanDoNenSheets([]);
     setBanDoNenSearchError("");
   }, []);
@@ -820,6 +820,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             <MapSheetTilesLoader
               onData={setBanDoNenSheets}
               filterMaXa={banDoNenFilterMaXa}
+              pinnedSheets={banDoNenPinnedSheets}
               onEnabledChange={setBanDoNenLayerOn}
             />
 

@@ -1,10 +1,15 @@
 import { useEffect, useRef } from "react";
 
+import L from "leaflet";
 import { useMap, useMapEvents } from "react-leaflet";
 
 import { getBanDoNenInView } from "../../services/mapSheetService";
 
 const DEBOUNCE_MS = 400;
+
+// Nới khung nhìn 25% khi lọc tờ ghim theo xã — tờ nằm sát mép vẫn được
+// mount trước để kéo bản đồ 1 chút là thấy ngay, không giật.
+const VIEWPORT_PAD = 0.25;
 
 // Phải khớp CHÍNH XÁC name="..." của LayersControl.Overlay bọc lớp này
 // trong App.jsx — Leaflet phát sự kiện overlayadd/overlayremove kèm đúng
@@ -23,20 +28,46 @@ const OVERLAY_NAME = "Bản đồ địa chính";
 // cả với người chưa từng bật lớp này, tạo request bbox thừa trên mọi lần
 // pan/zoom cho MỌI khách xem bản đồ (đã thấy thực tế qua log truy cập từ
 // điện thoại) — không cần thiết và tốn tài nguyên Supabase vô ích.
-export default function MapSheetTilesLoader({ onData, filterMaXa = "", onEnabledChange }) {
+//
+// Chế độ lọc theo xã (filterMaXa khác rỗng): KHÔNG gọi API theo khung
+// nhìn nữa. App đưa TRỌN danh sách tờ của xã qua pinnedSheets; loader chỉ
+// lọc lại các tờ giao khung nhìn hiện tại (rẻ, tính client) rồi trả về
+// onData — tránh mount hàng chục <TileLayer> cùng lúc khi xã có nhiều tờ.
+export default function MapSheetTilesLoader({
+  onData,
+  filterMaXa = "",
+  pinnedSheets = [],
+  onEnabledChange,
+}) {
   const map = useMap();
   const timerRef = useRef(null);
   const abortRef = useRef(null);
   const enabledRef = useRef(false);
-  // filterMaXa qua ref để các handler đăng ký 1 lần trong useMapEvents luôn
-  // đọc được giá trị mới nhất.
+  // filterMaXa / pinnedSheets qua ref để các handler đăng ký 1 lần trong
+  // useMapEvents luôn đọc được giá trị mới nhất.
   const filterRef = useRef(filterMaXa);
   filterRef.current = filterMaXa;
+  const pinnedRef = useRef(pinnedSheets);
+  pinnedRef.current = pinnedSheets;
+
+  // Lọc danh sách tờ ghim còn các tờ giao khung nhìn (đã nới 25%).
+  const emitViewportCull = () => {
+    if (!enabledRef.current || !filterRef.current) return;
+    const view = map.getBounds().pad(VIEWPORT_PAD);
+    const visible = pinnedRef.current.filter((feature) => {
+      try {
+        return L.geoJSON(feature).getBounds().intersects(view);
+      } catch {
+        return true;
+      }
+    });
+    onData(visible);
+  };
 
   const load = () => {
     if (!enabledRef.current) return;
-    // Đang lọc theo xã: danh sách tờ do App tự nạp + ghim (searchBanDoNen),
-    // loader không đụng vào để pan/zoom không ghi đè.
+    // Đang lọc theo xã: danh sách tờ do App ghim, lọc theo khung nhìn ở
+    // emitViewportCull — không gọi API viewport.
     if (filterRef.current) return;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -59,7 +90,11 @@ export default function MapSheetTilesLoader({ onData, filterMaXa = "", onEnabled
   };
 
   const scheduleLoad = () => {
-    if (!enabledRef.current || filterRef.current) return;
+    if (!enabledRef.current) return;
+    if (filterRef.current) {
+      emitViewportCull();
+      return;
+    }
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(load, DEBOUNCE_MS);
   };
@@ -71,8 +106,8 @@ export default function MapSheetTilesLoader({ onData, filterMaXa = "", onEnabled
       if (event.name !== OVERLAY_NAME) return;
       enabledRef.current = true;
       onEnabledChange?.(true);
-      // Khi đang lọc theo xã, App đã giữ sẵn danh sách tờ — chỉ cần render.
-      if (!filterRef.current) load();
+      if (filterRef.current) emitViewportCull();
+      else load();
     },
     overlayremove: (event) => {
       if (event.name !== OVERLAY_NAME) return;
@@ -85,14 +120,17 @@ export default function MapSheetTilesLoader({ onData, filterMaXa = "", onEnabled
     },
   });
 
-  // Vào/ra chế độ lọc theo xã: huỷ request viewport đang chờ; khi bỏ lọc mà
-  // lớp vẫn đang bật thì nạp lại danh sách theo khung nhìn.
+  // Vào/ra chế độ lọc, hoặc danh sách tờ ghim đổi: huỷ request viewport
+  // đang chờ; lọc lại theo khung nhìn (chế độ lọc) hoặc nạp lại theo khung
+  // nhìn (đã bỏ lọc) khi lớp đang bật.
   useEffect(() => {
     window.clearTimeout(timerRef.current);
     abortRef.current?.abort();
-    if (!filterMaXa && enabledRef.current) load();
+    if (!enabledRef.current) return;
+    if (filterMaXa) emitViewportCull();
+    else load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterMaXa]);
+  }, [filterMaXa, pinnedSheets]);
 
   useEffect(() => {
     // Pane riêng cho raster bản đồ nền — Leaflet mặc định dồn MỌI

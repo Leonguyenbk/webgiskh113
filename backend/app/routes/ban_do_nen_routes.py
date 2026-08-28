@@ -32,6 +32,15 @@ def get_ban_do_nen_in_view():
     return jsonify(data)
 
 
+@ban_do_nen_bp.get("/api/ban-do-nen/in-xa")
+def get_ban_do_nen_in_xa():
+    ma_xa = request.args.get("ma_xa", "").strip()
+    data, error_response = ban_do_nen_service.get_in_xa(ma_xa)
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @ban_do_nen_bp.get("/api/ban-do-nen/search")
 def search_ban_do_nen():
     ma_xa = request.args.get("ma_xa", "").strip()
