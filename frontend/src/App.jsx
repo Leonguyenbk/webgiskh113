@@ -143,17 +143,27 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [banDoNenSheets, setBanDoNenSheets] = useState([]);
   const [banDoNenOpacity, setBanDoNenOpacity] = useState(0.75);
   const [banDoNenSearchError, setBanDoNenSearchError] = useState("");
+  // Khi khác rỗng: lớp "Bản đồ địa chính" bị ghim vào đúng tờ của xã này
+  // (không tự tải theo khung nhìn nữa). banDoNenLayerOn: lớp overlay đang bật?
+  const [banDoNenFilterMaXa, setBanDoNenFilterMaXa] = useState("");
+  const [banDoNenLayerOn, setBanDoNenLayerOn] = useState(false);
 
-  const handleSearchBanDoNen = useCallback(async () => {
+  const handleFilterBanDoNen = useCallback(async () => {
     if (!maXa) return;
     setBanDoNenSearchError("");
     try {
       const result = await searchBanDoNen({ maXa, soTo: soTo.trim() || undefined });
-      const features = result?.features || [];
+      const features = (result?.features || []).filter(
+        (f) => f.properties?.trang_thai === "ready" && f.properties?.tile_url,
+      );
       if (features.length === 0) {
-        setBanDoNenSearchError("Không tìm thấy tờ bản đồ nền khớp mã xã/số tờ này.");
+        setBanDoNenSearchError(
+          "Không có tờ bản đồ nền (đã sẵn sàng) cho xã/số tờ này.",
+        );
         return;
       }
+      setBanDoNenSheets(features);
+      setBanDoNenFilterMaXa(maXa);
       if (mapInstance) {
         const bounds = L.geoJSON({ type: "FeatureCollection", features }).getBounds();
         if (bounds.isValid()) mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
@@ -162,6 +172,19 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
       setBanDoNenSearchError(fetchError.message);
     }
   }, [maXa, soTo, mapInstance]);
+
+  const handleClearBanDoNenFilter = useCallback(() => {
+    setBanDoNenFilterMaXa("");
+    setBanDoNenSheets([]);
+    setBanDoNenSearchError("");
+  }, []);
+
+  // Đổi xã tra cứu mà đang ghim lớp nền theo xã cũ thì bỏ ghim cho khỏi lệch.
+  useEffect(() => {
+    if (banDoNenFilterMaXa && banDoNenFilterMaXa !== maXa) {
+      handleClearBanDoNenFilter();
+    }
+  }, [maXa, banDoNenFilterMaXa, handleClearBanDoNenFilter]);
 
   // Đánh dấu lần tìm gần nhất là bấm nút "Tìm thửa quanh đây" (theo khung
   // nhìn bản đồ), để phân biệt với tra cứu theo mã xã / định vị GPS.
@@ -606,12 +629,23 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 <button
                   type="button"
                   className="resetButton"
-                  onClick={handleSearchBanDoNen}
+                  onClick={handleFilterBanDoNen}
                   disabled={!maXa}
-                  title="Phóng đến tờ bản đồ nền khớp mã xã/số tờ"
+                  title="Lọc lớp bản đồ nền theo xã đang chọn và phóng tới khu vực"
                 >
-                  Tìm bản đồ nền
+                  Lọc bản đồ nền theo xã
                 </button>
+
+                {banDoNenFilterMaXa && (
+                  <button
+                    type="button"
+                    className="resetButton"
+                    onClick={handleClearBanDoNenFilter}
+                    title="Bỏ lọc, cho lớp bản đồ nền tự tải theo khung nhìn"
+                  >
+                    Bỏ lọc bản đồ nền
+                  </button>
+                )}
 
                 {hasActiveQuery && (
                   <button
@@ -626,6 +660,14 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
 
               {banDoNenSearchError && (
                 <div className="notice error">{banDoNenSearchError}</div>
+              )}
+
+              {banDoNenFilterMaXa && !banDoNenLayerOn && (
+                <div className="notice">
+                  Đã lọc bản đồ nền theo xã{" "}
+                  {xaNameByCode[banDoNenFilterMaXa] || banDoNenFilterMaXa}. Bật lớp
+                  “Bản đồ địa chính” (góc phải bản đồ) để xem.
+                </div>
               )}
             </>
           )}
@@ -775,7 +817,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               onMeta={handleMeta}
             />
 
-            <MapSheetTilesLoader onData={setBanDoNenSheets} />
+            <MapSheetTilesLoader
+              onData={setBanDoNenSheets}
+              filterMaXa={banDoNenFilterMaXa}
+              onEnabledChange={setBanDoNenLayerOn}
+            />
 
             <MapInstanceCapture onReady={setMapInstance} />
 

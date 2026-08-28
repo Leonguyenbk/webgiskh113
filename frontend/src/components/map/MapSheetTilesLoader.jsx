@@ -23,14 +23,21 @@ const OVERLAY_NAME = "Bản đồ địa chính";
 // cả với người chưa từng bật lớp này, tạo request bbox thừa trên mọi lần
 // pan/zoom cho MỌI khách xem bản đồ (đã thấy thực tế qua log truy cập từ
 // điện thoại) — không cần thiết và tốn tài nguyên Supabase vô ích.
-export default function MapSheetTilesLoader({ onData }) {
+export default function MapSheetTilesLoader({ onData, filterMaXa = "", onEnabledChange }) {
   const map = useMap();
   const timerRef = useRef(null);
   const abortRef = useRef(null);
   const enabledRef = useRef(false);
+  // filterMaXa qua ref để các handler đăng ký 1 lần trong useMapEvents luôn
+  // đọc được giá trị mới nhất.
+  const filterRef = useRef(filterMaXa);
+  filterRef.current = filterMaXa;
 
   const load = () => {
     if (!enabledRef.current) return;
+    // Đang lọc theo xã: danh sách tờ do App tự nạp + ghim (searchBanDoNen),
+    // loader không đụng vào để pan/zoom không ghi đè.
+    if (filterRef.current) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -52,7 +59,7 @@ export default function MapSheetTilesLoader({ onData }) {
   };
 
   const scheduleLoad = () => {
-    if (!enabledRef.current) return;
+    if (!enabledRef.current || filterRef.current) return;
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(load, DEBOUNCE_MS);
   };
@@ -63,16 +70,29 @@ export default function MapSheetTilesLoader({ onData }) {
     overlayadd: (event) => {
       if (event.name !== OVERLAY_NAME) return;
       enabledRef.current = true;
-      load();
+      onEnabledChange?.(true);
+      // Khi đang lọc theo xã, App đã giữ sẵn danh sách tờ — chỉ cần render.
+      if (!filterRef.current) load();
     },
     overlayremove: (event) => {
       if (event.name !== OVERLAY_NAME) return;
       enabledRef.current = false;
+      onEnabledChange?.(false);
       window.clearTimeout(timerRef.current);
       abortRef.current?.abort();
-      onData([]);
+      // Đang lọc theo xã thì giữ nguyên danh sách của App để bật lại thấy ngay.
+      if (!filterRef.current) onData([]);
     },
   });
+
+  // Vào/ra chế độ lọc theo xã: huỷ request viewport đang chờ; khi bỏ lọc mà
+  // lớp vẫn đang bật thì nạp lại danh sách theo khung nhìn.
+  useEffect(() => {
+    window.clearTimeout(timerRef.current);
+    abortRef.current?.abort();
+    if (!filterMaXa && enabledRef.current) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMaXa]);
 
   useEffect(() => {
     // Pane riêng cho raster bản đồ nền — Leaflet mặc định dồn MỌI
