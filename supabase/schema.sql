@@ -1075,4 +1075,39 @@ $$;
 revoke all on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) from public;
 grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) to service_role;
 
+-- =========================================================
+-- XUẤT DANH SÁCH GCN ĐÃ THU THẬP THUỘC 1 NHÓM KH 2959 (trang Công cụ ->
+-- "Xuất GCN theo nhóm"). Join du_lieu_gcn với dong_bo_du_lieu qua khóa
+-- madvhc_soto_sothua = ma_xa_sốtờ_sốthửa để lọc theo phan_loai_ke_hoach_2959.
+-- Trả về NGUYÊN các dòng du_lieu_gcn (mỗi chủ sử dụng 1 dòng) — backend
+-- dựng file .xlsx. Lọc theo g.ma_nguon (= mã xã với nguồn Google Sheet).
+-- =========================================================
+create or replace function public.export_gcn_theo_nhom(
+    p_ma_xa text,
+    p_nhom text[] default array['NHÓM 2']
+)
+returns setof public.du_lieu_gcn
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    select g.*
+    from public.du_lieu_gcn g
+    join public.dong_bo_du_lieu d
+        on g.madvhc_soto_sothua =
+           d.ma_xa || '_' || d.so_to::text || '_' || d.so_thua::text
+    where g.ma_nguon = p_ma_xa
+      and upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) in (
+          select upper(trim(x)) from unnest(p_nhom) as x
+      )
+    order by
+      (case when g.soto ~ '^[0-9]+$' then g.soto::int end) nulls last, g.soto,
+      (case when g.sothua ~ '^[0-9]+$' then g.sothua::int end) nulls last, g.sothua,
+      g.dong_sheet;
+$$;
+
+revoke all on function public.export_gcn_theo_nhom(text, text[]) from public;
+grant execute on function public.export_gcn_theo_nhom(text, text[]) to service_role;
+
 

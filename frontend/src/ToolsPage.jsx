@@ -23,6 +23,7 @@ export default function ToolsPage({
   onNavigateSync,
   onNavigateGcnLinks,
   onNavigateGcnDashboard,
+  onNavigateExportGcnNhom2,
   onNavigateMplisSync,
   onNavigateNhom4,
   onNavigateRanhThon,
@@ -48,6 +49,12 @@ export default function ToolsPage({
       name: "📊 Thống kê thu thập",
       description: "Tỉ lệ thửa đất đã nhập biểu GCN theo từng xã/phường.",
       onNavigate: onNavigateGcnDashboard,
+    },
+    {
+      name: "⬇ Xuất GCN Nhóm 2",
+      description:
+        "Tải Excel các dòng du_lieu_gcn của thửa đã thu thập nhưng đang thuộc Nhóm 2 (KH 2959), chọn theo xã/phường.",
+      onNavigate: onNavigateExportGcnNhom2,
     },
     {
       name: "🔄 Cập nhật MPLIS",

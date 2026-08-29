@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import io
 from datetime import datetime, timezone
 
 import requests
 from flask import current_app, jsonify
+from openpyxl import Workbook
 
 import gcn_sync
 from ..repositories import gcn_repository, supabase_client
+
+# Nhóm KH 2959 hợp lệ cho chức năng "Xuất GCN theo nhóm".
+_NHOM_HOP_LE = {"NHÓM 1", "NHÓM 2"}
 
 
 def get_stats():
@@ -44,6 +49,50 @@ def refresh_stats_cache():
     # Hàm SQL trả về số dòng đã ghi vào cache (PostgREST bọc trong scalar).
     rows = result if isinstance(result, int) else None
     return {"ok": True, "rows": rows}, None
+
+
+def _xlsx_cell(value):
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return str(value)
+    return value
+
+
+def export_theo_nhom_xlsx(ma_xa: str, nhom_raw: str | None):
+    """Xuất .xlsx: các dòng du_lieu_gcn của xã đã thu thập GCN và thuộc
+    nhóm KH 2959 chỉ định. Trả về ((bytes, ten_file), None) hoặc
+    (None, response_loi)."""
+    ma_xa = (ma_xa or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+
+    raw = nhom_raw or "Nhóm 2"
+    nhom = [n.strip() for n in raw.split(",") if n.strip()]
+    xau = [n.upper() for n in nhom if n.upper() in _NHOM_HOP_LE]
+    if not xau:
+        return None, (jsonify({"error": "Nhóm không hợp lệ (chỉ Nhóm 1 / Nhóm 2)"}), 400)
+
+    rows, error_response = gcn_repository.export_gcn_theo_nhom(ma_xa, nhom)
+    if error_response:
+        return None, error_response
+    rows = rows if isinstance(rows, list) else []
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "GCN"[:31]
+    if rows:
+        headers = list(rows[0].keys())
+        ws.append(headers)
+        for row in rows:
+            ws.append([_xlsx_cell(row.get(h)) for h in headers])
+    else:
+        ws.append(["Không có dữ liệu khớp"])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    nhom_ten = "_".join(n.upper().replace("NHÓM ", "N").replace(" ", "") for n in nhom)
+    return (buf.getvalue(), f"gcn_{nhom_ten}_{ma_xa}.xlsx"), None
 
 
 def list_sources():

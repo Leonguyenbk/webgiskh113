@@ -32,6 +32,16 @@ def refresh_gcn_thu_thap_theo_xa_cache():
     )
 
 
+def export_gcn_theo_nhom(ma_xa: str, nhom: list[str]):
+    # Join du_lieu_gcn x dong_bo_du_lieu, lọc các thửa của xã đã thu thập
+    # GCN và thuộc nhóm KH 2959 chỉ định. Trả nguyên dòng du_lieu_gcn.
+    return supabase_client.call_rpc(
+        "export_gcn_theo_nhom",
+        {"p_ma_xa": ma_xa, "p_nhom": nhom},
+        timeout=60,
+    )
+
+
 def list_nguon():
     response, error_response = supabase_client.rest_request(
         "GET", NGUON_GCN_TABLE, params={"select": "*", "order": "ma_nguon.asc"}

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
 from ..services import gcn_service
 from ..utils.validators import check_import_token
 
 gcn_bp = Blueprint("gcn", __name__)
+
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 @gcn_bp.get("/api/gcn-stats")
@@ -14,6 +16,23 @@ def gcn_stats():
     if error_response:
         return error_response
     return jsonify(data)
+
+
+@gcn_bp.get("/api/gcn-export-theo-nhom")
+def gcn_export_theo_nhom():
+    # Xuất .xlsx danh sách du_lieu_gcn của 1 xã đã thu thập + thuộc nhóm
+    # KH 2959 (mặc định Nhóm 2). ?ma_xa=<mã xã>&nhom=Nhóm 2[,Nhóm 1]
+    result, error_response = gcn_service.export_theo_nhom_xlsx(
+        request.args.get("ma_xa", ""), request.args.get("nhom")
+    )
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @gcn_bp.post("/api/gcn-stats/refresh")
