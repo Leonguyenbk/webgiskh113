@@ -59,6 +59,10 @@ const EXTENT_PADDING = 0.01;
 export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
+  // Chọn nhiều thửa: giữ Ctrl/Shift khi bấm để thêm/bỏ; `selected` là thửa
+  // vừa bấm (hiện ở panel), `selectedIds` là toàn bộ tập đã chọn.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [onlySelected, setOnlySelected] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -281,6 +285,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     if (!maXa) return;
 
     setSelected(null);
+    setSelectedIds(new Set());
+    setOnlySelected(false);
     setQuery("");
     setNearMeRequest(null);
     setViewportSearchActive(false);
@@ -298,6 +304,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     if (!myPosition) return;
 
     setSelected(null);
+    setSelectedIds(new Set());
+    setOnlySelected(false);
     setQuery("");
     setSubmittedFilters(null);
     setViewportSearchActive(false);
@@ -309,6 +317,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   // khác (mã xã / định vị GPS) và đánh dấu chế độ hiện tại là "quanh đây".
   const handleFindHereStart = useCallback(() => {
     setSelected(null);
+    setSelectedIds(new Set());
+    setOnlySelected(false);
     setQuery("");
     setSubmittedFilters(null);
     setNearMeRequest(null);
@@ -328,26 +338,49 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     setViewportSearchActive(false);
     setFiltersOpen(true);
     setSelected(null);
+    setSelectedIds(new Set());
+    setOnlySelected(false);
     setQuery("");
     setData(null);
     setError("");
     setMeta({ loaded: 0 });
   }, []);
 
-  const handleSelectParcel = useCallback((feature) => {
-    setSelected({ id: feature.id, feature, ...feature.properties });
+  const handleSelectParcel = useCallback((feature, additive = false) => {
+    setSelectedIds((prev) => {
+      const next = additive ? new Set(prev) : new Set();
+      if (additive && next.has(feature.id)) next.delete(feature.id);
+      else next.add(feature.id);
+      return next;
+    });
+    setSelected((prevSel) =>
+      // Ctrl/Shift bấm lại đúng thửa đang mở panel = bỏ chọn -> đóng panel.
+      additive && prevSel?.id === feature.id
+        ? null
+        : { id: feature.id, feature, ...feature.properties },
+    );
     setFocusTick((value) => value + 1);
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setOnlySelected(false);
+    setSelected(null);
   }, []);
 
   const filtered = useMemo(() => {
     if (!data) return null;
 
-    const keyword = query.trim().toLocaleLowerCase("vi");
-    if (!keyword) return data;
+    let features = data.features;
 
-    return {
-      ...data,
-      features: data.features.filter(({ properties: p }) =>
+    // "Chỉ hiện thửa đã chọn": tắt hẳn các thửa ngoài tập đã chọn.
+    if (onlySelected && selectedIds.size > 0) {
+      features = features.filter((f) => selectedIds.has(f.id));
+    }
+
+    const keyword = query.trim().toLocaleLowerCase("vi");
+    if (keyword) {
+      features = features.filter(({ properties: p }) =>
         [
           p.so_to,
           p.so_thua,
@@ -360,30 +393,33 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
           .some((value) =>
             String(value).toLocaleLowerCase("vi").includes(keyword),
           ),
-      ),
-    };
-  }, [data, query, xaNameByCode]);
+      );
+    }
+
+    return features === data.features ? data : { ...data, features };
+  }, [data, query, xaNameByCode, onlySelected, selectedIds]);
 
   const selectedFeature = selected?.feature || null;
 
   const style = useCallback(
     (feature) => {
-      const isSelected = feature.id === selected?.id;
+      const inSet = selectedIds.has(feature.id);
+      const isPrimary = feature.id === selected?.id;
 
       return {
-        color: isSelected ? "#ffffff" : "#334155",
-        weight: isSelected ? 4 : 1.5,
-        fillColor: isSelected
-          ? "#2563eb"
-          : getParcelFillColor(feature.properties),
-        // Slider "Độ mờ thửa đất" điều khiển lớp chưa chọn; thửa đang
+        color: inSet ? "#ffffff" : "#334155",
+        // Thửa vừa bấm (mở panel) viền dày nhất; các thửa cùng tập đã
+        // chọn dày vừa; còn lại mảnh.
+        weight: isPrimary ? 4 : inSet ? 3 : 1.5,
+        fillColor: inSet ? "#2563eb" : getParcelFillColor(feature.properties),
+        // Slider "Độ mờ thửa đất" điều khiển lớp chưa chọn; thửa đã
         // chọn luôn đậm hơn một chút (+0.2) để vẫn nổi bật, tối đa 1.
-        fillOpacity: isSelected
+        fillOpacity: inSet
           ? Math.min(1, parcelOpacity + 0.2)
           : parcelOpacity,
       };
     },
-    [selected, parcelOpacity],
+    [selectedIds, selected, parcelOpacity],
   );
 
   const onEachFeature = useCallback(
@@ -395,7 +431,14 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
         direction: "top",
       });
 
-      layer.on("click", () => handleSelectParcel(feature));
+      layer.on("click", (event) => {
+        const oe = event.originalEvent;
+        // Giữ Ctrl / Shift (hoặc Cmd trên Mac) khi bấm để chọn thêm/bỏ.
+        handleSelectParcel(
+          feature,
+          Boolean(oe && (oe.shiftKey || oe.ctrlKey || oe.metaKey)),
+        );
+      });
     },
     [handleSelectParcel],
   );
@@ -822,14 +865,19 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 ) : (
                   filtered.features.map((feature) => {
                     const p = feature.properties;
-                    const isActive = feature.id === selected?.id;
+                    const isActive = selectedIds.has(feature.id);
 
                     return (
                       <button
                         key={featureKey(feature)}
                         type="button"
                         className={`parcelListItem${isActive ? " active" : ""}`}
-                        onClick={() => handleSelectParcel(feature)}
+                        onClick={(event) =>
+                          handleSelectParcel(
+                            feature,
+                            event.ctrlKey || event.shiftKey || event.metaKey,
+                          )
+                        }
                       >
                         <span
                           className="parcelListDot"
@@ -977,7 +1025,28 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             <FitBounds focusFeature={selectedFeature} focusTick={focusTick} />
           </MapContainer>
 
-          <div className="mapHint">Bấm vào ranh thửa để xem thông tin</div>
+          {selectedIds.size > 0 && (
+            <div className="selectionBar">
+              <span>
+                Đã chọn <strong>{selectedIds.size}</strong> thửa
+              </span>
+              <label className="selectionBarToggle">
+                <input
+                  type="checkbox"
+                  checked={onlySelected}
+                  onChange={(event) => setOnlySelected(event.target.checked)}
+                />
+                Chỉ hiện thửa đã chọn
+              </label>
+              <button type="button" onClick={handleClearSelection}>
+                Bỏ chọn
+              </button>
+            </div>
+          )}
+
+          <div className="mapHint">
+            Bấm ranh thửa để xem thông tin · giữ Ctrl/Shift để chọn nhiều thửa
+          </div>
 
           <div className="landLegend">
             <strong>Ghi chú</strong>

@@ -143,6 +143,26 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   color: white; background: #173d3ccc; backdrop-filter: blur(6px);
   box-shadow: 0 5px 15px #102a2b40; font-size: 11px; pointer-events: none;
 }
+
+.selectionBar {
+  position: absolute; left: 50%; top: 14px; z-index: 700;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 14px; border-radius: 20px;
+  color: #ffffff; background: #1d4ed8ee; backdrop-filter: blur(6px);
+  border: 1px solid #ffffff66; box-shadow: 0 5px 15px #102a2b40;
+  font-size: 12px; white-space: nowrap;
+}
+.selectionBar strong { font-size: 13px; }
+.selectionBarToggle {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.selectionBarToggle input { cursor: pointer; }
+.selectionBar button {
+  border: 1px solid #ffffff88; background: #ffffff22; color: #ffffff;
+  border-radius: 14px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+}
+.selectionBar button:hover { background: #ffffff33; }
 .locateButton {
   position: absolute;
   right: 10px;
