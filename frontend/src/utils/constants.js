@@ -44,6 +44,11 @@ export const GROUP_LABELS = {
 export const GCN_COLOR = "#2563eb";
 export const GCN_LABEL = "Thửa đất đã nhập biểu";
 
+// Màu tô thửa ĐANG CHỌN trên bản đồ (chọn 1 hoặc nhiều). Tím đậm — tách
+// hẳn khỏi xanh lá (Nhóm 1), đỏ (Nhóm 2), xanh dương (đã nhập biểu) và
+// xám (chưa phân loại).
+export const SELECTED_COLOR = "#9333ea";
+
 export function getGroupKey(phanLoai = "") {
   const normalized = phanLoai.trim().toUpperCase();
   return GROUP_COLORS[normalized] ? normalized : "DEFAULT";

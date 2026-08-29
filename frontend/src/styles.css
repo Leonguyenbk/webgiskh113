@@ -149,7 +149,7 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   transform: translateX(-50%);
   display: flex; align-items: center; gap: 14px;
   padding: 8px 14px; border-radius: 20px;
-  color: #ffffff; background: #1d4ed8ee; backdrop-filter: blur(6px);
+  color: #ffffff; background: #9333eaee; backdrop-filter: blur(6px);
   border: 1px solid #ffffff66; box-shadow: 0 5px 15px #102a2b40;
   font-size: 12px; white-space: nowrap;
 }

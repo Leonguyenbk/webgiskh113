@@ -38,6 +38,7 @@ import {
   GROUP_COLORS,
   GROUP_LABELS,
   NEAR_ME_TARGET,
+  SELECTED_COLOR,
   VIEWPORT_SEARCH_TARGET,
   getParcelFillColor,
 } from "./utils/constants";
@@ -411,7 +412,9 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
         // Thửa vừa bấm (mở panel) viền dày nhất; các thửa cùng tập đã
         // chọn dày vừa; còn lại mảnh.
         weight: isPrimary ? 4 : inSet ? 3 : 1.5,
-        fillColor: inSet ? "#2563eb" : getParcelFillColor(feature.properties),
+        fillColor: inSet
+          ? SELECTED_COLOR
+          : getParcelFillColor(feature.properties),
         // Slider "Độ mờ thửa đất" điều khiển lớp chưa chọn; thửa đã
         // chọn luôn đậm hơn một chút (+0.2) để vẫn nổi bật, tối đa 1.
         fillOpacity: inSet
