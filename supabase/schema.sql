@@ -661,6 +661,11 @@ alter table public.gcn_thu_thap_theo_xa_cache enable row level security;
 -- không cần nới statement_timeout. Nếu cache rỗng (chưa refresh lần nào)
 -- sẽ trả 0 dòng -> frontend hiện danh sách trống; seed 1 lần bằng:
 --   select public.refresh_gcn_thu_thap_theo_xa_cache();
+--
+-- DROP trước: bản v1 trả 3 cột, v2 thêm computed_at -> "create or replace"
+-- không đổi được kiểu trả về (lỗi 42P13). Không ai còn phụ thuộc chữ ký
+-- cũ (backend gọi qua RPC, bỏ qua cột thừa/thiếu).
+drop function if exists public.gcn_thu_thap_theo_xa();
 create or replace function public.gcn_thu_thap_theo_xa()
 returns table (
     ma_xa text,
