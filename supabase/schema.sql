@@ -1082,29 +1082,40 @@ grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) to
 -- Trả về NGUYÊN các dòng du_lieu_gcn (mỗi chủ sử dụng 1 dòng) — backend
 -- dựng file .xlsx. Lọc theo g.ma_nguon (= mã xã với nguồn Google Sheet).
 -- =========================================================
+-- returns jsonb (mảng 1 giá trị) chứ KHÔNG "returns setof": PostgREST cắt
+-- kết quả setof ở 1000 dòng (db-max-rows), một xã Nhóm 2 có thể vài nghìn
+-- dòng. Gói cả mảng vào 1 jsonb -> trả trọn.
+-- d.ma_xa = p_ma_xa: khóa GCN có tiền tố = mã xã nên điều kiện này luôn
+-- đúng cho cặp join, nhưng giúp planner lọc dong_bo_du_lieu (2,3 triệu
+-- dòng) về 1 xã bằng chỉ mục UNIQUE trước khi tính chuỗi khóa + hash join.
 create or replace function public.export_gcn_theo_nhom(
     p_ma_xa text,
     p_nhom text[] default array['NHÓM 2']
 )
-returns setof public.du_lieu_gcn
+returns jsonb
 language sql
 stable
 security definer
 set search_path = public, extensions
+set statement_timeout = '60s'
 as $$
-    select g.*
-    from public.du_lieu_gcn g
-    join public.dong_bo_du_lieu d
-        on g.madvhc_soto_sothua =
-           d.ma_xa || '_' || d.so_to::text || '_' || d.so_thua::text
-    where g.ma_nguon = p_ma_xa
-      and upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) in (
-          select upper(trim(x)) from unnest(p_nhom) as x
-      )
-    order by
-      (case when g.soto ~ '^[0-9]+$' then g.soto::int end) nulls last, g.soto,
-      (case when g.sothua ~ '^[0-9]+$' then g.sothua::int end) nulls last, g.sothua,
-      g.dong_sheet;
+    select coalesce(jsonb_agg(sub), '[]'::jsonb)
+    from (
+        select g.*
+        from public.du_lieu_gcn g
+        join public.dong_bo_du_lieu d
+            on d.ma_xa = p_ma_xa
+           and g.madvhc_soto_sothua =
+               d.ma_xa || '_' || d.so_to::text || '_' || d.so_thua::text
+        where g.ma_nguon = p_ma_xa
+          and upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) in (
+              select upper(trim(x)) from unnest(p_nhom) as x
+          )
+        order by
+          (case when g.soto ~ '^[0-9]+$' then g.soto::int end) nulls last, g.soto,
+          (case when g.sothua ~ '^[0-9]+$' then g.sothua::int end) nulls last, g.sothua,
+          g.dong_sheet
+    ) sub;
 $$;
 
 revoke all on function public.export_gcn_theo_nhom(text, text[]) from public;
