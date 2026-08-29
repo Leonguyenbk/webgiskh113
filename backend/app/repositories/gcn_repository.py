@@ -32,14 +32,13 @@ def refresh_gcn_thu_thap_theo_xa_cache():
     )
 
 
-def export_gcn_theo_nhom(ma_xa: str, nhom: list[str]):
-    # Join du_lieu_gcn x dong_bo_du_lieu, lọc các thửa của xã đã thu thập
-    # GCN và thuộc nhóm KH 2959 chỉ định. RPC trả jsonb (mảng object) —
-    # PostgREST không cắt 1000 dòng như "returns setof". Hàm SQL đặt
-    # statement_timeout 60s nên timeout HTTP phải lớn hơn.
+def export_gcn_theo_nhom_page(ma_xa: str, nhom: list[str], limit: int, offset: int):
+    # 1 trang: join du_lieu_gcn x dong_bo_du_lieu, lọc thửa đã thu thập GCN
+    # thuộc nhóm KH 2959. RPC trả jsonb (mảng object) — không bị PostgREST
+    # cắt 1000 dòng. Hàm SQL đặt statement_timeout 60s.
     return supabase_client.call_rpc(
         "export_gcn_theo_nhom",
-        {"p_ma_xa": ma_xa, "p_nhom": nhom},
+        {"p_ma_xa": ma_xa, "p_nhom": nhom, "p_limit": limit, "p_offset": offset},
         timeout=90,
     )
 

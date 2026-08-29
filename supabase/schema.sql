@@ -1083,14 +1083,20 @@ grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) to
 -- dựng file .xlsx. Lọc theo g.ma_nguon (= mã xã với nguồn Google Sheet).
 -- =========================================================
 -- returns jsonb (mảng 1 giá trị) chứ KHÔNG "returns setof": PostgREST cắt
--- kết quả setof ở 1000 dòng (db-max-rows), một xã Nhóm 2 có thể vài nghìn
--- dòng. Gói cả mảng vào 1 jsonb -> trả trọn.
+-- kết quả setof ở 1000 dòng (db-max-rows). Gói mảng vào 1 jsonb -> trả trọn
+-- trang. Backend gọi phân trang p_limit/p_offset rồi ghép thành 1 file
+-- .xlsx (xem gcn_service.export_theo_nhom_xlsx) — tránh 1 payload jsonb
+-- quá lớn cho xã nhiều bản ghi.
 -- d.ma_xa = p_ma_xa: khóa GCN có tiền tố = mã xã nên điều kiện này luôn
 -- đúng cho cặp join, nhưng giúp planner lọc dong_bo_du_lieu (2,3 triệu
 -- dòng) về 1 xã bằng chỉ mục UNIQUE trước khi tính chuỗi khóa + hash join.
+drop function if exists public.export_gcn_theo_nhom(text, text[]);
+
 create or replace function public.export_gcn_theo_nhom(
     p_ma_xa text,
-    p_nhom text[] default array['NHÓM 2']
+    p_nhom text[] default array['NHÓM 2'],
+    p_limit integer default 5000,
+    p_offset integer default 0
 )
 returns jsonb
 language sql
@@ -1115,10 +1121,11 @@ as $$
           (case when g.soto ~ '^[0-9]+$' then g.soto::int end) nulls last, g.soto,
           (case when g.sothua ~ '^[0-9]+$' then g.sothua::int end) nulls last, g.sothua,
           g.dong_sheet
+        limit greatest(p_limit, 1) offset greatest(p_offset, 0)
     ) sub;
 $$;
 
-revoke all on function public.export_gcn_theo_nhom(text, text[]) from public;
-grant execute on function public.export_gcn_theo_nhom(text, text[]) to service_role;
+revoke all on function public.export_gcn_theo_nhom(text, text[], integer, integer) from public;
+grant execute on function public.export_gcn_theo_nhom(text, text[], integer, integer) to service_role;
 
 

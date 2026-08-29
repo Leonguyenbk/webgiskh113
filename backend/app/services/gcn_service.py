@@ -12,6 +12,8 @@ from ..repositories import gcn_repository, supabase_client
 
 # Nhóm KH 2959 hợp lệ cho chức năng "Xuất GCN theo nhóm".
 _NHOM_HOP_LE = {"NHÓM 1", "NHÓM 2"}
+_EXPORT_PAGE = 5000      # số dòng mỗi lần gọi RPC
+_EXPORT_MAX = 300_000    # trần an toàn cho 1 lần xuất
 
 
 def get_stats():
@@ -73,10 +75,19 @@ def export_theo_nhom_xlsx(ma_xa: str, nhom_raw: str | None):
     if not xau:
         return None, (jsonify({"error": "Nhóm không hợp lệ (chỉ Nhóm 1 / Nhóm 2)"}), 400)
 
-    rows, error_response = gcn_repository.export_gcn_theo_nhom(ma_xa, nhom)
-    if error_response:
-        return None, error_response
-    rows = rows if isinstance(rows, list) else []
+    rows: list = []
+    offset = 0
+    while True:
+        page, error_response = gcn_repository.export_gcn_theo_nhom_page(
+            ma_xa, nhom, _EXPORT_PAGE, offset
+        )
+        if error_response:
+            return None, error_response
+        page = page if isinstance(page, list) else []
+        rows.extend(page)
+        if len(page) < _EXPORT_PAGE or len(rows) >= _EXPORT_MAX:
+            break
+        offset += _EXPORT_PAGE
 
     wb = Workbook()
     ws = wb.active
