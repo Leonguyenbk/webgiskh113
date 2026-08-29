@@ -637,12 +637,14 @@ alter table public.nguon_gcn enable row level security;
 -- kể cả khi số hơi cũ). Việc tính lại do lịch (pg_cron) hoặc backend cron
 -- gọi refresh_gcn_thu_thap_theo_xa_cache() mỗi 15 phút.
 --
--- Lý do bỏ bản v1: v1 tính lại NGAY trong lúc trả dữ liệu khi cache cũ
--- quá 15 phút. Khi lần quét vượt statement_timeout 30s, hàm luôn lỗi
--- TRƯỚC khi kịp return -> PostgREST trả lỗi -> backend map thành 502; và
--- vì computed_at không bao giờ cập nhật được nên MỌI lần mở sau đó cũng
--- rơi vào nhánh tính lại và cùng 502 -> trang chết hẳn ("exhausting
--- multiple resources").
+-- Lý do bỏ bản v1 (2 lỗi cùng khiến trang 502 vĩnh viễn, vì computed_at
+-- không bao giờ ghi được nên MỌI lần mở sau đó lặp lại đúng lỗi đó):
+--   1. Tính lại NGAY trong lúc trả dữ liệu -> khi lần quét vượt
+--      statement_timeout 30s thì hàm lỗi trước khi kịp return.
+--   2. "delete from ... cache" KHÔNG có WHERE -> Supabase bật pg-safeupdate
+--      chặn: {"error":"DELETE requires a WHERE clause"}.
+-- v2: đọc tách hẳn khỏi tính lại; phần tính lại dùng UPSERT (không DELETE
+-- trần) và chạy nền.
 -- =========================================================
 
 create table if not exists public.gcn_thu_thap_theo_xa_cache (
@@ -691,6 +693,7 @@ set search_path = public, extensions
 set statement_timeout = '120s'
 as $$
 declare
+    v_now timestamptz := now();
     v_rows integer;
 begin
     -- Khoá theo phạm vi transaction: lần refresh thứ 2 chạy song song sẽ
@@ -699,14 +702,15 @@ begin
 
     if exists (
         select 1 from public.gcn_thu_thap_theo_xa_cache
-        where computed_at > now() - interval '1 minute'
+        where computed_at > v_now - interval '1 minute'
     ) then
         select count(*) into v_rows from public.gcn_thu_thap_theo_xa_cache;
         return v_rows;
     end if;
 
-    delete from public.gcn_thu_thap_theo_xa_cache;
-
+    -- UPSERT thay cho "delete + insert": không có DELETE trần (Supabase
+    -- bật pg-safeupdate -> "DELETE requires a WHERE clause"), và người đọc
+    -- luôn thấy 1 bộ đầy đủ (cũ hoặc mới), không có khoảng trống rỗng.
     insert into public.gcn_thu_thap_theo_xa_cache (ma_xa, tong_so_thua, da_nhap_bieu, computed_at)
     with gcn_keys as (
         select distinct g.madvhc_soto_sothua
@@ -717,16 +721,24 @@ begin
         t.ma_xa,
         count(*)::bigint as tong_so_thua,
         count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
-        now()
+        v_now
     from public.thua_dat t
     left join public.dong_bo_du_lieu d
         on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
     left join gcn_keys k
         on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
     where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
-    group by t.ma_xa;
+    group by t.ma_xa
+    on conflict (ma_xa) do update set
+        tong_so_thua = excluded.tong_so_thua,
+        da_nhap_bieu = excluded.da_nhap_bieu,
+        computed_at  = excluded.computed_at;
 
     get diagnostics v_rows = row_count;
+
+    -- Dọn xã không còn trong nguồn (nếu có) — DELETE này CÓ mệnh đề WHERE.
+    delete from public.gcn_thu_thap_theo_xa_cache where computed_at < v_now;
+
     return v_rows;
 end;
 $$;
