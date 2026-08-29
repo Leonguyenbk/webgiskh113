@@ -41,6 +41,7 @@ button { cursor: pointer; }
   white-space: nowrap;
 }
 .topbar p { margin: 0; color: #bfe6df; font-size: 12px; }
+.topbar p.dashboardAsOf { margin-top: 2px; color: #8fcabf; font-size: 11px; }
 .count { margin-left: auto; display: flex; flex-direction: column; text-align: right; }
 .count strong { font-size: 22px; color: #d9f99d; }
 .count span { font-size: 11px; color: #bfe6df; }

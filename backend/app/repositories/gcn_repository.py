@@ -16,10 +16,20 @@ def _json_or_error(response, error_response):
 
 
 def gcn_thu_thap_theo_xa():
-    # thua_dat đã 1.36 triệu dòng — hàm SQL đã gắn statement_timeout riêng
-    # 30s (xem supabase/schema.sql), timeout HTTP ở đây phải lớn hơn 1 chút
-    # để không tự cắt trước khi Postgres kịp trả lỗi/kết quả.
-    return supabase_client.call_rpc("gcn_thu_thap_theo_xa", {}, timeout=40)
+    # Hàm SQL giờ CHỈ đọc bảng cache gcn_thu_thap_theo_xa_cache (vài mili
+    # giây) — phần quét nặng đã tách sang refresh_gcn_thu_thap_theo_xa_cache
+    # (xem supabase/schema.sql). Không cần timeout HTTP dài như trước.
+    return supabase_client.call_rpc("gcn_thu_thap_theo_xa", {}, timeout=15)
+
+
+def refresh_gcn_thu_thap_theo_xa_cache():
+    # Nhánh chậm: quét toàn bộ thua_dat để tính lại cache. Gọi từ cron
+    # (pg_cron hoặc Render Cron qua POST /api/gcn-stats/refresh), KHÔNG
+    # bao giờ từ request người dùng. Hàm SQL nới statement_timeout 120s
+    # nên timeout HTTP ở đây phải lớn hơn.
+    return supabase_client.call_rpc(
+        "refresh_gcn_thu_thap_theo_xa_cache", {}, timeout=180
+    )
 
 
 def list_nguon():

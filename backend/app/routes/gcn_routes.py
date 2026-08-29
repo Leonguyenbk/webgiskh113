@@ -16,6 +16,20 @@ def gcn_stats():
     return jsonify(data)
 
 
+@gcn_bp.post("/api/gcn-stats/refresh")
+def gcn_stats_refresh():
+    # Tính lại bảng cache thống kê thu thập (nhánh quét nặng). Dành cho
+    # cron gọi định kỳ — không phải request người dùng — nên chắn bằng
+    # IMPORT_TOKEN. Nếu đã bật pg_cron thì không cần endpoint này.
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    data, error_response = gcn_service.refresh_stats_cache()
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/nguon-gcn")
 def list_nguon_gcn():
     data, error_response = gcn_service.list_sources()

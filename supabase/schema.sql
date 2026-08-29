@@ -25,11 +25,11 @@ alter table public.thua_dat
 -- ĐÍNH CHÍNH: bỏ chỉ mục theo biểu thức đã thêm trước đó
 -- (thua_dat_ma_xa_so_to_so_thua_idx) — kiểm tra thực tế qua
 -- pg_stat_user_indexes cho thấy 0 lượt quét. Lý do: chỗ dùng biểu thức
--- này (JOIN trong gcn_thu_thap_theo_xa, EXISTS trong co_gcn) đều để
--- Postgres tự tính biểu thức rồi hash join/hash lookup, không cần tra
--- theo index của thua_dat — index này chỉ tốn 44MB vô ích. Việc
--- gcn_thu_thap_theo_xa chạy được là nhờ statement_timeout tăng lên, không
--- phải nhờ index này.
+-- này (JOIN trong refresh_gcn_thu_thap_theo_xa_cache, EXISTS trong co_gcn)
+-- đều để Postgres tự tính biểu thức rồi hash join/hash lookup, không cần
+-- tra theo index của thua_dat — index này chỉ tốn 44MB vô ích. Việc
+-- refresh_gcn_thu_thap_theo_xa_cache chạy được là nhờ statement_timeout
+-- tăng lên, không phải nhờ index này.
 drop index if exists public.thua_dat_ma_xa_so_to_so_thua_idx;
 
 create index if not exists thua_dat_geom_gix
@@ -631,13 +631,18 @@ alter table public.nguon_gcn enable row level security;
 -- hàm này quét toàn bộ thua_dat chứ không giới hạn theo khung bản đồ/
 -- limit.
 --
--- CACHE: quét thẳng 1,36 triệu dòng thua_dat MỖI LẦN mở trang Dashboard
--- (đo thực tế qua Query Performance: trung bình 15s/lần, có lúc gần chạm
--- trần 30s, góp phần vào cảnh báo "exhausting multiple resources" của
--- Supabase) — quá tốn cho 1 trang thống kê không cần realtime tuyệt đối.
--- Đổi sang đọc từ bảng cache, chỉ tính lại khi cache cũ quá 15 phút —
--- giữ NGUYÊN chữ ký hàm (không tham số, cùng cột trả về) nên
--- backend/frontend không cần sửa gì.
+-- CACHE (v2): phần quét nặng 1,36 triệu dòng thua_dat được TÁCH RA hàm
+-- refresh riêng, KHÔNG còn nằm trên đường đọc. Trang Dashboard gọi
+-- gcn_thu_thap_theo_xa() chỉ đọc bảng cache (vài mili giây, luôn trả về
+-- kể cả khi số hơi cũ). Việc tính lại do lịch (pg_cron) hoặc backend cron
+-- gọi refresh_gcn_thu_thap_theo_xa_cache() mỗi 15 phút.
+--
+-- Lý do bỏ bản v1: v1 tính lại NGAY trong lúc trả dữ liệu khi cache cũ
+-- quá 15 phút. Khi lần quét vượt statement_timeout 30s, hàm luôn lỗi
+-- TRƯỚC khi kịp return -> PostgREST trả lỗi -> backend map thành 502; và
+-- vì computed_at không bao giờ cập nhật được nên MỌI lần mở sau đó cũng
+-- rơi vào nhánh tính lại và cùng 502 -> trang chết hẳn ("exhausting
+-- multiple resources").
 -- =========================================================
 
 create table if not exists public.gcn_thu_thap_theo_xa_cache (
@@ -650,59 +655,97 @@ alter table public.gcn_thu_thap_theo_xa_cache enable row level security;
 -- Không tạo policy: chỉ Service Role Key (qua hàm security definer bên
 -- dưới, hoặc backend) mới đọc/ghi được.
 
+-- ĐỌC: chỉ select từ cache, không tính toán -> language sql stable, nhẹ,
+-- không cần nới statement_timeout. Nếu cache rỗng (chưa refresh lần nào)
+-- sẽ trả 0 dòng -> frontend hiện danh sách trống; seed 1 lần bằng:
+--   select public.refresh_gcn_thu_thap_theo_xa_cache();
 create or replace function public.gcn_thu_thap_theo_xa()
 returns table (
     ma_xa text,
     tong_so_thua bigint,
-    da_nhap_bieu bigint
+    da_nhap_bieu bigint,
+    computed_at timestamptz
 )
-language plpgsql
+language sql
+stable
 security definer
 set search_path = public, extensions
--- Bảng thua_dat đã 1.36 triệu dòng — statement_timeout mặc định của
--- Supabase (khoảng 8s cho các hàm gọi qua API) không đủ để quét hết dù
--- đã có index. Gắn timeout riêng CHỈ cho hàm này (không đổi cài đặt
--- chung của project) — chỉ thật sự cần khi tính lại cache (nhánh chậm),
--- lần đọc cache (đa số lần gọi) rất nhanh nên không bị ảnh hưởng.
-set statement_timeout = '30s'
 as $$
-declare
-    v_last_computed timestamptz;
-begin
-    select max(c.computed_at) into v_last_computed from public.gcn_thu_thap_theo_xa_cache c;
-
-    if v_last_computed is null or now() - v_last_computed > interval '15 minutes' then
-        delete from public.gcn_thu_thap_theo_xa_cache;
-
-        insert into public.gcn_thu_thap_theo_xa_cache (ma_xa, tong_so_thua, da_nhap_bieu, computed_at)
-        with gcn_keys as (
-            select distinct g.madvhc_soto_sothua
-            from public.du_lieu_gcn g
-            where g.madvhc_soto_sothua is not null
-        )
-        select
-            t.ma_xa,
-            count(*)::bigint as tong_so_thua,
-            count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
-            now()
-        from public.thua_dat t
-        left join public.dong_bo_du_lieu d
-            on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
-        left join gcn_keys k
-            on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-        where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
-        group by t.ma_xa;
-    end if;
-
-    return query
-        select c.ma_xa, c.tong_so_thua, c.da_nhap_bieu
-        from public.gcn_thu_thap_theo_xa_cache c
-        order by c.ma_xa;
-end;
+    select c.ma_xa, c.tong_so_thua, c.da_nhap_bieu, c.computed_at
+    from public.gcn_thu_thap_theo_xa_cache c
+    order by c.ma_xa;
 $$;
 
 revoke all on function public.gcn_thu_thap_theo_xa() from public;
 grant execute on function public.gcn_thu_thap_theo_xa() to service_role;
+
+-- TÍNH LẠI: phần quét nặng. Chỉ chạy bởi lịch (pg_cron) hoặc backend
+-- cron, KHÔNG bao giờ gọi từ request người dùng. pg_advisory_xact_lock
+-- để 2 lần refresh chồng nhau (cron trùng tay, hay 2 job) không quét lại
+-- 2 lần. statement_timeout nới rộng vì đây là nhánh chậm, chạy nền.
+create or replace function public.refresh_gcn_thu_thap_theo_xa_cache()
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+set statement_timeout = '120s'
+as $$
+declare
+    v_rows integer;
+begin
+    -- Khoá theo phạm vi transaction: lần refresh thứ 2 chạy song song sẽ
+    -- chờ ở đây, rồi rơi vào nhánh "vừa mới tính" bên dưới và thoát nhanh.
+    perform pg_advisory_xact_lock(hashtext('refresh_gcn_thu_thap_theo_xa_cache'));
+
+    if exists (
+        select 1 from public.gcn_thu_thap_theo_xa_cache
+        where computed_at > now() - interval '1 minute'
+    ) then
+        select count(*) into v_rows from public.gcn_thu_thap_theo_xa_cache;
+        return v_rows;
+    end if;
+
+    delete from public.gcn_thu_thap_theo_xa_cache;
+
+    insert into public.gcn_thu_thap_theo_xa_cache (ma_xa, tong_so_thua, da_nhap_bieu, computed_at)
+    with gcn_keys as (
+        select distinct g.madvhc_soto_sothua
+        from public.du_lieu_gcn g
+        where g.madvhc_soto_sothua is not null
+    )
+    select
+        t.ma_xa,
+        count(*)::bigint as tong_so_thua,
+        count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
+        now()
+    from public.thua_dat t
+    left join public.dong_bo_du_lieu d
+        on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+    left join gcn_keys k
+        on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+    where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
+    group by t.ma_xa;
+
+    get diagnostics v_rows = row_count;
+    return v_rows;
+end;
+$$;
+
+revoke all on function public.refresh_gcn_thu_thap_theo_xa_cache() from public;
+grant execute on function public.refresh_gcn_thu_thap_theo_xa_cache() to service_role;
+
+-- LỊCH TÍNH LẠI — chạy TAY 1 lần trên Supabase SQL Editor. Cần bật
+-- extension pg_cron trước (Dashboard > Database > Extensions):
+--
+--   create extension if not exists pg_cron;
+--   select cron.schedule(
+--       'refresh-gcn-thu-thap',
+--       '*/15 * * * *',
+--       $$select public.refresh_gcn_thu_thap_theo_xa_cache();$$
+--   );
+--
+-- Không dùng pg_cron thì cho Render Cron Job gọi mỗi 15 phút:
+--   POST <API>/api/gcn-stats/refresh   (header X-Import-Token: <IMPORT_TOKEN>)
 
 -- =========================================================
 -- CẬP NHẬT TRẠNG THÁI TỪ MPLIS (trang "Cập nhật MPLIS", backend

@@ -16,12 +16,16 @@ def get_stats():
 
     rows = result if isinstance(result, list) else []
     items = []
+    as_of = None
     for row in rows:
         ma_xa = row.get("ma_xa")
         if not ma_xa:
             continue
         tong = int(row.get("tong_so_thua") or 0)
         da_nhap = int(row.get("da_nhap_bieu") or 0)
+        computed_at = row.get("computed_at")
+        if computed_at and (as_of is None or computed_at > as_of):
+            as_of = computed_at
         items.append(
             {
                 "ma_xa": ma_xa,
@@ -30,7 +34,16 @@ def get_stats():
                 "chua_nhap_bieu": max(tong - da_nhap, 0),
             }
         )
-    return {"items": items}, None
+    return {"items": items, "as_of": as_of}, None
+
+
+def refresh_stats_cache():
+    result, error_response = gcn_repository.refresh_gcn_thu_thap_theo_xa_cache()
+    if error_response:
+        return None, error_response
+    # Hàm SQL trả về số dòng đã ghi vào cache (PostgREST bọc trong scalar).
+    rows = result if isinstance(result, int) else None
+    return {"ok": True, "rows": rows}, None
 
 
 def list_sources():

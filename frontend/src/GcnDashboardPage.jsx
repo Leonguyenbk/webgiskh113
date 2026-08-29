@@ -15,6 +15,13 @@ function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
 }
 
+function formatThoiDiem(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+}
+
 function formatPercent(daNhap, tong) {
   if (!tong) return 0;
   return Math.round((daNhap / tong) * 100);
@@ -94,6 +101,7 @@ function DonutChart({ daNhap, tong }) {
 export default function GcnDashboardPage({ onNavigateHome }) {
   const [xaList, setXaList] = useState([]);
   const [stats, setStats] = useState([]);
+  const [asOf, setAsOf] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -109,6 +117,7 @@ export default function GcnDashboardPage({ onNavigateHome }) {
       .then(([xaResult, statsResult]) => {
         setXaList(xaResult?.items || []);
         setStats(statsResult?.items || []);
+        setAsOf(statsResult?.as_of || null);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -172,6 +181,11 @@ export default function GcnDashboardPage({ onNavigateHome }) {
             Tỉ lệ đã nhập biểu GCN trong nhóm thửa chưa tạo lập dữ liệu
             (ngoài Nhóm 1, Nhóm 2), theo từng xã/phường
           </p>
+          {asOf && (
+            <p className="dashboardAsOf">
+              Số liệu tính lúc {formatThoiDiem(asOf)}
+            </p>
+          )}
         </div>
         <a
           className="backLink"
