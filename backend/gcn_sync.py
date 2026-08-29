@@ -24,6 +24,11 @@ SHEET_START_ROW = 4
 DU_LIEU_GCN_TABLE = "du_lieu_gcn"
 BATCH_SIZE = 500
 
+# Nguồn "biểu Nhóm 4" (nhom4_service ghi thẳng, madvhc từ form đã kiểm) —
+# không đi qua sync_source. Mọi nguồn Google Sheet còn lại: ma_nguon
+# chính là mã xã chuẩn (bảng nguon_gcn).
+FORM_MA_NGUON = "NHOM4_FORM"
+
 # Thứ tự PHẢI khớp chính xác cột B..BE trên Google Sheet (56 cột). Trùng với
 # COLUMNS trong sync_gcn/config.py — hai bản tách riêng vì Render chỉ deploy
 # thư mục backend/, không kéo theo sync_gcn/. Đổi cấu trúc Sheet thì phải sửa
@@ -207,6 +212,12 @@ def sync_source(
         row["sheet_url"] = sheet_url
         row["dong_sheet"] = dong_sheet
         row["synced_at"] = synced_at
+        # madvhc (cột B của Sheet) hay bị gõ sai (vd 247373 thay vì
+        # 24373) -> khóa generated madvhc_soto_sothua lệch, co_gcn /
+        # gcn_thu_thap_theo_xa không nhận. Với nguồn Sheet, ép madvhc =
+        # ma_nguon (mã xã chuẩn từ nguon_gcn).
+        if ma_nguon != FORM_MA_NGUON:
+            row["madvhc"] = ma_nguon
         rows.append(row)
 
     return _replace_source_rows(base_url, headers, ma_nguon, rows)

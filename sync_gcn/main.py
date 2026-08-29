@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 import google_sheets
 import supabase_sync
 
+# Nguồn "biểu Nhóm 4" (backend ghi thẳng, madvhc từ form đã kiểm) không
+# đi qua đây. Mọi nguồn Sheet: ma_nguon = mã xã chuẩn (bảng nguon_gcn).
+FORM_MA_NGUON = "NHOM4_FORM"
+
 
 @dataclass
 class SheetSource:
@@ -49,6 +53,10 @@ def sync_source(source: SheetSource) -> int:
         row["sheet_url"] = source.url
         row["dong_sheet"] = dong_sheet
         row["synced_at"] = synced_at
+        # madvhc (cột B của Sheet) hay bị gõ sai -> khóa generated
+        # madvhc_soto_sothua lệch. Ép madvhc = ma_nguon (mã xã chuẩn).
+        if source.ma_nguon != FORM_MA_NGUON:
+            row["madvhc"] = source.ma_nguon
         rows.append(row)
 
     # 3) Chỉ xóa + ghi Supabase sau khi (1) và (2) đã xong an toàn.

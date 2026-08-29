@@ -463,14 +463,32 @@ grant execute on function public.get_parcels_in_view(
 -- mã xã để tránh quét toàn tỉnh.
 -- =========================================================
 
+-- "select distinct t.ma_xa ... order by" thẳng phải quét + DISTINCT toàn
+-- bộ 1,36 triệu dòng thua_dat -> vượt statement_timeout 8s của API role
+-- (đã gặp: 57014 "canceling statement due to statement timeout").
+-- Thay bằng "loose index scan" (skip scan): dùng chỉ mục UNIQUE
+-- thua_dat_ma_xa_so_to_so_thua_key (ma_xa dẫn đầu), mỗi bước nhảy tới
+-- ma_xa kế tiếp bằng 1 lần seek. thua_dat chỉ có ~100 mã xã nên còn
+-- ~100 lần seek, vài mili giây.
 create or replace function public.list_ma_xa()
 returns table (ma_xa text)
 language sql
 stable
 as $$
-    select distinct t.ma_xa
-    from public.thua_dat t
-    order by t.ma_xa;
+    with recursive walk as (
+        (select t.ma_xa from public.thua_dat t order by t.ma_xa limit 1)
+        union all
+        select (
+            select t.ma_xa
+            from public.thua_dat t
+            where t.ma_xa > w.ma_xa
+            order by t.ma_xa
+            limit 1
+        )
+        from walk w
+        where w.ma_xa is not null
+    )
+    select w.ma_xa from walk w where w.ma_xa is not null;
 $$;
 
 revoke all on function public.list_ma_xa() from public;
