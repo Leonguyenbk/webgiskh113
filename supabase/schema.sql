@@ -1082,15 +1082,16 @@ grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, integer) to
 -- Trả về NGUYÊN các dòng du_lieu_gcn (mỗi chủ sử dụng 1 dòng) — backend
 -- dựng file .xlsx. Lọc theo g.ma_nguon (= mã xã với nguồn Google Sheet).
 -- =========================================================
--- returns jsonb (mảng 1 giá trị) chứ KHÔNG "returns setof": PostgREST cắt
--- kết quả setof ở 1000 dòng (db-max-rows). Gói mảng vào 1 jsonb -> trả trọn
--- trang. Backend gọi phân trang p_limit/p_offset rồi ghép thành 1 file
--- .xlsx (xem gcn_service.export_theo_nhom_xlsx) — tránh 1 payload jsonb
--- quá lớn cho xã nhiều bản ghi.
+-- returns json (KHÔNG "returns setof": PostgREST cắt setof ở 1000 dòng;
+-- KHÔNG jsonb: kiểu jsonb sắp lại thứ tự key -> cột Excel loạn). json_agg
+-- giữ nguyên thứ tự cột g.* = thứ tự cột bảng du_lieu_gcn. Backend gọi
+-- phân trang p_limit/p_offset rồi ghép thành 1 file .xlsx (xem
+-- gcn_service.export_theo_nhom_xlsx).
 -- d.ma_xa = p_ma_xa: khóa GCN có tiền tố = mã xã nên điều kiện này luôn
 -- đúng cho cặp join, nhưng giúp planner lọc dong_bo_du_lieu (2,3 triệu
 -- dòng) về 1 xã bằng chỉ mục UNIQUE trước khi tính chuỗi khóa + hash join.
 drop function if exists public.export_gcn_theo_nhom(text, text[]);
+drop function if exists public.export_gcn_theo_nhom(text, text[], integer, integer);
 
 create or replace function public.export_gcn_theo_nhom(
     p_ma_xa text,
@@ -1098,14 +1099,14 @@ create or replace function public.export_gcn_theo_nhom(
     p_limit integer default 5000,
     p_offset integer default 0
 )
-returns jsonb
+returns json
 language sql
 stable
 security definer
 set search_path = public, extensions
 set statement_timeout = '60s'
 as $$
-    select coalesce(jsonb_agg(sub), '[]'::jsonb)
+    select coalesce(json_agg(sub), '[]'::json)
     from (
         select g.*
         from public.du_lieu_gcn g
