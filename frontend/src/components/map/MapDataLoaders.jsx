@@ -71,6 +71,11 @@ export function SearchParcelsLoader({ filters, onData, onLoading, onError, onMet
       if (filters.soThua) baseParams.so_thua = filters.soThua;
       if (filters.tenThon) baseParams.ten_thon = filters.tenThon;
 
+      // Có cả số tờ + số thửa -> khóa (ma_xa, so_to, so_thua) là DUY NHẤT,
+      // tối đa 1 thửa. Không cần lô 1000 + phân trang, chỉ xin vài dòng.
+      const exactParcel = Boolean(filters.soTo) && Boolean(filters.soThua);
+      const pageSize = exactParcel ? 5 : PAGE_SIZE;
+
       const collected = [];
       const seen = new Set();
 
@@ -78,10 +83,10 @@ export function SearchParcelsLoader({ filters, onData, onLoading, onError, onMet
         for (
           let offset = 0;
           offset < MAX_FEATURES && !controller.signal.aborted;
-          offset += PAGE_SIZE
+          offset += pageSize
         ) {
           const result = await searchParcels(
-            { ...baseParams, limit: PAGE_SIZE, offset },
+            { ...baseParams, limit: pageSize, offset },
             { signal: controller.signal },
           );
 
@@ -99,7 +104,7 @@ export function SearchParcelsLoader({ filters, onData, onLoading, onError, onMet
           onData({ type: "FeatureCollection", features: collected.slice() });
           onMeta({ loaded: collected.length });
 
-          if (features.length < PAGE_SIZE) break;
+          if (features.length < pageSize) break;
 
           if (added === 0) {
             throw new Error(
