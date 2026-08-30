@@ -41,6 +41,15 @@ export function importRanhThon(file, token) {
   });
 }
 
+export function deleteRanhThon(maXa, token) {
+  return request("/api/delete-ranh-thon", {
+    method: "POST",
+    body: { ma_xa: maXa },
+    token,
+    errorFallback: "Xóa ranh giới thôn thất bại",
+  });
+}
+
 // =========================================================
 // NGUỒN GOOGLE SHEET CHO ĐỒNG BỘ GCN (public.nguon_gcn)
 // =========================================================

@@ -112,6 +112,51 @@ def import_ranh_thon(file_stream):
     }, None
 
 
+def delete_ranh_thon(ma_xa: str):
+    """Xóa toàn bộ ranh giới thôn của 1 xã khỏi public.ranh_gioi_thon.
+    Trả về danh sách tên thôn đã xóa để hiển thị lại cho người dùng."""
+    ma_xa = (ma_xa or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã cần xóa"}), 400)
+
+    # PostgREST DELETE + Prefer: return=representation để đếm/liệt kê thôn đã
+    # xóa; chỉ lấy cột ten_thon (bỏ geom cho nhẹ). Không cần RPC riêng.
+    response, error_response = supabase_client.rest_request(
+        "DELETE",
+        "ranh_gioi_thon",
+        params={"ma_xa": f"eq.{ma_xa}", "select": "ten_thon"},
+        extra_headers={"Prefer": "return=representation"},
+        timeout=30,
+    )
+    if error_response:
+        return None, error_response
+
+    if not response.ok:
+        try:
+            detail = response.json()
+            message = detail.get("message") or detail.get("error") or response.text
+        except ValueError:
+            message = response.text or "Supabase trả về lỗi không rõ nguyên nhân"
+        return None, (jsonify({"error": message}), 502)
+
+    try:
+        deleted_rows = response.json()
+    except ValueError:
+        deleted_rows = []
+    if not isinstance(deleted_rows, list):
+        deleted_rows = []
+
+    ten_thon = sorted(
+        {str(row.get("ten_thon") or "").strip() for row in deleted_rows if row.get("ten_thon")}
+    )
+    return {
+        "ok": True,
+        "ma_xa": ma_xa,
+        "deleted": len(deleted_rows),
+        "ten_thon": ten_thon,
+    }, None
+
+
 def import_dong_bo(filename: str, data: bytes):
     base_url = supabase_client.get_base_url()
     if not base_url:

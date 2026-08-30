@@ -38,6 +38,22 @@ def import_ranh_thon():
     return jsonify(data)
 
 
+@admin_bp.post("/api/delete-ranh-thon")
+def delete_ranh_thon():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    ma_xa = str(payload.get("ma_xa") or "").strip()
+    if not ma_xa:
+        return jsonify({"error": "Thiếu mã xã cần xóa"}), 400
+
+    data, error_response = import_service.delete_ranh_thon(ma_xa)
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @admin_bp.post("/api/import-dong-bo")
 def import_dong_bo():
     if not check_import_token():
