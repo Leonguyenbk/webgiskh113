@@ -97,6 +97,21 @@ def list_phan_loai_by_xa(ma_xa: str) -> tuple[dict[tuple[int, int], str] | None,
     return {(row["so_to"], row["so_thua"]): row.get("phan_loai_ke_hoach_2959") for row in rows}, None
 
 
+def get_dia_chi_thua_dat(ma_xa: str, so_to: int, so_thua: int):
+    """Địa chỉ thửa đất tự sinh cho biểu Nhóm 4 — RPC get_dia_chi_thua_dat
+    (xem supabase/schema.sql). Trả về chuỗi "Thôn ..., Xã ..., tỉnh Đắk Lắk"
+    nếu xã có ranh thôn và tâm thửa rơi vào 1 thôn, ngược lại "Xã ..., tỉnh
+    Đắk Lắk". None nếu không tìm được tên xã."""
+    data, error_response = supabase_client.call_rpc(
+        "get_dia_chi_thua_dat",
+        {"p_ma_xa": ma_xa, "p_so_to": so_to, "p_so_thua": so_thua},
+        timeout=20,
+    )
+    if error_response:
+        return None, error_response
+    return data, None
+
+
 def insert_rows(rows: list[dict]):
     response, error_response = supabase_client.rest_request(
         "POST",

@@ -21,6 +21,18 @@ def kiem_tra_trung_thua():
     return jsonify(data)
 
 
+@nhom4_bp.get("/api/nhom4/dia-chi-thua-dat")
+def dia_chi_thua_dat():
+    ma_xa = request.args.get("ma_xa", "").strip()
+    so_to = request.args.get("so_to", "").strip()
+    so_thua = request.args.get("so_thua", "").strip()
+
+    data, error_response = nhom4_service.get_dia_chi_thua_dat(ma_xa, so_to, so_thua)
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @nhom4_bp.post("/api/nhom4/ho-so")
 def submit_ho_so():
     raw_payload = request.form.get("payload", "")

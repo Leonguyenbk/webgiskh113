@@ -54,6 +54,21 @@ def check_trung_thua(ma_xa: str, so_to: str, so_thua: str):
     return {"trung": trung, "nhom_1_2": _is_nhom_1_2(phan_loai), "phan_loai": phan_loai}, None
 
 
+def get_dia_chi_thua_dat(ma_xa: str, so_to: str, so_thua: str):
+    """Địa chỉ thửa đất tự sinh để điền sẵn ô "Địa chỉ thửa đất" ở biểu
+    Nhóm 4. Thiếu tham số thì trả rỗng (frontend giữ nguyên ô đang có)."""
+    ma_xa = (ma_xa or "").strip()
+    so_to_int = _to_int(so_to)
+    so_thua_int = _to_int(so_thua)
+    if not ma_xa or so_to_int is None or so_thua_int is None:
+        return {"dia_chi": ""}, None
+
+    dia_chi, error_response = nhom4_repository.get_dia_chi_thua_dat(ma_xa, so_to_int, so_thua_int)
+    if error_response:
+        return None, error_response
+    return {"dia_chi": dia_chi or ""}, None
+
+
 def _sanitize_filename(name: str) -> str:
     cleaned = re.sub(r'[\\/:*?"<>|]', "_", name).strip()
     return cleaned or "HSQ.pdf"

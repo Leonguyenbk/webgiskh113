@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getXaList, searchParcels } from "./services/parcelService";
-import { checkTrungThua, submitHoSo } from "./services/nhom4Service";
+import { checkTrungThua, getDiaChiThuaDat, submitHoSo } from "./services/nhom4Service";
 import {
   HINH_THUC_SU_DUNG_OPTIONS,
   LOAI_CHU_OPTIONS,
@@ -112,6 +112,21 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     }
   }, []);
 
+  // Tự điền ô "Địa chỉ thửa đất": backend trả "Thôn ..., Xã ..., tỉnh Đắk
+  // Lắk" nếu xã đã có ranh giới thôn và tâm thửa rơi vào 1 thôn, ngược lại
+  // "Xã ..., tỉnh Đắk Lắk". Địa chỉ tự sinh này GHI ĐÈ ô đang có (kể cả
+  // dia_chi thô từ GML) — người dùng vẫn sửa tay được sau đó.
+  const layDiaChiThuaDat = useCallback(async (maXaValue, soTo, soThua) => {
+    if (!maXaValue || !soTo || !soThua) return;
+    try {
+      const body = await getDiaChiThuaDat({ maXa: maXaValue, soTo, soThua });
+      const diaChi = (body?.dia_chi || "").trim();
+      if (diaChi) setThua((prev) => ({ ...prev, diaChiThuaDat: diaChi }));
+    } catch {
+      // Không lấy được thì giữ nguyên ô địa chỉ — người dùng tự nhập.
+    }
+  }, []);
+
   // Nhận dữ liệu thửa từ bản đồ khi bấm "Nhập dữ liệu (biểu Nhóm 4)" ở
   // ParcelInfoPanel — điền sẵn xã/số tờ/số thửa/diện tích/địa chỉ, rồi kiểm
   // tra trùng thửa ngay (parcel từ bản đồ đã có sẵn dữ liệu, không cần gọi
@@ -143,8 +158,9 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
     if (maXaValue && soTo && soThua) {
       runCheckTrungThua(maXaValue, soTo, soThua);
+      layDiaChiThuaDat(maXaValue, soTo, soThua);
     }
-  }, [prefill, runCheckTrungThua]);
+  }, [prefill, runCheckTrungThua, layDiaChiThuaDat]);
 
   const dat2DienTichTinh = useMemo(() => {
     if (!coDat2) return "";
@@ -158,6 +174,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     if (!maXa || !thua.soTo || !thua.soThua) return;
 
     runCheckTrungThua(maXa, thua.soTo, thua.soThua);
+    layDiaChiThuaDat(maXa, thua.soTo, thua.soThua);
 
     try {
       const found = await searchParcels({ ma_xa: maXa, so_to: thua.soTo, so_thua: thua.soThua });

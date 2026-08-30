@@ -8,6 +8,14 @@ export function checkTrungThua({ maXa, soTo, soThua }, { signal } = {}) {
   });
 }
 
+export function getDiaChiThuaDat({ maXa, soTo, soThua }, { signal } = {}) {
+  return request("/api/nhom4/dia-chi-thua-dat", {
+    params: { ma_xa: maXa, so_to: soTo, so_thua: soThua },
+    signal,
+    errorFallback: "Không lấy được địa chỉ thửa đất",
+  });
+}
+
 export function submitHoSo(payload, fileChinh, filePhu, fileTbxn) {
   const formData = new FormData();
   formData.append("payload", JSON.stringify(payload));
