@@ -24,6 +24,20 @@ function Root() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  // iOS Safari bỏ qua user-scalable=no, vẫn cho chụm 2 ngón phóng to cả
+  // trang. Chặn sự kiện "gesture*" (chỉ Safari phát) để pinch chỉ zoom bản
+  // đồ Leaflet (Leaflet dùng touch event nên không bị ảnh hưởng), nhờ đó
+  // các nút nổi không trôi theo khi zoom.
+  useEffect(() => {
+    const stop = (event) => event.preventDefault();
+    document.addEventListener("gesturestart", stop);
+    document.addEventListener("gesturechange", stop);
+    return () => {
+      document.removeEventListener("gesturestart", stop);
+      document.removeEventListener("gesturechange", stop);
+    };
+  }, []);
+
   const navigate = (to) => {
     window.history.pushState({}, "", to);
     setPath(to);

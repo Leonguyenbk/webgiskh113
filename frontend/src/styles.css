@@ -8,11 +8,16 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
+body { margin: 0; min-width: 320px; overscroll-behavior: none; touch-action: manipulation; }
 button, input { font: inherit; }
 button { cursor: pointer; }
 
-.shell { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+/* 100dvh (dynamic viewport height): trên điện thoại, khi thanh địa chỉ của
+   trình duyệt hiện/ẩn lúc zoom bản đồ, chiều cao .shell bám theo vùng nhìn
+   thấy thật — nhờ đó các nút nổi neo theo mép (vị trí của tôi, chọn lớp nền,
+   ẩn/hiện thanh tìm kiếm) không bị nhảy chỗ. 100vh giữ làm dự phòng cho
+   trình duyệt cũ. */
+.shell { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 .topbar {
   height: 76px;
   flex: 0 0 76px;

@@ -2,7 +2,14 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- maximum-scale + user-scalable=no: trên điện thoại, thao tác chụm 2
+         ngón chỉ zoom bản đồ Leaflet, không phóng to cả trang — nhờ vậy các
+         nút nổi (ẩn/hiện thanh tìm kiếm, chọn lớp nền, vị trí của tôi) đứng
+         yên một chỗ khi zoom. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <meta name="theme-color" content="#0f766e" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Bản đồ phân loại thửa đất</title>
