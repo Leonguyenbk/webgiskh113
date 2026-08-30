@@ -8,7 +8,12 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; overscroll-behavior: none; touch-action: manipulation; }
+/* touch-action: pan-x pan-y (KHÔNG dùng "manipulation" — nó vẫn cho pinch
+   zoom): tắt chụm 2 ngón phóng to cả trang, chỉ còn cuộn dọc/ngang. Bản đồ
+   không bị ảnh hưởng vì Leaflet tự đặt touch-action riêng cho .leaflet-container
+   và xử lý zoom bằng JS. */
+html, body { touch-action: pan-x pan-y; }
+body { margin: 0; min-width: 320px; overscroll-behavior: none; }
 button, input { font: inherit; }
 button { cursor: pointer; }
 
