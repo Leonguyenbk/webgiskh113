@@ -254,7 +254,7 @@ def export_theo_mau_tanan_xlsx(ma_xa: str, chi_nhom3: bool):
     buf = io.BytesIO()
     wb.save(buf)
     pham_vi = "nhom3" if chi_nhom3 else "toanbo"
-    return (buf.getvalue(), f"mau_TANAN_{ma_xa}_{pham_vi}.xlsx"), None
+    return (buf.getvalue(), f"du_lieu_gcn_{ma_xa}_{pham_vi}.xlsx"), None
 
 
 def list_sources():

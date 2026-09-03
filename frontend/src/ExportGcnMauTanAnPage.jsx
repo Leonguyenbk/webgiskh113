@@ -66,7 +66,7 @@ export default function ExportGcnMauTanAnPage({ onNavigateHome }) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `mau_TANAN_${selectedMaXa}_${phamVi}.xlsx`;
+      link.download = `du_lieu_gcn_${selectedMaXa}_${phamVi}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -203,11 +203,6 @@ export default function ExportGcnMauTanAnPage({ onNavigateHome }) {
               <span>{error}</span>
             </div>
           )}
-
-          <p style={{ marginTop: 16, fontSize: 12, color: "#52514e" }}>
-            File giữ nguyên bố cục và tiêu đề cột của mẫu TANAN.xlsx. Mỗi
-            chủ sử dụng 1 dòng, đánh lại số thứ tự từ 1.
-          </p>
         </div>
       </section>
     </main>
