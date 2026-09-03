@@ -11,6 +11,7 @@ from . import supabase_client
 # query public.du_lieu_gcn) tự động tính luôn dữ liệu nhập từ đây.
 GCN_TABLE = "du_lieu_gcn"
 DONG_BO_TABLE = "dong_bo_du_lieu"
+THUA_DAT_TABLE = "thua_dat"
 NHOM4_MA_NGUON = "NHOM4_FORM"
 NHOM4_TEN_NGUON = "Biểu Nhóm 4 (nhập trực tiếp)"
 
@@ -61,6 +62,43 @@ def exists_key(key: str):
     if error_response:
         return None, error_response
     return bool(rows), None
+
+
+def exists_in_thua_dat(ma_xa: str, so_to: int, so_thua: int):
+    """Thửa có thật trong public.thua_dat (đã nhập GML) không — biểu Nhóm 4
+    chỉ nhận thửa CÓ THẬT trên bản đồ, tránh nộp nhầm số tờ/số thửa không
+    tồn tại (dong_bo_du_lieu/du_lieu_gcn không tự phát hiện được lỗi này vì
+    2 bảng đó không bắt buộc khớp với thua_dat)."""
+    response, error_response = supabase_client.rest_request(
+        "GET",
+        THUA_DAT_TABLE,
+        params={
+            "select": "id",
+            "ma_xa": f"eq.{ma_xa}",
+            "so_to": f"eq.{so_to}",
+            "so_thua": f"eq.{so_thua}",
+            "limit": 1,
+        },
+    )
+    rows, error_response = _json_or_error(response, error_response)
+    if error_response:
+        return None, error_response
+    return bool(rows), None
+
+
+def list_thua_dat_keys_by_xa(ma_xa: str) -> tuple[set[tuple[int, int]] | None, tuple | None]:
+    """Tập (so_to, so_thua) có thật trong public.thua_dat của 1 xã — dùng
+    kiểm tra hàng loạt lúc nộp biểu Nhóm 4 (nhiều thửa/lần nộp), tránh gọi
+    exists_in_thua_dat() lặp lại từng thửa."""
+    response, error_response = supabase_client.rest_request(
+        "GET",
+        THUA_DAT_TABLE,
+        params={"select": "so_to,so_thua", "ma_xa": f"eq.{ma_xa}"},
+    )
+    rows, error_response = _json_or_error(response, error_response)
+    if error_response:
+        return None, error_response
+    return {(row["so_to"], row["so_thua"]) for row in rows}, None
 
 
 def get_phan_loai(ma_xa: str, so_to: int, so_thua: int):

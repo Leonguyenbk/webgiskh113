@@ -9,7 +9,7 @@ import ImportSyncPage from "./ImportSyncPage.jsx";
 import ManageGcnLinksPage from "./ManageGcnLinksPage.jsx";
 import GcnDashboardPage from "./GcnDashboardPage.jsx";
 import ExportGcnNhom2Page from "./ExportGcnNhom2Page.jsx";
-import ExportGcnMauTanAnPage from "./ExportGcnMauTanAnPage.jsx";
+import ExportGcnNhom3Page from "./ExportGcnNhom3Page.jsx";
 import MplisSyncPage from "./MplisSyncPage.jsx";
 import Nhom4FormPage from "./Nhom4FormPage.jsx";
 import ImportRanhThonPage from "./ImportRanhThonPage.jsx";
@@ -58,7 +58,7 @@ function Root() {
         onNavigateGcnLinks={() => navigate("/nguon-gcn")}
         onNavigateGcnDashboard={() => navigate("/thong-ke-gcn")}
         onNavigateExportGcnNhom2={() => navigate("/xuat-gcn-nhom2")}
-        onNavigateExportGcnMauTanAn={() => navigate("/xuat-gcn-mau-tanan")}
+        onNavigateExportGcnNhom3={() => navigate("/xuat-gcn-nhom3")}
         onNavigateMplisSync={() => navigate("/cap-nhat-mplis")}
         onNavigateNhom4={() => navigate("/nhom-4")}
         onNavigateRanhThon={() => navigate("/import-ranh-thon")}
@@ -81,8 +81,8 @@ function Root() {
   if (path.startsWith("/xuat-gcn-nhom2")) {
     return <ExportGcnNhom2Page onNavigateHome={() => navigate("/")} />;
   }
-  if (path.startsWith("/xuat-gcn-mau-tanan")) {
-    return <ExportGcnMauTanAnPage onNavigateHome={() => navigate("/")} />;
+  if (path.startsWith("/xuat-gcn-nhom3")) {
+    return <ExportGcnNhom3Page onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/cap-nhat-mplis")) {
     return <MplisSyncPage onNavigateHome={() => navigate("/")} />;

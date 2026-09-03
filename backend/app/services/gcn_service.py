@@ -209,7 +209,7 @@ def export_theo_nhom_xlsx(ma_xa: str, nhom_raw: str | None):
     return (buf.getvalue(), f"gcn_{nhom_ten}_{ma_xa}.xlsx"), None
 
 
-def export_theo_mau_tanan_xlsx(ma_xa: str, chi_nhom3: bool):
+def export_nhom3_xlsx(ma_xa: str, chi_nhom3: bool):
     """Xuất .xlsx đúng bố cục file mẫu TANAN.xlsx: toàn bộ dữ liệu GCN của
     1 đơn vị hành chính, hoặc chỉ thửa Nhóm 3 (chưa thuộc Nhóm 1/Nhóm 2 KH
     2959) nếu chi_nhom3=True. Trả về ((bytes, ten_file), None) hoặc

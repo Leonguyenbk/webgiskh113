@@ -3,16 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 import { API_URL } from "./config/env";
 import { getXaList } from "./services/parcelService";
 
-// Trang Công cụ -> "Xuất Excel theo mẫu TANAN". Chọn đơn vị hành chính
-// (xã/phường), tải file .xlsx đúng bố cục mẫu TANAN.xlsx gồm toàn bộ dữ
-// liệu du_lieu_gcn của đơn vị đó, hoặc chỉ các thửa Nhóm 3 (chưa thuộc
-// Nhóm 1/Nhóm 2 KH 2959) — backend /api/gcn-export-mau-tanan dựng file.
-export default function ExportGcnMauTanAnPage({ onNavigateHome }) {
+// Trang Công cụ -> "Xuất Excel Nhóm 3". Chọn đơn vị hành chính (xã/phường),
+// tải file .xlsx đúng bố cục mẫu TANAN.xlsx gồm toàn bộ dữ liệu du_lieu_gcn
+// của đơn vị đó, hoặc chỉ các thửa Nhóm 3 (chưa thuộc Nhóm 1/Nhóm 2 KH
+// 2959) — backend /api/gcn-export-nhom3 dựng file.
+export default function ExportGcnNhom3Page({ onNavigateHome }) {
   const [xaList, setXaList] = useState([]);
   const [selectedMaXa, setSelectedMaXa] = useState("");
   const [xaQuery, setXaQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [phamVi, setPhamVi] = useState("toanbo"); // "toanbo" | "nhom3"
+  const [phamVi, setPhamVi] = useState("nhom3"); // "toanbo" | "nhom3"
   const [token, setToken] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -50,7 +50,7 @@ export default function ExportGcnMauTanAnPage({ onNavigateHome }) {
     setNotice("");
     try {
       const res = await fetch(
-        `${API_URL}/api/gcn-export-mau-tanan?ma_xa=${encodeURIComponent(selectedMaXa)}&chi_nhom3=${phamVi === "nhom3" ? "1" : "0"}`,
+        `${API_URL}/api/gcn-export-nhom3?ma_xa=${encodeURIComponent(selectedMaXa)}&chi_nhom3=${phamVi === "nhom3" ? "1" : "0"}`,
         { headers: token ? { "X-Import-Token": token } : {} },
       );
       if (!res.ok) {
@@ -84,11 +84,11 @@ export default function ExportGcnMauTanAnPage({ onNavigateHome }) {
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
-          <h1>Xuất Excel theo mẫu TANAN</h1>
+          <h1>Xuất Excel Nhóm 3</h1>
           <p>
             Tải Excel dữ liệu GCN đúng bố cục file mẫu TANAN.xlsx, theo đơn
-            vị hành chính — lấy hết hoặc chỉ thửa Nhóm 3 (chưa thuộc Nhóm
-            1/Nhóm 2)
+            vị hành chính — chỉ thửa Nhóm 3 (chưa thuộc Nhóm 1/Nhóm 2) hoặc
+            lấy hết
           </p>
         </div>
         <a
@@ -105,10 +105,10 @@ export default function ExportGcnMauTanAnPage({ onNavigateHome }) {
 
       <section className="dashboardWrap">
         <div className="importCard" style={{ maxWidth: 560 }}>
-          <label htmlFor="exportMauMaXa">Chọn đơn vị hành chính (xã/phường)</label>
+          <label htmlFor="exportNhom3MaXa">Chọn đơn vị hành chính (xã/phường)</label>
           <div className="comboBox">
             <input
-              id="exportMauMaXa"
+              id="exportNhom3MaXa"
               type="text"
               className="filterInput"
               autoComplete="off"
@@ -151,29 +151,29 @@ export default function ExportGcnMauTanAnPage({ onNavigateHome }) {
               <input
                 type="radio"
                 name="phamVi"
-                value="toanbo"
-                checked={phamVi === "toanbo"}
-                onChange={() => setPhamVi("toanbo")}
-              />
-              Tải hết
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 400 }}>
-              <input
-                type="radio"
-                name="phamVi"
                 value="nhom3"
                 checked={phamVi === "nhom3"}
                 onChange={() => setPhamVi("nhom3")}
               />
               Chỉ Nhóm 3 (không thuộc Nhóm 1/Nhóm 2)
             </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 400 }}>
+              <input
+                type="radio"
+                name="phamVi"
+                value="toanbo"
+                checked={phamVi === "toanbo"}
+                onChange={() => setPhamVi("toanbo")}
+              />
+              Tải hết
+            </label>
           </div>
 
-          <label htmlFor="exportMauToken" style={{ marginTop: 14, display: "block" }}>
+          <label htmlFor="exportNhom3Token" style={{ marginTop: 14, display: "block" }}>
             Mã xác thực
           </label>
           <input
-            id="exportMauToken"
+            id="exportNhom3Token"
             type="password"
             className="filterInput"
             autoComplete="off"

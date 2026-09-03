@@ -96,15 +96,18 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     if (cheDo === "Đã có GCN") setFileTbxn(null);
   }, [cheDo]);
 
-  // Kiểm tra trùng thửa + đã thuộc Nhóm 1/2 hay chưa — Nhóm 1/2 coi như đã
+  // Kiểm tra: thửa có thật trong thua_dat (đã nhập GML) không, có trùng
+  // thửa đã nộp không, và đã thuộc Nhóm 1/2 hay chưa — Nhóm 1/2 coi như đã
   // có dữ liệu từ trước, không cần nhập biểu Nhóm 4 nữa (giống quy ước ở
-  // dashboard "Thống kê thu thập"). Dùng chung cho cả blur số tờ/thửa lẫn
-  // khi điền sẵn từ bản đồ.
+  // dashboard "Thống kê thu thập"). Chỉ thửa "Nhóm 3" (có thật trong
+  // thua_dat, chưa thuộc Nhóm 1/2) mới hợp lệ. Dùng chung cho cả blur số
+  // tờ/thửa lẫn khi điền sẵn từ bản đồ.
   const runCheckTrungThua = useCallback(async (maXaValue, soTo, soThua) => {
     setTrungThuaStatus("checking");
     try {
       const result = await checkTrungThua({ maXa: maXaValue, soTo, soThua });
-      if (result?.nhom_1_2) setTrungThuaStatus("nhom12");
+      if (result?.ton_tai === false) setTrungThuaStatus("khongtontai");
+      else if (result?.nhom_1_2) setTrungThuaStatus("nhom12");
       else if (result?.trung) setTrungThuaStatus("trung");
       else setTrungThuaStatus("ok");
     } catch {
@@ -225,6 +228,18 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setError("Vui lòng nhập đủ số tờ, số thửa, diện tích và loại đất 1 trước khi thêm thửa.");
       return;
     }
+    if (trungThuaStatus === "khongtontai") {
+      setError("Thửa này không tồn tại trong dữ liệu thửa đất (thua_dat) — kiểm tra lại số tờ/số thửa trước khi thêm.");
+      return;
+    }
+    if (trungThuaStatus === "nhom12") {
+      setError("Thửa này đã thuộc Nhóm 1/Nhóm 2 — không thêm được vào danh sách.");
+      return;
+    }
+    if (trungThuaStatus === "trung") {
+      setError("Thửa này đã có dữ liệu GCN — không thêm được vào danh sách.");
+      return;
+    }
     setError("");
     setThuaList((prev) => [...prev, { thua, dat1, dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null }]);
     setThua(taoThuaRong());
@@ -236,6 +251,21 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
   const xoaThua = (index) => setThuaList((prev) => prev.filter((_, i) => i !== index));
   const xoaDanhSachThua = () => setThuaList([]);
+
+  // Đưa 1 thửa trong danh sách trở lại các ô đang nhập để sửa (VD: thửa
+  // thêm hàng loạt từ bản đồ còn thiếu loại đất) — bấm "+ Thêm thửa đất"
+  // lại sau khi sửa xong để đưa trở lại danh sách.
+  const suaThua = (index) => {
+    const item = thuaList[index];
+    if (!item) return;
+    setThua(item.thua);
+    setDat1(item.dat1);
+    setCoDat2(Boolean(item.dat2));
+    setDat2(item.dat2 || taoDatRong());
+    setThuaList((prev) => prev.filter((_, i) => i !== index));
+    setTrungThuaStatus("");
+    setError("");
+  };
 
   const themNguoi = () => setOwners((prev) => [...prev, taoChuRong()]);
   const xoaNguoi = (index) => setOwners((prev) => prev.filter((_, i) => i !== index));
@@ -256,6 +286,14 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
     if (!maXa) return setError("Vui lòng chọn xã/phường.");
     if (!parcels.length) return setError("Chưa có thông tin thửa đất.");
+    const thieuLoaiDat = parcels.filter((p) => !p.dat1?.loaiDat);
+    if (thieuLoaiDat.length) {
+      return setError(
+        `Thiếu loại đất cho ${thieuLoaiDat.length} thửa: ` +
+          thieuLoaiDat.map((p) => `${p.thua.soTo}/${p.thua.soThua}`).join(", ") +
+          " — bấm Sửa để chọn loại đất trước khi nộp.",
+      );
+    }
     if (!fileChinh) {
       return setError(
         `Vui lòng chọn file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"}.`,
@@ -643,6 +681,11 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
             </div>
           </div>
           {trungThuaStatus === "checking" && <div className="notice">Đang kiểm tra trùng thửa…</div>}
+          {trungThuaStatus === "khongtontai" && (
+            <div className="notice error">
+              Thửa này không tồn tại trong dữ liệu thửa đất (thua_dat) — kiểm tra lại số tờ/số thửa.
+            </div>
+          )}
           {trungThuaStatus === "trung" && (
             <div className="notice error">Thửa này đã có dữ liệu GCN — không được nộp lại.</div>
           )}
@@ -651,7 +694,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               Thửa này đã thuộc Nhóm 1/Nhóm 2 — coi như đã có dữ liệu từ trước, không cần nhập biểu nữa.
             </div>
           )}
-          {trungThuaStatus === "ok" && <div className="notice">Thửa này chưa có trong dữ liệu đã nhập.</div>}
+          {trungThuaStatus === "ok" && <div className="notice">Thửa này thuộc Nhóm 3 — chưa có trong dữ liệu đã nhập.</div>}
 
           {cheDo === "Đã có GCN" && (
             <div className="nhom4Grid2">
@@ -835,10 +878,16 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
                   <li key={index}>
                     <span>
                       Tờ {p.thua.soTo} / Thửa {p.thua.soThua} — {p.thua.dienTichThuaDat} m²
+                      {p.dat1.loaiDat ? ` — ${p.dat1.loaiDat}` : " — ⚠ chưa chọn loại đất"}
                     </span>
-                    <button type="button" className="nhom4MiniBtn danger" onClick={() => xoaThua(index)}>
-                      Xóa
-                    </button>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button type="button" className="nhom4MiniBtn" onClick={() => suaThua(index)}>
+                        Sửa
+                      </button>
+                      <button type="button" className="nhom4MiniBtn danger" onClick={() => xoaThua(index)}>
+                        Xóa
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

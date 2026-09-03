@@ -41,7 +41,11 @@ def check_trung_thua(ma_xa: str, so_to: str, so_thua: str):
     so_to_int = _to_int(so_to)
     so_thua_int = _to_int(so_thua)
     if not ma_xa or so_to_int is None or so_thua_int is None:
-        return {"trung": False, "nhom_1_2": False}, None
+        return {"trung": False, "nhom_1_2": False, "ton_tai": False}, None
+
+    ton_tai, error_response = nhom4_repository.exists_in_thua_dat(ma_xa, so_to_int, so_thua_int)
+    if error_response:
+        return None, error_response
 
     trung, error_response = nhom4_repository.exists_key(_make_key(ma_xa, so_to_int, so_thua_int))
     if error_response:
@@ -51,7 +55,12 @@ def check_trung_thua(ma_xa: str, so_to: str, so_thua: str):
     if error_response:
         return None, error_response
 
-    return {"trung": trung, "nhom_1_2": _is_nhom_1_2(phan_loai), "phan_loai": phan_loai}, None
+    return {
+        "trung": trung,
+        "nhom_1_2": _is_nhom_1_2(phan_loai),
+        "phan_loai": phan_loai,
+        "ton_tai": ton_tai,
+    }, None
 
 
 def get_dia_chi_thua_dat(ma_xa: str, so_to: str, so_thua: str):
@@ -274,6 +283,28 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
     error_response = _reject_existing()
     if error_response:
         return None, error_response
+
+    # Chỉ nhận thửa CÓ THẬT trong public.thua_dat (đã nhập GML) — chặn nộp
+    # nhầm số tờ/số thửa không tồn tại trên bản đồ. dong_bo_du_lieu/
+    # du_lieu_gcn không tự phát hiện được lỗi này vì 2 bảng đó không bắt
+    # buộc khớp với thua_dat (xem nhom4_repository.exists_in_thua_dat).
+    thua_dat_keys_by_xa, error_response = nhom4_repository.list_thua_dat_keys_by_xa(ma_xa)
+    if error_response:
+        return None, error_response
+
+    for so_to, so_thua, _key in parcel_keys:
+        if (so_to, so_thua) not in thua_dat_keys_by_xa:
+            return None, (
+                jsonify(
+                    {
+                        "error": (
+                            f"Thửa {so_thua}, tờ {so_to} không tồn tại trong dữ liệu thửa đất "
+                            "(thua_dat) — kiểm tra lại số tờ/số thửa."
+                        )
+                    }
+                ),
+                404,
+            )
 
     phan_loai_by_xa, error_response = nhom4_repository.list_phan_loai_by_xa(ma_xa)
     if error_response:
