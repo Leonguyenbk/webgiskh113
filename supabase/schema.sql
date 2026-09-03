@@ -1180,13 +1180,19 @@ grant execute on function public.export_gcn_theo_nhom(text, text[], integer, int
 -- =========================================================
 -- XUẤT TOÀN BỘ DỮ LIỆU GCN CỦA 1 ĐVHC THEO MẪU TANAN.xlsx (trang Công cụ
 -- -> "Xuất Excel theo mẫu TANAN"). Khác export_gcn_theo_nhom: LEFT JOIN
--- (không loại thửa chưa có dòng dong_bo_du_lieu tương ứng) và cho phép
--- p_chi_nhom3 = true để CHỈ lấy thửa "Nhóm 3" — tức chưa thuộc Nhóm 1/
--- Nhóm 2 (KH 2959), bao gồm cả thửa chưa có dòng dong_bo_du_lieu hoặc có
+-- dong_bo_du_lieu (không loại thửa chưa có dòng đồng bộ tương ứng) và cho
+-- phép p_chi_nhom3 = true để CHỈ lấy thửa "Nhóm 3" — tức chưa thuộc Nhóm
+-- 1/Nhóm 2 (KH 2959), bao gồm cả thửa chưa có dòng dong_bo_du_lieu hoặc có
 -- nhưng phân loại rỗng/khác — cùng định nghĩa "DEFAULT" dùng ở
 -- get_parcels_in_view/count_parcels_in_view (xem frontend/src/utils/
 -- constants.js: getGroupKey/isNhom12). p_chi_nhom3 = false: lấy hết,
 -- không lọc theo phân loại.
+--
+-- Luôn EXISTS vào public.thua_dat (cùng cách so khớp madvhc_soto_sothua
+-- dùng ở get_parcels_in_view.co_gcn): du_lieu_gcn có thể chứa dòng của
+-- thửa chưa/không còn trong thua_dat (chưa nhập GML, sai lệch tờ/thửa từ
+-- Sheet nguồn...) — những dòng đó không tra cứu được trên bản đồ nên
+-- không đưa vào file xuất.
 -- =========================================================
 drop function if exists public.export_du_lieu_gcn(text, boolean, integer, integer);
 
@@ -1212,6 +1218,13 @@ as $$
            and g.madvhc_soto_sothua =
                d.ma_xa || '_' || d.so_to::text || '_' || d.so_thua::text
         where g.ma_nguon = p_ma_xa
+          and exists (
+              select 1
+              from public.thua_dat t
+              where t.ma_xa = p_ma_xa
+                and g.madvhc_soto_sothua =
+                    t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+          )
           and (
               not p_chi_nhom3
               or d.id is null
