@@ -43,6 +43,17 @@ def export_gcn_theo_nhom_page(ma_xa: str, nhom: list[str], limit: int, offset: i
     )
 
 
+def export_du_lieu_gcn_page(ma_xa: str, chi_nhom3: bool, limit: int, offset: int):
+    # 1 trang: LEFT JOIN du_lieu_gcn x dong_bo_du_lieu (khác
+    # export_gcn_theo_nhom_page: không loại thửa chưa có dòng đồng bộ).
+    # p_chi_nhom3=true lọc còn thửa chưa thuộc Nhóm 1/Nhóm 2 (KH 2959).
+    return supabase_client.call_rpc(
+        "export_du_lieu_gcn",
+        {"p_ma_xa": ma_xa, "p_chi_nhom3": chi_nhom3, "p_limit": limit, "p_offset": offset},
+        timeout=90,
+    )
+
+
 def list_nguon():
     response, error_response = supabase_client.rest_request(
         "GET", NGUON_GCN_TABLE, params={"select": "*", "order": "ma_nguon.asc"}

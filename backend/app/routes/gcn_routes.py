@@ -35,6 +35,31 @@ def gcn_export_theo_nhom():
     )
 
 
+@gcn_bp.get("/api/gcn-export-mau-tanan")
+def gcn_export_mau_tanan():
+    # Xuất .xlsx đúng bố cục file mẫu TANAN.xlsx của 1 đơn vị hành chính.
+    # ?ma_xa=<mã ĐVHC>&chi_nhom3=1 (mặc định 0 = lấy hết, không lọc nhóm).
+    # File chứa dữ liệu cá nhân (CCCD, địa chỉ...) nên bắt buộc mã xác thực
+    # IMPORT_TOKEN giống các endpoint quản trị khác — khác
+    # /api/gcn-export-theo-nhom (không chặn) vì mẫu TANAN xuất TOÀN BỘ dữ
+    # liệu 1 xã, không chỉ 1 nhóm KH 2959.
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    chi_nhom3 = request.args.get("chi_nhom3", "").strip().lower() in ("1", "true", "yes")
+    result, error_response = gcn_service.export_theo_mau_tanan_xlsx(
+        request.args.get("ma_xa", ""), chi_nhom3
+    )
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @gcn_bp.post("/api/gcn-stats/refresh")
 def gcn_stats_refresh():
     # Tính lại bảng cache thống kê thu thập (nhánh quét nặng). Dành cho

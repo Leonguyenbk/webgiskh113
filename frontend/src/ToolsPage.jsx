@@ -24,6 +24,7 @@ export default function ToolsPage({
   onNavigateGcnLinks,
   onNavigateGcnDashboard,
   onNavigateExportGcnNhom2,
+  onNavigateExportGcnMauTanAn,
   onNavigateMplisSync,
   onNavigateNhom4,
   onNavigateRanhThon,
@@ -55,6 +56,12 @@ export default function ToolsPage({
       description:
         "Tải Excel các dòng du_lieu_gcn của thửa đã thu thập nhưng đang thuộc Nhóm 2 (KH 2959), chọn theo xã/phường.",
       onNavigate: onNavigateExportGcnNhom2,
+    },
+    {
+      name: "⬇ Xuất Excel theo mẫu TANAN",
+      description:
+        "Tải Excel dữ liệu du_lieu_gcn đúng bố cục mẫu TANAN.xlsx theo đơn vị hành chính — lấy hết hoặc chỉ thửa Nhóm 3 (chưa thuộc Nhóm 1/Nhóm 2).",
+      onNavigate: onNavigateExportGcnMauTanAn,
     },
     {
       name: "🔄 Cập nhật MPLIS",

@@ -1177,4 +1177,55 @@ $$;
 revoke all on function public.export_gcn_theo_nhom(text, text[], integer, integer) from public;
 grant execute on function public.export_gcn_theo_nhom(text, text[], integer, integer) to service_role;
 
+-- =========================================================
+-- XUẤT TOÀN BỘ DỮ LIỆU GCN CỦA 1 ĐVHC THEO MẪU TANAN.xlsx (trang Công cụ
+-- -> "Xuất Excel theo mẫu TANAN"). Khác export_gcn_theo_nhom: LEFT JOIN
+-- (không loại thửa chưa có dòng dong_bo_du_lieu tương ứng) và cho phép
+-- p_chi_nhom3 = true để CHỈ lấy thửa "Nhóm 3" — tức chưa thuộc Nhóm 1/
+-- Nhóm 2 (KH 2959), bao gồm cả thửa chưa có dòng dong_bo_du_lieu hoặc có
+-- nhưng phân loại rỗng/khác — cùng định nghĩa "DEFAULT" dùng ở
+-- get_parcels_in_view/count_parcels_in_view (xem frontend/src/utils/
+-- constants.js: getGroupKey/isNhom12). p_chi_nhom3 = false: lấy hết,
+-- không lọc theo phân loại.
+-- =========================================================
+drop function if exists public.export_du_lieu_gcn(text, boolean, integer, integer);
+
+create or replace function public.export_du_lieu_gcn(
+    p_ma_xa text,
+    p_chi_nhom3 boolean default false,
+    p_limit integer default 5000,
+    p_offset integer default 0
+)
+returns json
+language sql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '60s'
+as $$
+    select coalesce(json_agg(sub), '[]'::json)
+    from (
+        select g.*
+        from public.du_lieu_gcn g
+        left join public.dong_bo_du_lieu d
+            on d.ma_xa = p_ma_xa
+           and g.madvhc_soto_sothua =
+               d.ma_xa || '_' || d.so_to::text || '_' || d.so_thua::text
+        where g.ma_nguon = p_ma_xa
+          and (
+              not p_chi_nhom3
+              or d.id is null
+              or upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
+          )
+        order by
+          (case when g.soto ~ '^[0-9]+$' then g.soto::int end) nulls last, g.soto,
+          (case when g.sothua ~ '^[0-9]+$' then g.sothua::int end) nulls last, g.sothua,
+          g.dong_sheet
+        limit greatest(p_limit, 1) offset greatest(p_offset, 0)
+    ) sub;
+$$;
+
+revoke all on function public.export_du_lieu_gcn(text, boolean, integer, integer) from public;
+grant execute on function public.export_du_lieu_gcn(text, boolean, integer, integer) to service_role;
+
 
