@@ -86,14 +86,24 @@ def exists_in_thua_dat(ma_xa: str, so_to: int, so_thua: int):
     return bool(rows), None
 
 
-def list_thua_dat_keys_by_xa(ma_xa: str) -> tuple[set[tuple[int, int]] | None, tuple | None]:
+def list_thua_dat_keys_by_xa(
+    ma_xa: str, so_to_list: list[int] | None = None
+) -> tuple[set[tuple[int, int]] | None, tuple | None]:
     """Tập (so_to, so_thua) có thật trong public.thua_dat của 1 xã — dùng
     kiểm tra hàng loạt lúc nộp biểu Nhóm 4 (nhiều thửa/lần nộp), tránh gọi
-    exists_in_thua_dat() lặp lại từng thửa."""
+    exists_in_thua_dat() lặp lại từng thửa.
+
+    so_to_list: chỉ lấy các tờ đang nộp. Supabase cắt 1000 dòng/request và
+    1 xã thường có > 1000 thửa — không lọc theo tờ sẽ trả thiếu, khiến thửa
+    có thật (nằm ngoài 1000 dòng đầu) bị báo nhầm là không tồn tại."""
+    params = {"select": "so_to,so_thua", "ma_xa": f"eq.{ma_xa}"}
+    if so_to_list:
+        in_list = ",".join(str(v) for v in sorted(set(so_to_list)))
+        params["so_to"] = f"in.({in_list})"
     response, error_response = supabase_client.rest_request(
         "GET",
         THUA_DAT_TABLE,
-        params={"select": "so_to,so_thua", "ma_xa": f"eq.{ma_xa}"},
+        params=params,
     )
     rows, error_response = _json_or_error(response, error_response)
     if error_response:
@@ -123,11 +133,20 @@ def get_phan_loai(ma_xa: str, so_to: int, so_thua: int):
     return (rows[0].get("phan_loai_ke_hoach_2959") if rows else None), None
 
 
-def list_phan_loai_by_xa(ma_xa: str) -> tuple[dict[tuple[int, int], str] | None, tuple | None]:
+def list_phan_loai_by_xa(
+    ma_xa: str, so_to_list: list[int] | None = None
+) -> tuple[dict[tuple[int, int], str] | None, tuple | None]:
+    # Lọc theo tờ đang nộp vì lý do y hệt list_thua_dat_keys_by_xa: Supabase
+    # cắt 1000 dòng/request, không lọc thì chốt chặn Nhóm 1/2 bỏ sót thửa
+    # nằm ngoài 1000 dòng đầu.
+    params = {"select": "so_to,so_thua,phan_loai_ke_hoach_2959", "ma_xa": f"eq.{ma_xa}"}
+    if so_to_list:
+        in_list = ",".join(str(v) for v in sorted(set(so_to_list)))
+        params["so_to"] = f"in.({in_list})"
     response, error_response = supabase_client.rest_request(
         "GET",
         DONG_BO_TABLE,
-        params={"select": "so_to,so_thua,phan_loai_ke_hoach_2959", "ma_xa": f"eq.{ma_xa}"},
+        params=params,
     )
     rows, error_response = _json_or_error(response, error_response)
     if error_response:

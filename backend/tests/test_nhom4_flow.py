@@ -137,7 +137,16 @@ class Nhom4FlowTest(unittest.TestCase):
             setattr(nhom4_repository, name, fn)
 
         self._orig["list_phan_loai_by_xa"] = nhom4_repository.list_phan_loai_by_xa
-        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa: ({}, None)
+        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa, so_to_list=None: ({}, None)
+
+        # Mọi thửa build_payload() dùng đều coi như CÓ THẬT trong thua_dat.
+        self._orig["list_thua_dat_keys_by_xa"] = nhom4_repository.list_thua_dat_keys_by_xa
+        nhom4_repository.list_thua_dat_keys_by_xa = lambda ma_xa, so_to_list=None: (
+            {(10, 200), (999, 888)},
+            None,
+        )
+        self._orig["exists_in_thua_dat"] = nhom4_repository.exists_in_thua_dat
+        nhom4_repository.exists_in_thua_dat = lambda ma_xa, so_to, so_thua: (True, None)
 
         self._orig["get_phan_loai"] = nhom4_repository.get_phan_loai
         nhom4_repository.get_phan_loai = lambda ma_xa, so_to, so_thua: (None, None)
@@ -255,8 +264,14 @@ class Nhom4FlowTest(unittest.TestCase):
         self.assertNotRegex(src, r"NHOM4_FORM")
         with open(os.path.join(sync_dir, "main.py"), encoding="utf-8") as fh:
             main_src = fh.read()
-        # Nguồn sync đọc từ bảng nguon_gcn, không tự chèn NHOM4_FORM.
-        self.assertNotRegex(main_src, r"NHOM4_FORM")
+        code = re.sub(r"#.*", "", main_src)
+        # Nguồn sync đọc từ bảng nguon_gcn. NHOM4_FORM chỉ được phép xuất
+        # hiện đúng 1 lần — dòng định nghĩa hằng FORM_MA_NGUON dùng để LOẠI
+        # TRỪ nguồn biểu Nhóm 4 khỏi bước ép madvhc, tuyệt đối không thêm nó
+        # làm một nguồn sync.
+        self.assertEqual(code.count("NHOM4_FORM"), 1)
+        self.assertRegex(code, r'FORM_MA_NGUON\s*=\s*["\']NHOM4_FORM["\']')
+        self.assertRegex(code, r'source\.ma_nguon\s*!=\s*FORM_MA_NGUON')
 
 
 class FakeDrive:
@@ -346,7 +361,12 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
             self._orig[name] = getattr(nhom4_repository, name)
             setattr(nhom4_repository, name, fn)
         self._orig["list_phan_loai_by_xa"] = nhom4_repository.list_phan_loai_by_xa
-        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa: ({}, None)
+        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa, so_to_list=None: ({}, None)
+        self._orig["list_thua_dat_keys_by_xa"] = nhom4_repository.list_thua_dat_keys_by_xa
+        nhom4_repository.list_thua_dat_keys_by_xa = lambda ma_xa, so_to_list=None: (
+            {(10, 200), (999, 888)},
+            None,
+        )
         self._orig_bg = nhom4_service._upload_files_background
         self.bg_calls: list[tuple] = []
         nhom4_service._upload_files_background = lambda *a, **k: self.bg_calls.append(a)
@@ -393,7 +413,12 @@ class ThoiHanSoNamTest(unittest.TestCase):
             self._orig[name] = getattr(nhom4_repository, name)
             setattr(nhom4_repository, name, fn)
         self._orig["list_phan_loai_by_xa"] = nhom4_repository.list_phan_loai_by_xa
-        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa: ({}, None)
+        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa, so_to_list=None: ({}, None)
+        self._orig["list_thua_dat_keys_by_xa"] = nhom4_repository.list_thua_dat_keys_by_xa
+        nhom4_repository.list_thua_dat_keys_by_xa = lambda ma_xa, so_to_list=None: (
+            {(10, 200), (999, 888)},
+            None,
+        )
         self._orig_bg = nhom4_service._upload_files_background
         nhom4_service._upload_files_background = lambda *a, **k: None
 

@@ -288,7 +288,10 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
     # nhầm số tờ/số thửa không tồn tại trên bản đồ. dong_bo_du_lieu/
     # du_lieu_gcn không tự phát hiện được lỗi này vì 2 bảng đó không bắt
     # buộc khớp với thua_dat (xem nhom4_repository.exists_in_thua_dat).
-    thua_dat_keys_by_xa, error_response = nhom4_repository.list_thua_dat_keys_by_xa(ma_xa)
+    so_to_dang_nop = [so_to for so_to, _so_thua, _key in parcel_keys]
+    thua_dat_keys_by_xa, error_response = nhom4_repository.list_thua_dat_keys_by_xa(
+        ma_xa, so_to_dang_nop
+    )
     if error_response:
         return None, error_response
 
@@ -306,7 +309,9 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
                 404,
             )
 
-    phan_loai_by_xa, error_response = nhom4_repository.list_phan_loai_by_xa(ma_xa)
+    phan_loai_by_xa, error_response = nhom4_repository.list_phan_loai_by_xa(
+        ma_xa, so_to_dang_nop
+    )
     if error_response:
         return None, error_response
 
