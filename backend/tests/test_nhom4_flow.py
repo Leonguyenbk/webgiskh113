@@ -136,12 +136,12 @@ class Nhom4FlowTest(unittest.TestCase):
             self._orig[name] = getattr(nhom4_repository, name)
             setattr(nhom4_repository, name, fn)
 
-        self._orig["list_phan_loai_by_xa"] = nhom4_repository.list_phan_loai_by_xa
-        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa, so_to_list=None: ({}, None)
+        self._orig["phan_loai_for_keys"] = nhom4_repository.phan_loai_for_keys
+        nhom4_repository.phan_loai_for_keys = lambda ma_xa, keys: ({}, None)
 
         # Mọi thửa build_payload() dùng đều coi như CÓ THẬT trong thua_dat.
-        self._orig["list_thua_dat_keys_by_xa"] = nhom4_repository.list_thua_dat_keys_by_xa
-        nhom4_repository.list_thua_dat_keys_by_xa = lambda ma_xa, so_to_list=None: (
+        self._orig["existing_thua_dat_keys"] = nhom4_repository.existing_thua_dat_keys
+        nhom4_repository.existing_thua_dat_keys = lambda ma_xa, keys: (
             {(10, 200), (999, 888)},
             None,
         )
@@ -355,10 +355,10 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
         }.items():
             self._orig[name] = getattr(nhom4_repository, name)
             setattr(nhom4_repository, name, fn)
-        self._orig["list_phan_loai_by_xa"] = nhom4_repository.list_phan_loai_by_xa
-        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa, so_to_list=None: ({}, None)
-        self._orig["list_thua_dat_keys_by_xa"] = nhom4_repository.list_thua_dat_keys_by_xa
-        nhom4_repository.list_thua_dat_keys_by_xa = lambda ma_xa, so_to_list=None: (
+        self._orig["phan_loai_for_keys"] = nhom4_repository.phan_loai_for_keys
+        nhom4_repository.phan_loai_for_keys = lambda ma_xa, keys: ({}, None)
+        self._orig["existing_thua_dat_keys"] = nhom4_repository.existing_thua_dat_keys
+        nhom4_repository.existing_thua_dat_keys = lambda ma_xa, keys: (
             {(10, 200), (999, 888)},
             None,
         )
@@ -437,10 +437,10 @@ class ThoiHanSoNamTest(unittest.TestCase):
         }.items():
             self._orig[name] = getattr(nhom4_repository, name)
             setattr(nhom4_repository, name, fn)
-        self._orig["list_phan_loai_by_xa"] = nhom4_repository.list_phan_loai_by_xa
-        nhom4_repository.list_phan_loai_by_xa = lambda ma_xa, so_to_list=None: ({}, None)
-        self._orig["list_thua_dat_keys_by_xa"] = nhom4_repository.list_thua_dat_keys_by_xa
-        nhom4_repository.list_thua_dat_keys_by_xa = lambda ma_xa, so_to_list=None: (
+        self._orig["phan_loai_for_keys"] = nhom4_repository.phan_loai_for_keys
+        nhom4_repository.phan_loai_for_keys = lambda ma_xa, keys: ({}, None)
+        self._orig["existing_thua_dat_keys"] = nhom4_repository.existing_thua_dat_keys
+        nhom4_repository.existing_thua_dat_keys = lambda ma_xa, keys: (
             {(10, 200), (999, 888)},
             None,
         )
@@ -499,6 +499,74 @@ class ThoiHanSoNamTest(unittest.TestCase):
         # placeholder dd/mm/yyyy chỉ còn ở ngày cấp GCN / ngày sinh, không
         # còn ở ô thời hạn sử dụng.
         self.assertNotRegex(src, r'thoiHanSuDung[\s\S]{0,200}dd/mm/yyyy')
+
+
+class _FakeResp:
+    def __init__(self, rows):
+        self._rows = rows
+        self.ok = True
+        self.status_code = 200
+        self.text = ""
+
+    def json(self):
+        return self._rows
+
+
+class ThuaDatCapProofTest(unittest.TestCase):
+    """existing_thua_dat_keys()/phan_loai_for_keys() KHÔNG được dính trần
+    1000 dòng/request của Supabase: phải hỏi đích danh từng thửa đang nộp,
+    không tải cả xã hay cả tờ.
+
+    Bug từng gặp: xã > 1000 thửa (vd 24379), nộp tay tờ 41 thửa 79 -> báo
+    nhầm "không tồn tại trong dữ liệu thửa đất" vì thửa 79 nằm ngoài 1000
+    dòng đầu mà request tải về."""
+
+    DENSE_SHEET = {(41, n) for n in range(1, 4001)}  # tờ 41 có 4000 thửa
+
+    def setUp(self):
+        self.calls: list[dict] = []
+        self._orig = nhom4_repository.supabase_client.rest_request
+
+        def fake_rest_request(method, table, *, params=None, **_kw):
+            self.calls.append({"table": table, "params": params or {}})
+            p = params or {}
+            # Mô phỏng Supabase: chỉ trả các dòng khớp filter, cắt cứng 1000.
+            so_to = int(p.get("so_to", "eq.0").split(".", 1)[1])
+            in_raw = p.get("so_thua", "in.()")
+            wanted = {
+                int(x) for x in in_raw[in_raw.index("(") + 1 : in_raw.rindex(")")].split(",") if x
+            }
+            universe = self.DENSE_SHEET if table == nhom4_repository.THUA_DAT_TABLE else set()
+            rows = [
+                {"so_to": st, "so_thua": sth}
+                for (st, sth) in sorted(universe)
+                if st == so_to and sth in wanted
+            ][:1000]
+            return _FakeResp(rows), None
+
+        nhom4_repository.supabase_client.rest_request = fake_rest_request
+
+    def tearDown(self):
+        nhom4_repository.supabase_client.rest_request = self._orig
+
+    def test_finds_thua_beyond_first_1000_rows(self):
+        found, err = nhom4_repository.existing_thua_dat_keys("24379", [(41, 79), (41, 3999)])
+        self.assertIsNone(err, err)
+        self.assertEqual(found, {(41, 79), (41, 3999)})
+
+    def test_query_is_scoped_per_to_and_thua(self):
+        nhom4_repository.existing_thua_dat_keys("24379", [(41, 79), (41, 80), (42, 5)])
+        # 1 request / số tờ, luôn kèm cả so_to=eq lẫn so_thua=in — không bao
+        # giờ có request "cả xã" (thiếu so_thua) làm chạm trần 1000.
+        self.assertEqual({c["params"].get("so_to") for c in self.calls}, {"eq.41", "eq.42"})
+        for c in self.calls:
+            self.assertIn("so_thua", c["params"])
+            self.assertTrue(c["params"]["so_thua"].startswith("in.("))
+
+    def test_missing_thua_not_reported_as_existing(self):
+        found, err = nhom4_repository.existing_thua_dat_keys("24379", [(41, 79), (41, 99999)])
+        self.assertIsNone(err, err)
+        self.assertEqual(found, {(41, 79)})
 
 
 class Nhom4CleanupTest(unittest.TestCase):

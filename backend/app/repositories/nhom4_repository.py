@@ -86,29 +86,47 @@ def exists_in_thua_dat(ma_xa: str, so_to: int, so_thua: int):
     return bool(rows), None
 
 
-def list_thua_dat_keys_by_xa(
-    ma_xa: str, so_to_list: list[int] | None = None
-) -> tuple[set[tuple[int, int]] | None, tuple | None]:
-    """Tập (so_to, so_thua) có thật trong public.thua_dat của 1 xã — dùng
-    kiểm tra hàng loạt lúc nộp biểu Nhóm 4 (nhiều thửa/lần nộp), tránh gọi
-    exists_in_thua_dat() lặp lại từng thửa.
+def _thua_by_to(keys: list[tuple[int, int]]) -> dict[int, list[int]]:
+    thua_by_to: dict[int, set[int]] = {}
+    for so_to, so_thua in keys:
+        thua_by_to.setdefault(so_to, set()).add(so_thua)
+    return {so_to: sorted(thua_set) for so_to, thua_set in thua_by_to.items()}
 
-    so_to_list: chỉ lấy các tờ đang nộp. Supabase cắt 1000 dòng/request và
-    1 xã thường có > 1000 thửa — không lọc theo tờ sẽ trả thiếu, khiến thửa
-    có thật (nằm ngoài 1000 dòng đầu) bị báo nhầm là không tồn tại."""
-    params = {"select": "so_to,so_thua", "ma_xa": f"eq.{ma_xa}"}
-    if so_to_list:
-        in_list = ",".join(str(v) for v in sorted(set(so_to_list)))
-        params["so_to"] = f"in.({in_list})"
-    response, error_response = supabase_client.rest_request(
-        "GET",
-        THUA_DAT_TABLE,
-        params=params,
-    )
-    rows, error_response = _json_or_error(response, error_response)
-    if error_response:
-        return None, error_response
-    return {(row["so_to"], row["so_thua"]) for row in rows}, None
+
+def existing_thua_dat_keys(
+    ma_xa: str, keys: list[tuple[int, int]]
+) -> tuple[set[tuple[int, int]] | None, tuple | None]:
+    """Trong các cặp (so_to, so_thua) truyền vào, cặp nào CÓ THẬT trong
+    public.thua_dat (đã nhập GML) — dùng kiểm tra hàng loạt lúc nộp biểu
+    Nhóm 4 (nhiều thửa/lần nộp), tránh gọi exists_in_thua_dat() lặp lại
+    từng thửa.
+
+    Hỏi ĐÍCH DANH theo từng số tờ (so_to=eq.X & so_thua=in.(các thửa của
+    tờ đó trong lô)) thay vì tải toàn bộ thửa của xã/của tờ. Lý do: Supabase
+    cắt cứng 1000 dòng/request. Xã đông thửa, hoặc lô nộp trải nhiều tờ, vẫn
+    vượt 1000 -> thửa có thật bị rớt khỏi kết quả -> submit_ho_so() báo nhầm
+    404 "không tồn tại trong dữ liệu thửa đất", dù ô kiểm tra realtime
+    (exists_in_thua_dat, query đích danh) vẫn báo hợp lệ. Hỏi đúng các thửa
+    đang nộp thì mỗi request chỉ trả tối đa số thửa của 1 tờ trong lô —
+    không bao giờ chạm trần 1000."""
+    found: set[tuple[int, int]] = set()
+    for so_to, thua_list in _thua_by_to(keys).items():
+        in_list = ",".join(str(v) for v in thua_list)
+        response, error_response = supabase_client.rest_request(
+            "GET",
+            THUA_DAT_TABLE,
+            params={
+                "select": "so_to,so_thua",
+                "ma_xa": f"eq.{ma_xa}",
+                "so_to": f"eq.{so_to}",
+                "so_thua": f"in.({in_list})",
+            },
+        )
+        rows, error_response = _json_or_error(response, error_response)
+        if error_response:
+            return None, error_response
+        found.update((row["so_to"], row["so_thua"]) for row in rows)
+    return found, None
 
 
 def get_phan_loai(ma_xa: str, so_to: int, so_thua: int):
@@ -133,25 +151,35 @@ def get_phan_loai(ma_xa: str, so_to: int, so_thua: int):
     return (rows[0].get("phan_loai_ke_hoach_2959") if rows else None), None
 
 
-def list_phan_loai_by_xa(
-    ma_xa: str, so_to_list: list[int] | None = None
+def phan_loai_for_keys(
+    ma_xa: str, keys: list[tuple[int, int]]
 ) -> tuple[dict[tuple[int, int], str] | None, tuple | None]:
-    # Lọc theo tờ đang nộp vì lý do y hệt list_thua_dat_keys_by_xa: Supabase
-    # cắt 1000 dòng/request, không lọc thì chốt chặn Nhóm 1/2 bỏ sót thửa
-    # nằm ngoài 1000 dòng đầu.
-    params = {"select": "so_to,so_thua,phan_loai_ke_hoach_2959", "ma_xa": f"eq.{ma_xa}"}
-    if so_to_list:
-        in_list = ",".join(str(v) for v in sorted(set(so_to_list)))
-        params["so_to"] = f"in.({in_list})"
-    response, error_response = supabase_client.rest_request(
-        "GET",
-        DONG_BO_TABLE,
-        params=params,
-    )
-    rows, error_response = _json_or_error(response, error_response)
-    if error_response:
-        return None, error_response
-    return {(row["so_to"], row["so_thua"]): row.get("phan_loai_ke_hoach_2959") for row in rows}, None
+    """phan_loai_ke_hoach_2959 của ĐÚNG các cặp (so_to, so_thua) đang nộp,
+    lấy từ dong_bo_du_lieu theo từng số tờ (so_to=eq.X & so_thua=in.(...)).
+    Cùng lý do với existing_thua_dat_keys: tải cả xã/cả tờ có thể vượt trần
+    1000 dòng của Supabase, khiến chốt chặn Nhóm 1/2 bỏ sót thửa nằm ngoài
+    1000 dòng đầu."""
+    out: dict[tuple[int, int], str] = {}
+    for so_to, thua_list in _thua_by_to(keys).items():
+        in_list = ",".join(str(v) for v in thua_list)
+        response, error_response = supabase_client.rest_request(
+            "GET",
+            DONG_BO_TABLE,
+            params={
+                "select": "so_to,so_thua,phan_loai_ke_hoach_2959",
+                "ma_xa": f"eq.{ma_xa}",
+                "so_to": f"eq.{so_to}",
+                "so_thua": f"in.({in_list})",
+            },
+        )
+        rows, error_response = _json_or_error(response, error_response)
+        if error_response:
+            return None, error_response
+        out.update(
+            ((row["so_to"], row["so_thua"]), row.get("phan_loai_ke_hoach_2959"))
+            for row in rows
+        )
+    return out, None
 
 
 def get_dia_chi_thua_dat(ma_xa: str, so_to: int, so_thua: int):

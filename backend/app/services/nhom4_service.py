@@ -295,15 +295,15 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
     # nhầm số tờ/số thửa không tồn tại trên bản đồ. dong_bo_du_lieu/
     # du_lieu_gcn không tự phát hiện được lỗi này vì 2 bảng đó không bắt
     # buộc khớp với thua_dat (xem nhom4_repository.exists_in_thua_dat).
-    so_to_dang_nop = [so_to for so_to, _so_thua, _key in parcel_keys]
-    thua_dat_keys_by_xa, error_response = nhom4_repository.list_thua_dat_keys_by_xa(
-        ma_xa, so_to_dang_nop
+    cap_dang_nop = [(so_to, so_thua) for so_to, so_thua, _key in parcel_keys]
+    thua_dat_keys, error_response = nhom4_repository.existing_thua_dat_keys(
+        ma_xa, cap_dang_nop
     )
     if error_response:
         return None, error_response
 
     for so_to, so_thua, _key in parcel_keys:
-        if (so_to, so_thua) not in thua_dat_keys_by_xa:
+        if (so_to, so_thua) not in thua_dat_keys:
             return None, (
                 jsonify(
                     {
@@ -316,8 +316,8 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
                 404,
             )
 
-    phan_loai_by_xa, error_response = nhom4_repository.list_phan_loai_by_xa(
-        ma_xa, so_to_dang_nop
+    phan_loai_by_key, error_response = nhom4_repository.phan_loai_for_keys(
+        ma_xa, cap_dang_nop
     )
     if error_response:
         return None, error_response
@@ -326,7 +326,7 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
         thua = parcel.get("thua") or {}
         so_to = _to_int(thua.get("so_to"))
         so_thua = _to_int(thua.get("so_thua"))
-        phan_loai = phan_loai_by_xa.get((so_to, so_thua))
+        phan_loai = phan_loai_by_key.get((so_to, so_thua))
         if _is_nhom_1_2(phan_loai):
             return None, (
                 jsonify(
