@@ -151,14 +151,17 @@ class Nhom4FlowTest(unittest.TestCase):
         self._orig["get_phan_loai"] = nhom4_repository.get_phan_loai
         nhom4_repository.get_phan_loai = lambda ma_xa, so_to, so_thua: (None, None)
 
-        # Không đụng tới Google Drive trong test.
-        self._orig_bg = nhom4_service._upload_files_background
-        nhom4_service._upload_files_background = lambda *a, **k: None
+        # Không đụng tới Google Drive trong test — upload "thành công" giả.
+        self._orig_bg = nhom4_service._upload_files
+        nhom4_service._upload_files = lambda *a, **k: (
+            {"chinh_id": "id-chinh", "chinh_name": "chinh.pdf"},
+            None,
+        )
 
     def tearDown(self):
         for name, fn in self._orig.items():
             setattr(nhom4_repository, name, fn)
-        nhom4_service._upload_files_background = self._orig_bg
+        nhom4_service._upload_files = self._orig_bg
         self.ctx.pop()
 
     # 1) Thửa chưa có trong du_lieu_gcn -> nộp thành công.
@@ -289,60 +292,52 @@ class FakeDrive:
 
 
 class Nhom4FileUploadTest(unittest.TestCase):
-    """Đặt tên file quét trên Drive: -DDK/-GCN (file chính), -GT (giấy tờ),
-    -TBXN (thông báo xác nhận, chỉ chế độ "Chưa được cấp GCN", tùy chọn)."""
-
-    class _FakeResp:
-        ok = True
-        text = ""
+    """_upload_files: đặt tên file quét trên Drive -DDK/-GCN (file chính),
+    -GT (giấy tờ), -TBXN (thông báo xác nhận, tùy chọn) và trả file_info
+    để _build_rows ghi thẳng vào du_lieu_gcn."""
 
     def setUp(self):
         self.app = Flask(__name__)
         self.ctx = self.app.app_context()
         self.ctx.push()
-
         self.drive = FakeDrive()
         self._orig_drive = nhom4_service.google_drive_client
         nhom4_service.google_drive_client = self.drive
 
-        # Bắt patch THẬT mà nhom4_repository.update_file_info_by_submission
-        # dựng (gồm cả ánh xạ cột file_tbxn_* + ghép tenfilequet).
-        self.patches: list[dict] = []
-        self._orig_rest = nhom4_repository.supabase_client.rest_request
-
-        def fake_rest(method, table, params=None, json_body=None, extra_headers=None):
-            self.patches.append(json_body)
-            return self._FakeResp(), None
-
-        nhom4_repository.supabase_client.rest_request = fake_rest
-
     def tearDown(self):
         nhom4_service.google_drive_client = self._orig_drive
-        nhom4_repository.supabase_client.rest_request = self._orig_rest
         self.ctx.pop()
 
     def _run(self, tbxn_bytes):
-        nhom4_service._upload_files_background(
-            self.app, "26317", "Xa Test", "26317_10_200", "DDK",
-            b"chinh", b"phu", tbxn_bytes, "sub-1",
+        return nhom4_service._upload_files(
+            "26317", "Xa Test", "26317_10_200", "DDK", b"chinh", b"phu", tbxn_bytes
         )
 
     def test_tbxn_uploaded_with_suffix(self):
-        self._run(b"tbxn-body")
+        file_info, err = self._run(b"tbxn-body")
+        self.assertIsNone(err)
         names = [name for name, _ in self.drive.uploads]
         self.assertEqual(
             names, ["26317_10_200-DDK.pdf", "26317_10_200-GT.pdf", "26317_10_200-TBXN.pdf"]
         )
-        self.assertEqual(self.patches[0]["file_tbxn_drive_id"], "id-26317_10_200-TBXN.pdf")
-        self.assertEqual(self.patches[0]["file_tbxn_ten_file"], "26317_10_200-TBXN.pdf")
-        self.assertIn("26317_10_200-TBXN.pdf", self.patches[0]["tenfilequet"])
+        self.assertEqual(file_info["tbxn_id"], "id-26317_10_200-TBXN.pdf")
+        self.assertEqual(file_info["tbxn_name"], "26317_10_200-TBXN.pdf")
 
     def test_no_tbxn_skips_upload(self):
-        self._run(None)
+        file_info, err = self._run(None)
+        self.assertIsNone(err)
         names = [name for name, _ in self.drive.uploads]
         self.assertEqual(names, ["26317_10_200-DDK.pdf", "26317_10_200-GT.pdf"])
-        self.assertIsNone(self.patches[0]["file_tbxn_drive_id"])
-        self.assertNotIn("TBXN", self.patches[0]["tenfilequet"])
+        self.assertNotIn("tbxn_id", file_info)
+
+    def test_drive_loi_tra_ve_502_khong_ghi_thua(self):
+        def no_folder(*a, **k):
+            raise RuntimeError("storageQuotaExceeded")
+
+        self.drive.resolve_xa_folder = no_folder
+        file_info, err = self._run(None)
+        self.assertIsNone(file_info)
+        self.assertEqual(err[1], 502)
 
 
 class Nhom4SubmitTbxnTest(unittest.TestCase):
@@ -367,24 +362,30 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
             {(10, 200), (999, 888)},
             None,
         )
-        self._orig_bg = nhom4_service._upload_files_background
-        self.bg_calls: list[tuple] = []
-        nhom4_service._upload_files_background = lambda *a, **k: self.bg_calls.append(a)
+        # _upload_files nay chạy ĐỒNG BỘ trong submit_ho_so — stub ghi lại
+        # tham số rồi trả file_info "thành công".
+        self._orig_bg = nhom4_service._upload_files
+        self.up_calls: list[tuple] = []
+        nhom4_service._upload_files = lambda *a: (
+            self.up_calls.append(a) or {"chinh_id": "id-chinh", "chinh_name": "chinh.pdf"},
+            None,
+        )
 
     def tearDown(self):
         for name, fn in self._orig.items():
             setattr(nhom4_repository, name, fn)
-        nhom4_service._upload_files_background = self._orig_bg
+        nhom4_service._upload_files = self._orig_bg
         self.ctx.pop()
 
+    # _upload_files(ma_xa, ten_xa, base_name, chinh_suffix, chinh_bytes,
+    #               phu_bytes, tbxn_bytes)
     def test_submit_with_tbxn_ok_and_bytes_forwarded(self):
         data, err = nhom4_service.submit_ho_so(
             build_payload(), FakePdf("chinh.pdf"), None, FakePdf("tbxn.pdf")
         )
         self.assertIsNone(err, err)
         self.assertTrue(data["ok"])
-        # tham số thứ 8 của _upload_files_background là tbxn_bytes.
-        self.assertEqual(self.bg_calls[0][7], b"%PDF-1.4 fake body")
+        self.assertEqual(self.up_calls[0][6], b"%PDF-1.4 fake body")  # tbxn_bytes
 
     def test_tbxn_ignored_when_da_co_gcn(self):
         payload = build_payload()
@@ -394,13 +395,20 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
             payload, FakePdf("gcn.pdf"), None, FakePdf("tbxn.pdf")
         )
         self.assertIsNone(err, err)
-        self.assertIsNone(self.bg_calls[0][7])  # tbxn_bytes = None
+        self.assertIsNone(self.up_calls[0][6])  # tbxn_bytes = None
 
-    # base_name (tham số thứ 4 của _upload_files_background) + chinh_suffix
-    # (thứ 5) đặt tên file quét trên Drive — phải khớp bieumau/Validate.js.
+    def test_drive_loi_thi_khong_ghi_thua(self):
+        nhom4_service._upload_files = lambda *a: (None, ("boom", 502))
+        data, err = nhom4_service.submit_ho_so(build_payload(), FakePdf(), None)
+        self.assertIsNone(data)
+        self.assertEqual(err[1], 502)
+        self.assertEqual(len(self.store.rows), 0)  # upload lỗi -> không insert
+
+    # base_name (tham số thứ 3) + chinh_suffix (thứ 4) đặt tên file quét
+    # trên Drive — phải khớp bieumau/Validate.js.
     def test_base_name_chua_co_giay_has_chuacogiay_prefix(self):
         nhom4_service.submit_ho_so(build_payload(so_to="10", so_thua="200"), FakePdf(), None)
-        _, _ma_xa, _ten_xa, base_name, chinh_suffix = self.bg_calls[0][:5]
+        _ma_xa, _ten_xa, base_name, chinh_suffix = self.up_calls[0][:4]
         self.assertEqual(base_name, "CHUACOGIAY_26317_10_200")
         self.assertEqual(chinh_suffix, "DDK")
 
@@ -409,7 +417,7 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
         payload["che_do"] = "Đã có GCN"
         payload["gcn"] = {"so_phat_hanh": "1234567890", "ngay_cap": "01/01/2020", "so_vao_so": "1"}
         nhom4_service.submit_ho_so(payload, FakePdf("gcn.pdf"), None)
-        _, _ma_xa, _ten_xa, base_name, chinh_suffix = self.bg_calls[0][:5]
+        _ma_xa, _ten_xa, base_name, chinh_suffix = self.up_calls[0][:4]
         self.assertEqual(base_name, "1234567890")
         self.assertEqual(chinh_suffix, "GCN")
 
@@ -436,13 +444,16 @@ class ThoiHanSoNamTest(unittest.TestCase):
             {(10, 200), (999, 888)},
             None,
         )
-        self._orig_bg = nhom4_service._upload_files_background
-        nhom4_service._upload_files_background = lambda *a, **k: None
+        self._orig_bg = nhom4_service._upload_files
+        nhom4_service._upload_files = lambda *a: (
+            {"chinh_id": "id-chinh", "chinh_name": "chinh.pdf"},
+            None,
+        )
 
     def tearDown(self):
         for name, fn in self._orig.items():
             setattr(nhom4_repository, name, fn)
-        nhom4_service._upload_files_background = self._orig_bg
+        nhom4_service._upload_files = self._orig_bg
         self.ctx.pop()
 
     def test_validate_accepts_plain_year_count(self):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import threading
 import uuid
 
 from flask import current_app, jsonify
@@ -94,6 +93,14 @@ def _validate_pdf(file_storage, label: str) -> str | None:
     file_storage.stream.seek(0)
     if header[:4] != b"%PDF":
         return f"{label}: nội dung file không phải PDF hợp lệ."
+
+    # Upload Drive nay chạy đồng bộ trong request — chặn file quá lớn để 1
+    # hồ sơ không giữ thread xử lý cả phút.
+    file_storage.stream.seek(0, 2)
+    size = file_storage.stream.tell()
+    file_storage.stream.seek(0)
+    if size > MAX_PDF_BYTES:
+        return f"{label}: file vượt {MAX_PDF_BYTES // (1024 * 1024)} MB."
 
     return None
 
@@ -369,15 +376,25 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
     )
 
     submission_id = str(uuid.uuid4())
-    # file_info để trống lúc ghi — không chờ Drive để trả lời người nộp
-    # ngay (upload PDF lên Drive là bước chậm nhất, ~vài giây tới cả phút
-    # tùy dung lượng/mạng). Cột file_*/tenfilequet được cập nhật SAU bởi
-    # _upload_files_background() khi upload xong.
-    rows = _build_rows(payload, submission_id, {})
+
+    # Upload PDF lên Drive NGAY (đồng bộ) TRƯỚC khi ghi du_lieu_gcn. File
+    # ≤15MB nên chỉ vài giây; đổi lấy việc người nộp biết CHẮC file đã lên
+    # (cơ chế thread nền cũ nuốt lỗi -> file rớt âm thầm, dòng vẫn "có dữ
+    # liệu" nhưng thiếu file quét). Ghi thửa chỉ khi upload OK.
+    file_info, error_response = _upload_files(
+        ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
+        chinh_bytes, phu_bytes, tbxn_bytes,
+    )
+    if error_response:
+        return None, error_response
+
+    rows = _build_rows(payload, submission_id, file_info)
 
     # Kiểm tra lại public.du_lieu_gcn NGAY TRƯỚC KHI INSERT — thu hẹp khe
     # race khi 2 request nộp gần đồng thời cùng 1 thửa (frontend đã khóa
-    # nút Nộp, đây là lớp chặn cuối phía backend).
+    # nút Nộp, đây là lớp chặn cuối phía backend). Upload lỡ chạy trước mà
+    # thửa bị chặn ở đây thì chỉ còn 1 file PDF thừa trên Drive — không ảnh
+    # hưởng dữ liệu.
     error_response = _reject_existing()
     if error_response:
         return None, error_response
@@ -386,61 +403,52 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
     if error_response:
         return None, error_response
 
-    # current_app là proxy theo request/app context hiện tại — phải lấy
-    # object app THẬT ở đây (còn trong request) để thread nền tự mở lại
-    # app context riêng (xem _upload_files_background), vì current_app sẽ
-    # không dùng được nữa sau khi request này kết thúc.
-    app = current_app._get_current_object()
-    threading.Thread(
-        target=_upload_files_background,
-        args=(
-            app, ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
-            chinh_bytes, phu_bytes, tbxn_bytes, submission_id,
-        ),
-        daemon=True,
-    ).start()
-
     return {
         "ok": True,
-        "message": f"Đã lưu {len(parcels)} thửa, tổng {len(rows)} dòng. File quét đang tải lên Drive ở nền.",
+        "message": f"Đã lưu {len(parcels)} thửa, tổng {len(rows)} dòng, kèm file quét trên Drive.",
         "so_thua": len(parcels),
         "so_dong": len(rows),
     }, None
 
 
-def _upload_files_background(
-    app, ma_xa: str, ten_xa, base_name: str, chinh_suffix: str,
+def _upload_files(
+    ma_xa: str, ten_xa, base_name: str, chinh_suffix: str,
     chinh_bytes: bytes, phu_bytes: bytes | None, tbxn_bytes: bytes | None,
-    submission_id: str,
-) -> None:
-    with app.app_context():
-        file_info: dict = {}
-        try:
-            folder_id = google_drive_client.resolve_xa_folder(ma_xa, ten_xa)
-            uploaded_chinh = google_drive_client.upload_pdf(
-                folder_id, f"{base_name}-{chinh_suffix}.pdf", chinh_bytes
-            )
-            file_info["chinh_id"] = uploaded_chinh["id"]
-            file_info["chinh_name"] = uploaded_chinh["name"]
+) -> tuple[dict | None, tuple | None]:
+    """Upload PDF hồ sơ quét lên Drive ngay trong request. Trả
+    (file_info, None) khi mọi file đã lên, hoặc (None, (jsonify, 502)) nếu
+    Drive lỗi — caller dừng luôn, KHÔNG ghi thửa nào (khác cơ chế thread
+    nền cũ: ghi trước rồi upload sau, lỗi thì file rớt âm thầm)."""
+    file_info: dict = {}
+    try:
+        folder_id = google_drive_client.resolve_xa_folder(ma_xa, ten_xa)
+        uploaded_chinh = google_drive_client.upload_pdf(
+            folder_id, f"{base_name}-{chinh_suffix}.pdf", chinh_bytes
+        )
+        file_info["chinh_id"] = uploaded_chinh["id"]
+        file_info["chinh_name"] = uploaded_chinh["name"]
 
-            if phu_bytes:
-                uploaded_phu = google_drive_client.upload_pdf(folder_id, f"{base_name}-GT.pdf", phu_bytes)
-                file_info["phu_id"] = uploaded_phu["id"]
-                file_info["phu_name"] = uploaded_phu["name"]
+        if phu_bytes:
+            uploaded_phu = google_drive_client.upload_pdf(folder_id, f"{base_name}-GT.pdf", phu_bytes)
+            file_info["phu_id"] = uploaded_phu["id"]
+            file_info["phu_name"] = uploaded_phu["name"]
 
-            if tbxn_bytes:
-                uploaded_tbxn = google_drive_client.upload_pdf(folder_id, f"{base_name}-TBXN.pdf", tbxn_bytes)
-                file_info["tbxn_id"] = uploaded_tbxn["id"]
-                file_info["tbxn_name"] = uploaded_tbxn["name"]
-        except Exception:
-            current_app.logger.exception(
-                "Upload Drive nền cho submission %s thất bại — dòng đã lưu nhưng thiếu file quét.",
-                submission_id,
-            )
-            return
+        if tbxn_bytes:
+            uploaded_tbxn = google_drive_client.upload_pdf(folder_id, f"{base_name}-TBXN.pdf", tbxn_bytes)
+            file_info["tbxn_id"] = uploaded_tbxn["id"]
+            file_info["tbxn_name"] = uploaded_tbxn["name"]
+    except Exception as exc:
+        current_app.logger.exception("Upload Drive cho hồ sơ Nhóm 4 thất bại")
+        return None, (
+            jsonify(
+                {
+                    "error": (
+                        "Tải file quét lên Google Drive thất bại "
+                        f"({exc}). Chưa ghi thửa nào — vui lòng thử nộp lại."
+                    )
+                }
+            ),
+            502,
+        )
 
-        _, error_response = nhom4_repository.update_file_info_by_submission(submission_id, file_info)
-        if error_response:
-            current_app.logger.error(
-                "Cập nhật file_info nền cho submission %s thất bại: %s", submission_id, error_response
-            )
+    return file_info, None

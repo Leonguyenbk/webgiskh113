@@ -181,39 +181,3 @@ def insert_rows(rows: list[dict]):
     if not response.ok:
         return None, (jsonify({"error": response.text}), response.status_code)
     return True, None
-
-
-def update_file_info_by_submission(submission_id: str, file_info: dict):
-    """Cập nhật các cột file_*/tenfilequet SAU KHI upload Drive nền hoàn
-    tất (xem nhom4_service._upload_files_background) — insert_rows() ghi
-    các cột này rỗng trước để trả lời người nộp ngay, không chờ Drive."""
-    ten_file_quet = ", ".join(
-        name
-        for name in (
-            file_info.get("chinh_name"),
-            file_info.get("phu_name"),
-            file_info.get("tbxn_name"),
-        )
-        if name
-    )
-    patch = {
-        "file_chinh_drive_id": file_info.get("chinh_id"),
-        "file_chinh_ten_file": file_info.get("chinh_name"),
-        "file_phu_drive_id": file_info.get("phu_id"),
-        "file_phu_ten_file": file_info.get("phu_name"),
-        "file_tbxn_drive_id": file_info.get("tbxn_id"),
-        "file_tbxn_ten_file": file_info.get("tbxn_name"),
-        "tenfilequet": ten_file_quet or None,
-    }
-    response, error_response = supabase_client.rest_request(
-        "PATCH",
-        GCN_TABLE,
-        params={"submission_id": f"eq.{submission_id}"},
-        json_body=patch,
-        extra_headers={"Content-Type": "application/json", "Prefer": "return=minimal"},
-    )
-    if error_response:
-        return None, error_response
-    if not response.ok:
-        return None, (jsonify({"error": response.text}), response.status_code)
-    return True, None
