@@ -334,9 +334,26 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
             )
 
     first_thua = (parcels[0].get("thua") or {}) if parcels else {}
-    base_name = _sanitize_filename(f"{ma_xa}_{first_thua.get('so_to')}_{first_thua.get('so_thua')}")
     che_do = payload.get("che_do") or ""
-    chinh_suffix = "GCN" if che_do == "Đã có GCN" else "DDK"
+    da_co_gcn = che_do == "Đã có GCN"
+    # Tên file quét trên Drive khớp quy ước bieumau/Validate.js
+    # (makeTenFileHsq_):
+    #   - Đã có GCN    -> base = số phát hành GCN thật  -> "<sph>-GCN.pdf"
+    #   - Chưa có giấy -> base = CHUACOGIAY_<mã xã>_<số tờ>_<số thửa>
+    #     (đúng bằng _default_so_phat_hanh, tức là trùng luôn với giá trị
+    #     cột sophathanhgcn ghi vào du_lieu_gcn cho thửa đầu) ->
+    #     "CHUACOGIAY_..-DDK.pdf".
+    if da_co_gcn:
+        base_name = _sanitize_filename(
+            str((payload.get("gcn") or {}).get("so_phat_hanh") or "").strip()
+        )
+    else:
+        base_name = _sanitize_filename(
+            _default_so_phat_hanh(
+                ma_xa, _to_int(first_thua.get("so_to")), _to_int(first_thua.get("so_thua"))
+            )
+        )
+    chinh_suffix = "GCN" if da_co_gcn else "DDK"
 
     # Đọc nội dung file NGAY (trong request), vì FileStorage của Flask
     # không dùng được nữa sau khi request kết thúc — bytes đọc ra thì

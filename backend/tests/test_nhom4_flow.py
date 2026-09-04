@@ -396,6 +396,23 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
         self.assertIsNone(err, err)
         self.assertIsNone(self.bg_calls[0][7])  # tbxn_bytes = None
 
+    # base_name (tham số thứ 4 của _upload_files_background) + chinh_suffix
+    # (thứ 5) đặt tên file quét trên Drive — phải khớp bieumau/Validate.js.
+    def test_base_name_chua_co_giay_has_chuacogiay_prefix(self):
+        nhom4_service.submit_ho_so(build_payload(so_to="10", so_thua="200"), FakePdf(), None)
+        _, _ma_xa, _ten_xa, base_name, chinh_suffix = self.bg_calls[0][:5]
+        self.assertEqual(base_name, "CHUACOGIAY_26317_10_200")
+        self.assertEqual(chinh_suffix, "DDK")
+
+    def test_base_name_da_co_gcn_is_so_phat_hanh(self):
+        payload = build_payload()
+        payload["che_do"] = "Đã có GCN"
+        payload["gcn"] = {"so_phat_hanh": "1234567890", "ngay_cap": "01/01/2020", "so_vao_so": "1"}
+        nhom4_service.submit_ho_so(payload, FakePdf("gcn.pdf"), None)
+        _, _ma_xa, _ten_xa, base_name, chinh_suffix = self.bg_calls[0][:5]
+        self.assertEqual(base_name, "1234567890")
+        self.assertEqual(chinh_suffix, "GCN")
+
 
 class ThoiHanSoNamTest(unittest.TestCase):
     """Thời hạn sử dụng nhập bằng SỐ NĂM, không còn dd/mm/yyyy. Thêm NTS."""
