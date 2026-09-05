@@ -178,7 +178,10 @@ export default function BieuThongKePage({ onNavigateHome }) {
               </div>
             </div>
 
-            <div className="importCard">
+            <div
+              className="importCard statsTableCard"
+              style={{ width: "80%", maxWidth: "80%", margin: "0 auto" }}
+            >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <label style={{ margin: 0 }}>Tất cả xã/phường</label>
                 <button
