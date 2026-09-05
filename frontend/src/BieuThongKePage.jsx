@@ -27,6 +27,12 @@ function formatPercent(daNhap, tong) {
 // nhiều/tỉ lệ cao lên đầu), chữ thì mặc định tăng dần (A→Z).
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
+  {
+    key: "so_thua_can_thu_thap",
+    label: "Số thửa cần thu thập (ngoài N1/N2)",
+    type: "number",
+    defaultDir: "desc",
+  },
   { key: "tong_so_thua", label: "Tổng số thửa", type: "number", defaultDir: "desc" },
   { key: "da_nhap_form", label: "Từ form", type: "number", defaultDir: "desc" },
   { key: "da_nhap_nguon_khac", label: "Từ nguồn khác", type: "number", defaultDir: "desc" },
@@ -52,6 +58,7 @@ export default function BieuThongKePage({ onNavigateHome }) {
   const [exportNotice, setExportNotice] = useState("");
 
   const [sort, setSort] = useState({ key: "ten_xa", dir: "asc" });
+  const [xaFilter, setXaFilter] = useState("");
 
   const handleSort = (key) => {
     setSort((prev) => {
@@ -104,18 +111,27 @@ export default function BieuThongKePage({ onNavigateHome }) {
     return mapped;
   }, [stats, xaNameByCode, sort]);
 
+  const filteredRows = useMemo(() => {
+    const keyword = xaFilter.trim().toLocaleLowerCase("vi");
+    if (!keyword) return rows;
+    return rows.filter(({ ma_xa, ten_xa }) =>
+      `${ten_xa} ${ma_xa}`.toLocaleLowerCase("vi").includes(keyword),
+    );
+  }, [rows, xaFilter]);
+
   const totals = useMemo(() => {
-    return rows.reduce(
+    return filteredRows.reduce(
       (acc, row) => {
         acc.tong += row.tong_so_thua;
+        acc.canThuThap += row.so_thua_can_thu_thap;
         acc.tuForm += row.da_nhap_form;
         acc.tuNguonKhac += row.da_nhap_nguon_khac;
         acc.daNhap += row.da_nhap_bieu;
         return acc;
       },
-      { tong: 0, tuForm: 0, tuNguonKhac: 0, daNhap: 0 },
+      { tong: 0, canThuThap: 0, tuForm: 0, tuNguonKhac: 0, daNhap: 0 },
     );
-  }, [rows]);
+  }, [filteredRows]);
 
   const handleExport = async () => {
     if (exporting) return;
@@ -196,6 +212,10 @@ export default function BieuThongKePage({ onNavigateHome }) {
                 <strong>{formatSo(totals.tong)}</strong>
               </div>
               <div className="statTile">
+                <span>Cần thu thập (ngoài Nhóm 1/2)</span>
+                <strong>{formatSo(totals.canThuThap)}</strong>
+              </div>
+              <div className="statTile">
                 <span>Từ form (Nhóm 4)</span>
                 <strong style={{ color: DA_NHAP_COLOR }}>
                   {formatSo(totals.tuForm)}
@@ -216,7 +236,9 @@ export default function BieuThongKePage({ onNavigateHome }) {
               style={{ width: "80%", maxWidth: "80%", margin: "0 auto" }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <label style={{ margin: 0 }}>Tất cả xã/phường</label>
+                <label style={{ margin: 0 }}>
+                  Tất cả xã/phường ({formatSo(filteredRows.length)}/{formatSo(rows.length)})
+                </label>
                 <button
                   type="button"
                   className="downloadButton"
@@ -224,9 +246,19 @@ export default function BieuThongKePage({ onNavigateHome }) {
                   disabled={exporting}
                   onClick={handleExport}
                 >
-                  {exporting ? "Đang tạo file…" : "⬇ Xuất Excel"}
+                  {exporting ? "Đang tạo file…" : "⬇ Xuất Excel (toàn bộ)"}
                 </button>
               </div>
+
+              <input
+                type="text"
+                className="filterInput"
+                autoComplete="off"
+                value={xaFilter}
+                placeholder="Lọc theo tên hoặc mã xã/phường…"
+                style={{ marginTop: 12 }}
+                onChange={(event) => setXaFilter(event.target.value)}
+              />
 
               {exportNotice && (
                 <div className="notice" style={{ marginTop: 12 }}>
@@ -260,26 +292,33 @@ export default function BieuThongKePage({ onNavigateHome }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.ma_xa}>
-                        <td>{row.ten_xa}</td>
-                        <td>{formatSo(row.tong_so_thua)}</td>
-                        <td>{formatSo(row.da_nhap_form)}</td>
-                        <td>{formatSo(row.da_nhap_nguon_khac)}</td>
-                        <td>{formatSo(row.da_nhap_bieu)}</td>
-                        <td>
-                          <div className="statsTableBar">
-                            <div className="statsTableBarTrack">
-                              <div
-                                className="statsTableBarFill"
-                                style={{ width: `${row.percent}%` }}
-                              />
-                            </div>
-                            <span>{row.percent}%</span>
-                          </div>
-                        </td>
+                    {filteredRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={SORT_COLUMNS.length}>Không tìm thấy xã/phường phù hợp</td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredRows.map((row) => (
+                        <tr key={row.ma_xa}>
+                          <td>{row.ten_xa}</td>
+                          <td>{formatSo(row.so_thua_can_thu_thap)}</td>
+                          <td>{formatSo(row.tong_so_thua)}</td>
+                          <td>{formatSo(row.da_nhap_form)}</td>
+                          <td>{formatSo(row.da_nhap_nguon_khac)}</td>
+                          <td>{formatSo(row.da_nhap_bieu)}</td>
+                          <td>
+                            <div className="statsTableBar">
+                              <div className="statsTableBarTrack">
+                                <div
+                                  className="statsTableBarFill"
+                                  style={{ width: `${row.percent}%` }}
+                                />
+                              </div>
+                              <span>{row.percent}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

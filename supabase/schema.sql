@@ -933,17 +933,28 @@ grant execute on function public.batch_upsert_dong_bo_du_lieu(jsonb) to service_
 -- Cùng cơ chế CACHE + refresh nền như gcn_thu_thap_theo_xa_cache ở trên
 -- (quét 1,36 triệu dòng thua_dat quá nặng để tính trực tiếp trên mỗi
 -- request) — xem lý do ở phần ghi chú v2 phía trên.
+--
+-- so_thua_can_thu_thap: trong tổng số thửa của xã, đếm riêng số thửa
+-- thuộc "nhóm cần thu thập dữ liệu" — tức KHÔNG thuộc Nhóm 1/Nhóm 2 (KH
+-- 2959), cùng định nghĩa/cách lọc với tong_so_thua của
+-- gcn_thu_thap_theo_xa_cache ở trên. Cột này KHÁC tong_so_thua (lấy hết,
+-- không phân biệt nhóm) — dùng để biết trong tổng số thửa của xã, bao
+-- nhiêu thửa thực sự cần thu thập.
 -- =========================================================
 
 create table if not exists public.bieu_thong_ke_theo_xa_cache (
     ma_xa text primary key,
     tong_so_thua bigint not null,
+    so_thua_can_thu_thap bigint not null default 0,
     da_nhap_form bigint not null,
     da_nhap_nguon_khac bigint not null,
     da_nhap_bieu bigint not null,
     computed_at timestamptz not null default now()
 );
 alter table public.bieu_thong_ke_theo_xa_cache enable row level security;
+-- An toàn chạy lại nếu bảng đã tồn tại từ trước (lúc chưa có cột này).
+alter table public.bieu_thong_ke_theo_xa_cache
+    add column if not exists so_thua_can_thu_thap bigint not null default 0;
 -- Không tạo policy: chỉ Service Role Key (qua hàm security definer bên
 -- dưới, hoặc backend) mới đọc/ghi được.
 
@@ -952,6 +963,7 @@ create or replace function public.bieu_thong_ke_theo_xa()
 returns table (
     ma_xa text,
     tong_so_thua bigint,
+    so_thua_can_thu_thap bigint,
     da_nhap_form bigint,
     da_nhap_nguon_khac bigint,
     da_nhap_bieu bigint,
@@ -962,8 +974,8 @@ stable
 security definer
 set search_path = public, extensions
 as $$
-    select c.ma_xa, c.tong_so_thua, c.da_nhap_form, c.da_nhap_nguon_khac,
-           c.da_nhap_bieu, c.computed_at
+    select c.ma_xa, c.tong_so_thua, c.so_thua_can_thu_thap, c.da_nhap_form,
+           c.da_nhap_nguon_khac, c.da_nhap_bieu, c.computed_at
     from public.bieu_thong_ke_theo_xa_cache c
     order by c.ma_xa;
 $$;
@@ -995,7 +1007,8 @@ begin
     end if;
 
     insert into public.bieu_thong_ke_theo_xa_cache (
-        ma_xa, tong_so_thua, da_nhap_form, da_nhap_nguon_khac, da_nhap_bieu, computed_at
+        ma_xa, tong_so_thua, so_thua_can_thu_thap, da_nhap_form,
+        da_nhap_nguon_khac, da_nhap_bieu, computed_at
     )
     with gcn_keys as (
         select
@@ -1009,16 +1022,22 @@ begin
     select
         t.ma_xa,
         count(*)::bigint as tong_so_thua,
+        count(*) filter (
+            where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
+        )::bigint as so_thua_can_thu_thap,
         count(*) filter (where k.tu_form)::bigint as da_nhap_form,
         count(*) filter (where k.tu_nguon_khac)::bigint as da_nhap_nguon_khac,
         count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
         v_now
     from public.thua_dat t
+    left join public.dong_bo_du_lieu d
+        on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
     left join gcn_keys k
         on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
     group by t.ma_xa
     on conflict (ma_xa) do update set
         tong_so_thua = excluded.tong_so_thua,
+        so_thua_can_thu_thap = excluded.so_thua_can_thu_thap,
         da_nhap_form = excluded.da_nhap_form,
         da_nhap_nguon_khac = excluded.da_nhap_nguon_khac,
         da_nhap_bieu = excluded.da_nhap_bieu,

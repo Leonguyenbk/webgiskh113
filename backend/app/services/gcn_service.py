@@ -173,6 +173,7 @@ def get_bieu_thong_ke():
         if not ma_xa:
             continue
         tong = int(row.get("tong_so_thua") or 0)
+        can_thu_thap = int(row.get("so_thua_can_thu_thap") or 0)
         tu_form = int(row.get("da_nhap_form") or 0)
         tu_nguon_khac = int(row.get("da_nhap_nguon_khac") or 0)
         da_nhap = int(row.get("da_nhap_bieu") or 0)
@@ -183,6 +184,7 @@ def get_bieu_thong_ke():
             {
                 "ma_xa": ma_xa,
                 "tong_so_thua": tong,
+                "so_thua_can_thu_thap": can_thu_thap,
                 "da_nhap_form": tu_form,
                 "da_nhap_nguon_khac": tu_nguon_khac,
                 "da_nhap_bieu": da_nhap,
@@ -219,9 +221,9 @@ def export_bieu_thong_ke_xlsx():
     ws = wb.active
     ws.title = "ThongKeNhapBieu"[:31]
     ws.append([
-        "Mã xã", "Tên xã/phường", "Tổng số thửa", "Từ form (Nhóm 4)",
-        "Từ nguồn khác", "Tổng đã nhập biểu (duy nhất)", "Chưa nhập biểu",
-        "Tỉ lệ đã nhập (%)",
+        "Mã xã", "Tên xã/phường", "Số thửa cần thu thập (ngoài Nhóm 1/2)",
+        "Tổng số thửa", "Từ form (Nhóm 4)", "Từ nguồn khác",
+        "Tổng đã nhập biểu (duy nhất)", "Chưa nhập biểu", "Tỉ lệ đã nhập (%)",
     ])
     for row in data["items"]:
         tong = row["tong_so_thua"]
@@ -229,6 +231,7 @@ def export_bieu_thong_ke_xlsx():
         ws.append([
             row["ma_xa"],
             ten_xa_by_ma.get(row["ma_xa"], ""),
+            row["so_thua_can_thu_thap"],
             tong,
             row["da_nhap_form"],
             row["da_nhap_nguon_khac"],
