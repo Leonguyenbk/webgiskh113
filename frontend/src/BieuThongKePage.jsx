@@ -22,6 +22,18 @@ function formatPercent(daNhap, tong) {
   return Math.round((daNhap / tong) * 100);
 }
 
+// Cấu hình cột cho phép bấm tiêu đề để sắp xếp. defaultDir: hướng áp
+// dụng khi bấm lần đầu vào 1 cột khác — số thì mặc định giảm dần (xã
+// nhiều/tỉ lệ cao lên đầu), chữ thì mặc định tăng dần (A→Z).
+const SORT_COLUMNS = [
+  { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
+  { key: "tong_so_thua", label: "Tổng số thửa", type: "number", defaultDir: "desc" },
+  { key: "da_nhap_form", label: "Từ form", type: "number", defaultDir: "desc" },
+  { key: "da_nhap_nguon_khac", label: "Từ nguồn khác", type: "number", defaultDir: "desc" },
+  { key: "da_nhap_bieu", label: "Tổng đã nhập biểu", type: "number", defaultDir: "desc" },
+  { key: "percent", label: "Tỉ lệ", type: "number", defaultDir: "desc" },
+];
+
 // Trang "Thống kê nhập biểu" — khác GcnDashboardPage (chỉ tính nhóm thửa
 // "chưa tạo lập dữ liệu", ngoài Nhóm 1/2): trang này lấy TẤT CẢ thửa
 // không phân biệt nhóm KH 2959, và tách riêng số thửa có dữ liệu nhập từ
@@ -38,6 +50,18 @@ export default function BieuThongKePage({ onNavigateHome }) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [exportNotice, setExportNotice] = useState("");
+
+  const [sort, setSort] = useState({ key: "ten_xa", dir: "asc" });
+
+  const handleSort = (key) => {
+    setSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+      }
+      const column = SORT_COLUMNS.find((c) => c.key === key);
+      return { key, dir: column?.defaultDir || "asc" };
+    });
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -62,14 +86,23 @@ export default function BieuThongKePage({ onNavigateHome }) {
   }, [xaList]);
 
   const rows = useMemo(() => {
-    return stats
-      .map((row) => ({
-        ...row,
-        ten_xa: xaNameByCode[row.ma_xa] || row.ma_xa,
-        percent: formatPercent(row.da_nhap_bieu, row.tong_so_thua),
-      }))
-      .sort((a, b) => a.ten_xa.localeCompare(b.ten_xa, "vi"));
-  }, [stats, xaNameByCode]);
+    const column = SORT_COLUMNS.find((c) => c.key === sort.key);
+    const mapped = stats.map((row) => ({
+      ...row,
+      ten_xa: xaNameByCode[row.ma_xa] || row.ma_xa,
+      percent: formatPercent(row.da_nhap_bieu, row.tong_so_thua),
+    }));
+    mapped.sort((a, b) => {
+      let cmp;
+      if (column?.type === "text") {
+        cmp = a[sort.key].localeCompare(b[sort.key], "vi");
+      } else {
+        cmp = a[sort.key] - b[sort.key];
+      }
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+    return mapped;
+  }, [stats, xaNameByCode, sort]);
 
   const totals = useMemo(() => {
     return rows.reduce(
@@ -211,12 +244,19 @@ export default function BieuThongKePage({ onNavigateHome }) {
                 <table className="statsTable">
                   <thead>
                     <tr>
-                      <th>Xã / phường</th>
-                      <th>Tổng số thửa</th>
-                      <th>Từ form</th>
-                      <th>Từ nguồn khác</th>
-                      <th>Tổng đã nhập biểu</th>
-                      <th>Tỉ lệ</th>
+                      {SORT_COLUMNS.map((column) => (
+                        <th
+                          key={column.key}
+                          onClick={() => handleSort(column.key)}
+                          style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                          title="Bấm để sắp xếp"
+                        >
+                          {column.label}
+                          <span style={{ marginLeft: 4, opacity: sort.key === column.key ? 1 : 0.25 }}>
+                            {sort.key === column.key ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
+                          </span>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
