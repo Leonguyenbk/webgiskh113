@@ -17,35 +17,35 @@ function formatThoiDiem(iso) {
   return d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 }
 
-function formatPercent(daNhap, tong) {
-  if (!tong) return 0;
-  return Math.round((daNhap / tong) * 100);
-}
-
 // Cấu hình cột cho phép bấm tiêu đề để sắp xếp. defaultDir: hướng áp
 // dụng khi bấm lần đầu vào 1 cột khác — số thì mặc định giảm dần (xã
-// nhiều/tỉ lệ cao lên đầu), chữ thì mặc định tăng dần (A→Z).
+// nhiều lên đầu), chữ thì mặc định tăng dần (A→Z).
+//
+// Mẫu số duy nhất hiển thị là "Chưa tạo lập dữ liệu" (Nhóm 3/loại 4 —
+// ngoài Nhóm 1/2 KH 2959), giống cách tính ở GcnDashboardPage
+// (/thong-ke-gcn) — KHÔNG hiển thị tổng số thửa toàn xã (mọi nhóm) và
+// KHÔNG hiển thị thanh tỉ lệ, vì "Từ form"/"Từ nguồn khác"/"Tổng đã nhập
+// biểu" vẫn đếm trên TẤT CẢ bản ghi (không lọc nhóm) nên % so với riêng
+// nhóm 3 sẽ gây hiểu nhầm.
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
   {
     key: "so_thua_can_thu_thap",
-    label: "Số thửa cần thu thập (ngoài N1/N2)",
+    label: "Chưa tạo lập dữ liệu (Nhóm 3)",
     type: "number",
     defaultDir: "desc",
   },
-  { key: "tong_so_thua", label: "Tổng số thửa", type: "number", defaultDir: "desc" },
   { key: "da_nhap_form", label: "Từ form", type: "number", defaultDir: "desc" },
   { key: "da_nhap_nguon_khac", label: "Từ nguồn khác", type: "number", defaultDir: "desc" },
   { key: "da_nhap_bieu", label: "Tổng đã nhập biểu", type: "number", defaultDir: "desc" },
-  { key: "percent", label: "Tỉ lệ", type: "number", defaultDir: "desc" },
 ];
 
 // Trang "Thống kê nhập biểu" — khác GcnDashboardPage (chỉ tính nhóm thửa
-// "chưa tạo lập dữ liệu", ngoài Nhóm 1/2): trang này lấy TẤT CẢ thửa
-// không phân biệt nhóm KH 2959, và tách riêng số thửa có dữ liệu nhập từ
-// biểu Nhóm 4 (form) với số thửa có dữ liệu từ nguồn khác (đồng bộ Google
-// Sheet). 1 thửa có thể có cả 2 nên "Từ form" + "Từ nguồn khác" có thể lớn
-// hơn "Tổng đã nhập biểu" (số thửa duy nhất).
+// "chưa tạo lập dữ liệu", ngoài Nhóm 1/2): trang này tách riêng số thửa
+// có dữ liệu nhập từ biểu Nhóm 4 (form) với số thửa có dữ liệu từ nguồn
+// khác (đồng bộ Google Sheet) — đếm trên TẤT CẢ bản ghi, không phân biệt
+// nhóm KH 2959. 1 thửa có thể có cả 2 nên "Từ form" + "Từ nguồn khác" có
+// thể lớn hơn "Tổng đã nhập biểu" (số thửa duy nhất).
 export default function BieuThongKePage({ onNavigateHome }) {
   const [xaList, setXaList] = useState([]);
   const [stats, setStats] = useState([]);
@@ -97,7 +97,6 @@ export default function BieuThongKePage({ onNavigateHome }) {
     const mapped = stats.map((row) => ({
       ...row,
       ten_xa: xaNameByCode[row.ma_xa] || row.ma_xa,
-      percent: formatPercent(row.da_nhap_bieu, row.tong_so_thua),
     }));
     mapped.sort((a, b) => {
       let cmp;
@@ -122,14 +121,13 @@ export default function BieuThongKePage({ onNavigateHome }) {
   const totals = useMemo(() => {
     return filteredRows.reduce(
       (acc, row) => {
-        acc.tong += row.tong_so_thua;
         acc.canThuThap += row.so_thua_can_thu_thap;
         acc.tuForm += row.da_nhap_form;
         acc.tuNguonKhac += row.da_nhap_nguon_khac;
         acc.daNhap += row.da_nhap_bieu;
         return acc;
       },
-      { tong: 0, canThuThap: 0, tuForm: 0, tuNguonKhac: 0, daNhap: 0 },
+      { canThuThap: 0, tuForm: 0, tuNguonKhac: 0, daNhap: 0 },
     );
   }, [filteredRows]);
 
@@ -208,11 +206,7 @@ export default function BieuThongKePage({ onNavigateHome }) {
           <>
             <div className="statTiles">
               <div className="statTile">
-                <span>Tổng số thửa</span>
-                <strong>{formatSo(totals.tong)}</strong>
-              </div>
-              <div className="statTile">
-                <span>Cần thu thập (ngoài Nhóm 1/2)</span>
+                <span>Chưa tạo lập dữ liệu (Nhóm 3)</span>
                 <strong>{formatSo(totals.canThuThap)}</strong>
               </div>
               <div className="statTile">
@@ -301,21 +295,9 @@ export default function BieuThongKePage({ onNavigateHome }) {
                         <tr key={row.ma_xa}>
                           <td>{row.ten_xa}</td>
                           <td>{formatSo(row.so_thua_can_thu_thap)}</td>
-                          <td>{formatSo(row.tong_so_thua)}</td>
                           <td>{formatSo(row.da_nhap_form)}</td>
                           <td>{formatSo(row.da_nhap_nguon_khac)}</td>
                           <td>{formatSo(row.da_nhap_bieu)}</td>
-                          <td>
-                            <div className="statsTableBar">
-                              <div className="statsTableBarTrack">
-                                <div
-                                  className="statsTableBarFill"
-                                  style={{ width: `${row.percent}%` }}
-                                />
-                              </div>
-                              <span>{row.percent}%</span>
-                            </div>
-                          </td>
                         </tr>
                       ))
                     )}

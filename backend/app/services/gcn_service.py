@@ -221,23 +221,17 @@ def export_bieu_thong_ke_xlsx():
     ws = wb.active
     ws.title = "ThongKeNhapBieu"[:31]
     ws.append([
-        "Mã xã", "Tên xã/phường", "Số thửa cần thu thập (ngoài Nhóm 1/2)",
-        "Tổng số thửa", "Từ form (Nhóm 4)", "Từ nguồn khác",
-        "Tổng đã nhập biểu (duy nhất)", "Chưa nhập biểu", "Tỉ lệ đã nhập (%)",
+        "Mã xã", "Tên xã/phường", "Chưa tạo lập dữ liệu (Nhóm 3, ngoài Nhóm 1/2)",
+        "Từ form (Nhóm 4)", "Từ nguồn khác", "Tổng đã nhập biểu (duy nhất)",
     ])
     for row in data["items"]:
-        tong = row["tong_so_thua"]
-        percent = round((row["da_nhap_bieu"] / tong) * 100, 1) if tong else 0
         ws.append([
             row["ma_xa"],
             ten_xa_by_ma.get(row["ma_xa"], ""),
             row["so_thua_can_thu_thap"],
-            tong,
             row["da_nhap_form"],
             row["da_nhap_nguon_khac"],
             row["da_nhap_bieu"],
-            row["chua_nhap_bieu"],
-            percent,
         ])
 
     buf = io.BytesIO()
