@@ -8,6 +8,7 @@ import ImportGmlPage from "./ImportGmlPage.jsx";
 import ImportSyncPage from "./ImportSyncPage.jsx";
 import ManageGcnLinksPage from "./ManageGcnLinksPage.jsx";
 import GcnDashboardPage from "./GcnDashboardPage.jsx";
+import BieuThongKePage from "./BieuThongKePage.jsx";
 import ExportGcnNhom2Page from "./ExportGcnNhom2Page.jsx";
 import ExportGcnNhom3Page from "./ExportGcnNhom3Page.jsx";
 import MplisSyncPage from "./MplisSyncPage.jsx";
@@ -57,6 +58,7 @@ function Root() {
         onNavigateSync={() => navigate("/import-dong-bo")}
         onNavigateGcnLinks={() => navigate("/nguon-gcn")}
         onNavigateGcnDashboard={() => navigate("/thong-ke-gcn")}
+        onNavigateBieuThongKe={() => navigate("/thong-ke-nhap-bieu")}
         onNavigateExportGcnNhom2={() => navigate("/xuat-gcn-nhom2")}
         onNavigateExportGcnNhom3={() => navigate("/xuat-gcn-nhom3")}
         onNavigateMplisSync={() => navigate("/cap-nhat-mplis")}
@@ -77,6 +79,9 @@ function Root() {
   }
   if (path.startsWith("/thong-ke-gcn")) {
     return <GcnDashboardPage onNavigateHome={() => navigate("/")} />;
+  }
+  if (path.startsWith("/thong-ke-nhap-bieu")) {
+    return <BieuThongKePage onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/xuat-gcn-nhom2")) {
     return <ExportGcnNhom2Page onNavigateHome={() => navigate("/")} />;

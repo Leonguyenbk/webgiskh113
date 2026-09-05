@@ -10,6 +10,7 @@ from openpyxl import Workbook, load_workbook
 
 import gcn_sync
 from ..repositories import gcn_repository, supabase_client
+from . import parcel_service
 
 # Nhóm KH 2959 hợp lệ cho chức năng "Xuất GCN theo nhóm".
 _NHOM_HOP_LE = {"NHÓM 1", "NHÓM 2"}
@@ -154,6 +155,91 @@ def refresh_stats_cache():
     # Hàm SQL trả về số dòng đã ghi vào cache (PostgREST bọc trong scalar).
     rows = result if isinstance(result, int) else None
     return {"ok": True, "rows": rows}, None
+
+
+def get_bieu_thong_ke():
+    """Thống kê thửa đã nhập biểu theo xã, tách form (Nhóm 4) / nguồn
+    khác, lấy TẤT CẢ thửa không phân biệt nhóm KH 2959 — khác get_stats()
+    ở trên (chỉ tính nhóm 'chưa tạo lập dữ liệu')."""
+    result, error_response = gcn_repository.bieu_thong_ke_theo_xa()
+    if error_response:
+        return None, error_response
+
+    rows = result if isinstance(result, list) else []
+    items = []
+    as_of = None
+    for row in rows:
+        ma_xa = row.get("ma_xa")
+        if not ma_xa:
+            continue
+        tong = int(row.get("tong_so_thua") or 0)
+        tu_form = int(row.get("da_nhap_form") or 0)
+        tu_nguon_khac = int(row.get("da_nhap_nguon_khac") or 0)
+        da_nhap = int(row.get("da_nhap_bieu") or 0)
+        computed_at = row.get("computed_at")
+        if computed_at and (as_of is None or computed_at > as_of):
+            as_of = computed_at
+        items.append(
+            {
+                "ma_xa": ma_xa,
+                "tong_so_thua": tong,
+                "da_nhap_form": tu_form,
+                "da_nhap_nguon_khac": tu_nguon_khac,
+                "da_nhap_bieu": da_nhap,
+                "chua_nhap_bieu": max(tong - da_nhap, 0),
+            }
+        )
+    return {"items": items, "as_of": as_of}, None
+
+
+def refresh_bieu_thong_ke_cache():
+    result, error_response = gcn_repository.refresh_bieu_thong_ke_theo_xa_cache()
+    if error_response:
+        return None, error_response
+    rows = result if isinstance(result, int) else None
+    return {"ok": True, "rows": rows}, None
+
+
+def export_bieu_thong_ke_xlsx():
+    """Xuất .xlsx thống kê thửa đã nhập biểu theo xã (tách form/nguồn
+    khác) — dựng từ dữ liệu cache sẵn có (get_bieu_thong_ke), không quét
+    lại du_lieu_gcn nên rất nhẹ."""
+    data, error_response = get_bieu_thong_ke()
+    if error_response:
+        return None, error_response
+
+    xa_data, error_response = parcel_service.list_xa()
+    ten_xa_by_ma = {}
+    if not error_response:
+        ten_xa_by_ma = {
+            item["ma_xa"]: item.get("ten_xa") or "" for item in xa_data.get("items", [])
+        }
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "ThongKeNhapBieu"[:31]
+    ws.append([
+        "Mã xã", "Tên xã/phường", "Tổng số thửa", "Từ form (Nhóm 4)",
+        "Từ nguồn khác", "Tổng đã nhập biểu (duy nhất)", "Chưa nhập biểu",
+        "Tỉ lệ đã nhập (%)",
+    ])
+    for row in data["items"]:
+        tong = row["tong_so_thua"]
+        percent = round((row["da_nhap_bieu"] / tong) * 100, 1) if tong else 0
+        ws.append([
+            row["ma_xa"],
+            ten_xa_by_ma.get(row["ma_xa"], ""),
+            tong,
+            row["da_nhap_form"],
+            row["da_nhap_nguon_khac"],
+            row["da_nhap_bieu"],
+            row["chua_nhap_bieu"],
+            percent,
+        ])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return (buf.getvalue(), "thong_ke_nhap_bieu_theo_xa.xlsx"), None
 
 
 def _xlsx_cell(value):

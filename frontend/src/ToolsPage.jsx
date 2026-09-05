@@ -23,6 +23,7 @@ export default function ToolsPage({
   onNavigateSync,
   onNavigateGcnLinks,
   onNavigateGcnDashboard,
+  onNavigateBieuThongKe,
   onNavigateExportGcnNhom2,
   onNavigateExportGcnNhom3,
   onNavigateMplisSync,
@@ -50,6 +51,12 @@ export default function ToolsPage({
       name: "📊 Thống kê thu thập",
       description: "Tỉ lệ thửa đất đã nhập biểu GCN theo từng xã/phường.",
       onNavigate: onNavigateGcnDashboard,
+    },
+    {
+      name: "📊 Thống kê nhập biểu",
+      description:
+        "Số thửa đất đã nhập biểu theo từng xã/phường, tách form (Nhóm 4) và nguồn khác, lấy tất cả bản ghi không phân biệt nhóm — cho phép xuất Excel.",
+      onNavigate: onNavigateBieuThongKe,
     },
     {
       name: "⬇ Xuất GCN Nhóm 2",

@@ -919,6 +919,136 @@ grant execute on function public.batch_upsert_dong_bo_du_lieu(jsonb) to service_
 -- backend/app/repositories/nhom4_repository.py.
 
 -- =========================================================
+-- THỐNG KÊ THỬA ĐÃ NHẬP BIỂU THEO XÃ — TÁCH FORM/NGUỒN KHÁC (trang
+-- "Thống kê nhập biểu"). Khác gcn_thu_thap_theo_xa_cache ở trên (loại
+-- thửa Nhóm 1/Nhóm 2 KH 2959 để tính tiến độ "chưa tạo lập dữ liệu"):
+-- hàm này lấy TẤT CẢ thửa trong thua_dat, không phân biệt nhóm KH 2959,
+-- và tách riêng số thửa có dữ liệu GCN nhập từ biểu Nhóm 4
+-- (ma_nguon = 'NHOM4_FORM', xem backend/gcn_sync.py FORM_MA_NGUON) với số
+-- thửa có dữ liệu từ nguồn khác (đồng bộ Google Sheet qua nguon_gcn,
+-- ma_nguon = mã xã). 1 thửa có thể vừa có form vừa có nguồn khác nên
+-- da_nhap_form + da_nhap_nguon_khac có thể > da_nhap_bieu (số thửa
+-- DUY NHẤT có dữ liệu, hợp của 2 tập).
+--
+-- Cùng cơ chế CACHE + refresh nền như gcn_thu_thap_theo_xa_cache ở trên
+-- (quét 1,36 triệu dòng thua_dat quá nặng để tính trực tiếp trên mỗi
+-- request) — xem lý do ở phần ghi chú v2 phía trên.
+-- =========================================================
+
+create table if not exists public.bieu_thong_ke_theo_xa_cache (
+    ma_xa text primary key,
+    tong_so_thua bigint not null,
+    da_nhap_form bigint not null,
+    da_nhap_nguon_khac bigint not null,
+    da_nhap_bieu bigint not null,
+    computed_at timestamptz not null default now()
+);
+alter table public.bieu_thong_ke_theo_xa_cache enable row level security;
+-- Không tạo policy: chỉ Service Role Key (qua hàm security definer bên
+-- dưới, hoặc backend) mới đọc/ghi được.
+
+drop function if exists public.bieu_thong_ke_theo_xa();
+create or replace function public.bieu_thong_ke_theo_xa()
+returns table (
+    ma_xa text,
+    tong_so_thua bigint,
+    da_nhap_form bigint,
+    da_nhap_nguon_khac bigint,
+    da_nhap_bieu bigint,
+    computed_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    select c.ma_xa, c.tong_so_thua, c.da_nhap_form, c.da_nhap_nguon_khac,
+           c.da_nhap_bieu, c.computed_at
+    from public.bieu_thong_ke_theo_xa_cache c
+    order by c.ma_xa;
+$$;
+
+revoke all on function public.bieu_thong_ke_theo_xa() from public;
+grant execute on function public.bieu_thong_ke_theo_xa() to service_role;
+
+-- TÍNH LẠI: phần quét nặng. Chỉ chạy bởi lịch (pg_cron) hoặc backend
+-- cron, KHÔNG bao giờ gọi từ request người dùng.
+create or replace function public.refresh_bieu_thong_ke_theo_xa_cache()
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+set statement_timeout = '120s'
+as $$
+declare
+    v_now timestamptz := now();
+    v_rows integer;
+begin
+    perform pg_advisory_xact_lock(hashtext('refresh_bieu_thong_ke_theo_xa_cache'));
+
+    if exists (
+        select 1 from public.bieu_thong_ke_theo_xa_cache
+        where computed_at > v_now - interval '1 minute'
+    ) then
+        select count(*) into v_rows from public.bieu_thong_ke_theo_xa_cache;
+        return v_rows;
+    end if;
+
+    insert into public.bieu_thong_ke_theo_xa_cache (
+        ma_xa, tong_so_thua, da_nhap_form, da_nhap_nguon_khac, da_nhap_bieu, computed_at
+    )
+    with gcn_keys as (
+        select
+            g.madvhc_soto_sothua,
+            bool_or(g.ma_nguon = 'NHOM4_FORM') as tu_form,
+            bool_or(g.ma_nguon <> 'NHOM4_FORM') as tu_nguon_khac
+        from public.du_lieu_gcn g
+        where g.madvhc_soto_sothua is not null
+        group by g.madvhc_soto_sothua
+    )
+    select
+        t.ma_xa,
+        count(*)::bigint as tong_so_thua,
+        count(*) filter (where k.tu_form)::bigint as da_nhap_form,
+        count(*) filter (where k.tu_nguon_khac)::bigint as da_nhap_nguon_khac,
+        count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
+        v_now
+    from public.thua_dat t
+    left join gcn_keys k
+        on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+    group by t.ma_xa
+    on conflict (ma_xa) do update set
+        tong_so_thua = excluded.tong_so_thua,
+        da_nhap_form = excluded.da_nhap_form,
+        da_nhap_nguon_khac = excluded.da_nhap_nguon_khac,
+        da_nhap_bieu = excluded.da_nhap_bieu,
+        computed_at  = excluded.computed_at;
+
+    get diagnostics v_rows = row_count;
+
+    -- Dọn xã không còn trong nguồn (nếu có) — DELETE này CÓ mệnh đề WHERE.
+    delete from public.bieu_thong_ke_theo_xa_cache where computed_at < v_now;
+
+    return v_rows;
+end;
+$$;
+
+revoke all on function public.refresh_bieu_thong_ke_theo_xa_cache() from public;
+grant execute on function public.refresh_bieu_thong_ke_theo_xa_cache() to service_role;
+
+-- LỊCH TÍNH LẠI — chạy TAY 1 lần trên Supabase SQL Editor (đã bật
+-- pg_cron cho refresh-gcn-thu-thap thì thêm job này cùng chỗ):
+--
+--   select cron.schedule(
+--       'refresh-bieu-thong-ke',
+--       '*/15 * * * *',
+--       $$select public.refresh_bieu_thong_ke_theo_xa_cache();$$
+--   );
+--
+-- Không dùng pg_cron thì cho Render Cron Job gọi mỗi 15 phút:
+--   POST <API>/api/bieu-thong-ke/refresh   (header X-Import-Token: <IMPORT_TOKEN>)
+
+-- =========================================================
 -- BẢN ĐỒ NỀN (tờ bản đồ dạng raster) — quản lý theo từng tờ (ma_xa +
 -- so_to). KHÔNG xử lý DGN/KMZ/raster gì trên WebGIS/Render — toàn bộ việc
 -- đọc KMZ (MicroStation xuất từ DGN), georeference, reproject EPSG:3857,

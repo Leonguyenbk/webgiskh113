@@ -31,3 +31,7 @@ export function searchParcels(params, { signal, errorFallback } = {}) {
 export function getGcnStats({ signal } = {}) {
   return request("/api/gcn-stats", { signal });
 }
+
+export function getBieuThongKe({ signal } = {}) {
+  return request("/api/bieu-thong-ke", { signal });
+}

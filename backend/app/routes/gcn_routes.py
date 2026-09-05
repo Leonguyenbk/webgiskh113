@@ -18,6 +18,41 @@ def gcn_stats():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/bieu-thong-ke")
+def bieu_thong_ke():
+    # Thống kê thửa đã nhập biểu theo xã, tách form (Nhóm 4)/nguồn khác,
+    # lấy tất cả bản ghi không phân biệt nhóm KH 2959.
+    data, error_response = gcn_service.get_bieu_thong_ke()
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
+@gcn_bp.get("/api/bieu-thong-ke/export")
+def bieu_thong_ke_export():
+    result, error_response = gcn_service.export_bieu_thong_ke_xlsx()
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@gcn_bp.post("/api/bieu-thong-ke/refresh")
+def bieu_thong_ke_refresh():
+    # Tính lại bảng cache (nhánh quét nặng). Dành cho cron gọi định kỳ.
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    data, error_response = gcn_service.refresh_bieu_thong_ke_cache()
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/gcn-export-theo-nhom")
 def gcn_export_theo_nhom():
     # Xuất .xlsx danh sách du_lieu_gcn của 1 xã đã thu thập + thuộc nhóm
