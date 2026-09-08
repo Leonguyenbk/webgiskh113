@@ -174,7 +174,15 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
         const feats = (result?.features || []).filter(
           (f) => f.properties?.trang_thai === "ready" && f.properties?.tile_url,
         );
-        feats.sort((a, b) => (a.properties.so_to ?? 0) - (b.properties.so_to ?? 0));
+        // so_to giờ là text (có tờ kèm tên địa phương cũ, VD "ttmdrak12")
+        // -> so sánh chuỗi kiểu numeric để số thuần vẫn sắp đúng thứ tự.
+        feats.sort((a, b) =>
+          String(a.properties.so_to ?? "").localeCompare(
+            String(b.properties.so_to ?? ""),
+            undefined,
+            { numeric: true, sensitivity: "base" },
+          ),
+        );
         setBanDoNenXaSheets(feats);
       })
       .catch((fetchError) => {

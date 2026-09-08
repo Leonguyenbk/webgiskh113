@@ -42,17 +42,14 @@ def _validate_geom(geom) -> str | None:
 
 def register(body: dict):
     ma_xa = str(body.get("ma_xa", "")).strip()
-    so_to = body.get("so_to")
+    # so_to là text (không bắt buộc số nguyên) — một số tờ bản đồ cũ đánh
+    # số kèm tên địa phương cũ (VD "ttmdrak12").
+    so_to = str(body.get("so_to", "")).strip()
     tile_url = str(body.get("tile_url", "")).strip()
     geom = body.get("geom")
 
-    if not ma_xa or so_to in (None, "") or not tile_url or not geom:
+    if not ma_xa or not so_to or not tile_url or not geom:
         return None, (jsonify({"error": "Thiếu ma_xa, so_to, geom hoặc tile_url"}), 400)
-
-    try:
-        so_to = int(so_to)
-    except (TypeError, ValueError):
-        return None, (jsonify({"error": "so_to phải là số nguyên"}), 400)
 
     geom_error = _validate_geom(geom)
     if geom_error:

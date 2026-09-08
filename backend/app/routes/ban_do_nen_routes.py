@@ -36,12 +36,7 @@ def get_ban_do_nen_in_view():
 def search_ban_do_nen():
     ma_xa = request.args.get("ma_xa", "").strip()
     so_to_raw = request.args.get("so_to", "").strip()
-    so_to = None
-    if so_to_raw:
-        try:
-            so_to = int(so_to_raw)
-        except ValueError:
-            return jsonify({"error": "so_to phải là số nguyên"}), 400
+    so_to = so_to_raw or None
 
     data, error_response = ban_do_nen_service.search(ma_xa, so_to)
     if error_response:
