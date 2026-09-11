@@ -28,6 +28,7 @@ import {
 import MapSheetBoundaryLayer from "./components/map/MapSheetBoundaryLayer";
 import MapSheetTilesLayer from "./components/map/MapSheetTilesLayer";
 import MapSheetTilesLoader from "./components/map/MapSheetTilesLoader";
+import RanhThonOverlayLoader from "./components/map/RanhThonOverlayLoader";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
 import { getXaList } from "./services/parcelService";
 import { getRanhGioiThonAllCached } from "./services/ranhThonService";
@@ -108,39 +109,51 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [submittedFilters, setSubmittedFilters] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
 
-  // Ranh giới thôn: tải hết 1 lần khi mở trang (dataset nhỏ, không cần
-  // theo khung bản đồ/xã) — hễ zoom/kéo tới đâu có ranh là hiện ngay,
-  // không cần bấm Tra cứu trước. Xã nào chưa có dữ liệu ranh thì đơn giản
-  // là không có feature nào rơi vào khu vực đó.
+  // Ranh giới thôn: CHỈ tải khi thật sự cần — lúc chọn 1 xã ở bộ lọc (cần
+  // cho dropdown "Thôn" bên dưới) hoặc lúc bật lớp "Ranh giới thôn" trên
+  // bản đồ (RanhThonOverlayLoader báo qua onNeed) — KHÔNG còn tải ngay lúc
+  // mở trang như trước. Lớp bản đồ này mặc định tắt và phần lớn người dùng
+  // chỉ xem/tra cứu theo bbox, không bao giờ chọn xã hay bật lớp này, nên
+  // tải sẵn mỗi lần mở trang là lãng phí — góp phần vào sự cố CPU Supabase
+  // cao (xem chú thích ranh_gioi_thon_cache trong supabase/schema.sql).
   //
-  // Dùng getRanhGioiThonAllCached() (không phải AbortController) vì <App>
-  // bị unmount/mount lại mỗi khi người dùng rời/quay lại trang bản đồ
-  // (router tự chế trong main.jsx, xem ranhThonService.js) — effect này
-  // chạy lại rất thường xuyên dù dữ liệu gần như không đổi. Cache
-  // module-level bên trong getRanhGioiThonAllCached() xử lý việc "không gọi
-  // lại nếu vừa gọi" thay AbortController: hủy request đang chạy ở đây sẽ
-  // hủy luôn request DÙNG CHUNG mà 1 lần mount khác (StrictMode dev, hoặc
-  // quay lại trang rất nhanh) có thể đang chờ cùng — chỉ cần cờ `cancelled`
-  // để không setState sau khi component đã unmount.
+  // ranhThonLoadedRef chặn gọi lại vô ích trong 1 phiên <App> (vd chọn xã
+  // RỒI bật lớp bản đồ chỉ cần tải 1 lần) — getRanhGioiThonAllCached() vẫn
+  // có cache module-level riêng (sống qua các lần <App> mount lại) nên dù
+  // ref này reset về false ở mount mới, phần lớn lần gọi vẫn không tốn
+  // request mạng thật.
   const [ranhThonData, setRanhThonData] = useState({ type: "FeatureCollection", features: [] });
+  const ranhThonLoadedRef = useRef(false);
+  // Không dùng để huỷ request (network dùng chung qua cache module-level,
+  // huỷ ở đây sẽ huỷ nhầm request mà 1 nơi gọi khác đang chờ) — chỉ để
+  // chặn setState sau khi <App> đã unmount.
+  const ranhThonMountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      ranhThonMountedRef.current = false;
+    },
+    [],
+  );
 
-  useEffect(() => {
-    let cancelled = false;
+  const ensureRanhThonLoaded = useCallback(() => {
+    if (ranhThonLoadedRef.current) return;
+    ranhThonLoadedRef.current = true;
 
     getRanhGioiThonAllCached()
       .then((result) => {
-        if (cancelled) return;
+        if (!ranhThonMountedRef.current) return;
         setRanhThonData(result || { type: "FeatureCollection", features: [] });
       })
       .catch(() => {
-        if (cancelled) return;
+        if (!ranhThonMountedRef.current) return;
         setRanhThonData({ type: "FeatureCollection", features: [] });
+        ranhThonLoadedRef.current = false; // lỗi thì cho phép thử lại ở lần cần kế tiếp
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    if (maXa) ensureRanhThonLoaded();
+  }, [maXa, ensureRanhThonLoaded]);
 
   // Danh sách thôn của xã đang chọn trong bộ lọc (không phải xã đã tra
   // cứu) — suy ra thẳng từ ranhThonData đã tải sẵn, không gọi thêm API.
@@ -966,6 +979,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               pinnedSheets={banDoNenPinnedSheets}
               onEnabledChange={setBanDoNenLayerOn}
             />
+
+            <RanhThonOverlayLoader onNeed={ensureRanhThonLoaded} />
 
             <MapInstanceCapture onReady={setMapInstance} />
 
