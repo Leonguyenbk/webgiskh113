@@ -267,6 +267,12 @@ grant execute on function public.get_ranh_gioi_thon(text) to service_role;
 --       -> "<tên xã>, tỉnh Đắk Lắk"
 -- Dùng ST_Centroid + ST_Contains giống bộ lọc p_ten_thon trong search_parcels
 -- để mỗi thửa chỉ khớp đúng 1 thôn kể cả khi 2 lớp số hoá độc lập.
+-- statement_timeout: hàm chỉ tra 1 thửa qua unique index (ma_xa,so_to,
+-- so_thua) + đối chiếu vài chục thôn của xã đó, phải luôn nhanh — nới lên
+-- 15s (thay vì chịu trần mặc định ~8s của role gọi PostgREST) để tránh
+-- "canceling statement due to statement timeout" khi Supabase hơi tải, mà
+-- vẫn fail nhanh nếu có gì bất thường chứ không treo vô hạn. Cùng quy ước
+-- statement_timeout đã dùng cho các hàm nặng khác trong file này.
 create or replace function public.get_dia_chi_thua_dat(
     p_ma_xa text,
     p_so_to integer,
@@ -277,6 +283,7 @@ language sql
 stable
 security definer
 set search_path = public, extensions
+set statement_timeout = '15s'
 as $$
     with xa as (
         select ten_xa
@@ -299,6 +306,10 @@ as $$
     )
     select case
         when (select ten_xa from xa) is null then null
+        -- ĐÍNH CHÍNH: thửa không có thật (tam rỗng) từng vẫn trả về
+        -- "<tên xã>, tỉnh Đắk Lắk" — điền nhầm địa chỉ cho thửa không tồn
+        -- tại thay vì để trống.
+        when not exists (select 1 from tam) then null
         when (select ten_thon from thon) is not null
             then (select ten_thon from thon) || ', ' || (select ten_xa from xa) || ', tỉnh Đắk Lắk'
         else (select ten_xa from xa) || ', tỉnh Đắk Lắk'
@@ -570,6 +581,13 @@ drop function if exists public.search_parcels(
 -- tâm thay vì ST_Intersects để mỗi thửa chỉ thuộc đúng 1 thôn kể cả khi
 -- 2 bộ dữ liệu (thửa/ranh thôn) số hoá độc lập, đường biên không khớp
 -- tuyệt đối.
+--
+-- statement_timeout: tìm theo đúng số tờ/số thửa chạy qua unique index nên
+-- rất nhanh, nhưng lọc chỉ theo xã (không kèm số tờ/thửa, vd tìm kiếm trên
+-- WebGIS) phải quét tới p_limit=1000 thửa kèm sinh GeoJSON cho từng thửa —
+-- có thể chạm trần mặc định ~8s của role gọi PostgREST ở xã đông thửa.
+-- Nới lên 20s, cùng quy ước statement_timeout đã dùng cho các hàm nặng
+-- khác trong file này.
 create or replace function public.search_parcels(
     p_ma_xa text,
     p_nhom text[] default null,
@@ -585,6 +603,7 @@ language sql
 stable
 security definer
 set search_path = public, extensions
+set statement_timeout = '20s'
 as $$
     select jsonb_build_object(
         'type', 'FeatureCollection',
