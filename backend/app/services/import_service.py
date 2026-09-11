@@ -1,12 +1,45 @@
 from __future__ import annotations
 
 import requests
-from flask import jsonify
+from flask import current_app, jsonify
 
 import gml_reader
 import shapefile_reader
 from sync_reader import parse_sync_file
-from ..repositories import supabase_client
+from ..repositories import ranh_thon_repository, supabase_client
+
+
+def _refresh_ranh_gioi_thon_cache(ma_xa_list) -> str | None:
+    """Tính lại public.ranh_gioi_thon_cache cho từng xã vừa ghi (xem
+    supabase/schema.sql, refresh_ranh_gioi_thon_cache) rồi xoá cache RAM ở
+    backend (ranh_thon_repository) — để get_ranh_gioi_thon() thấy dữ liệu
+    mới NGAY, không đợi hết TTL. Chủ động gọi ở đây (sau khi ghi xong) thay
+    vì trigger DB, vì đây là 2 đường ghi ranh_gioi_thon DUY NHẤT trong toàn
+    dự án (grep xác nhận) — dễ theo dõi hơn trigger.
+
+    Lỗi refresh KHÔNG làm hỏng response import/xoá (dữ liệu đã ghi thành
+    công) — chỉ log cảnh báo và trả lại cho caller để đính kèm vào response,
+    admin biết mà tự chạy lại `select public.refresh_ranh_gioi_thon_cache(
+    '<ma_xa>');` nếu cần."""
+    warnings = []
+    for ma_xa in ma_xa_list:
+        _, error_response = supabase_client.call_rpc(
+            "refresh_ranh_gioi_thon_cache", {"p_ma_xa": ma_xa}, timeout=30
+        )
+        if error_response:
+            current_app.logger.warning(
+                "refresh_ranh_gioi_thon_cache lỗi cho xã %s (dữ liệu ranh_gioi_thon "
+                "đã ghi thành công, chỉ cache bị cũ tạm thời)",
+                ma_xa,
+            )
+            warnings.append(ma_xa)
+        ranh_thon_repository.invalidate(ma_xa)
+    return (
+        f"Không làm mới được cache hiển thị cho xã: {', '.join(warnings)} — "
+        "dữ liệu đã lưu, bản đồ có thể vẫn hiện thôn cũ tạm thời."
+        if warnings
+        else None
+    )
 
 
 def import_gml(file_stream):
@@ -103,13 +136,18 @@ def import_ranh_thon(file_stream):
         detail = exc.response.text if exc.response is not None else str(exc)
         return None, (jsonify({"error": detail, "total": len(rows)}), 502)
 
-    return {
+    cache_warning = _refresh_ranh_gioi_thon_cache(thon_by_xa.keys())
+
+    result = {
         "ok": True,
         "total": len(rows),
         "imported": imported,
         "deleted": deleted,
         "xa": list(thon_by_xa.keys()),
-    }, None
+    }
+    if cache_warning:
+        result["cache_warning"] = cache_warning
+    return result, None
 
 
 def delete_ranh_thon(ma_xa: str):
@@ -149,12 +187,18 @@ def delete_ranh_thon(ma_xa: str):
     ten_thon = sorted(
         {str(row.get("ten_thon") or "").strip() for row in deleted_rows if row.get("ten_thon")}
     )
-    return {
+
+    cache_warning = _refresh_ranh_gioi_thon_cache([ma_xa])
+
+    result = {
         "ok": True,
         "ma_xa": ma_xa,
         "deleted": len(deleted_rows),
         "ten_thon": ten_thon,
-    }, None
+    }
+    if cache_warning:
+        result["cache_warning"] = cache_warning
+    return result, None
 
 
 def import_dong_bo(filename: str, data: bytes):

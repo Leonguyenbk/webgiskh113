@@ -30,7 +30,7 @@ import MapSheetTilesLayer from "./components/map/MapSheetTilesLayer";
 import MapSheetTilesLoader from "./components/map/MapSheetTilesLoader";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
 import { getXaList } from "./services/parcelService";
-import { getRanhGioiThon } from "./services/ranhThonService";
+import { getRanhGioiThonAllCached } from "./services/ranhThonService";
 import { searchBanDoNen } from "./services/mapSheetService";
 import {
   GCN_COLOR,
@@ -112,17 +112,34 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   // theo khung bản đồ/xã) — hễ zoom/kéo tới đâu có ranh là hiện ngay,
   // không cần bấm Tra cứu trước. Xã nào chưa có dữ liệu ranh thì đơn giản
   // là không có feature nào rơi vào khu vực đó.
+  //
+  // Dùng getRanhGioiThonAllCached() (không phải AbortController) vì <App>
+  // bị unmount/mount lại mỗi khi người dùng rời/quay lại trang bản đồ
+  // (router tự chế trong main.jsx, xem ranhThonService.js) — effect này
+  // chạy lại rất thường xuyên dù dữ liệu gần như không đổi. Cache
+  // module-level bên trong getRanhGioiThonAllCached() xử lý việc "không gọi
+  // lại nếu vừa gọi" thay AbortController: hủy request đang chạy ở đây sẽ
+  // hủy luôn request DÙNG CHUNG mà 1 lần mount khác (StrictMode dev, hoặc
+  // quay lại trang rất nhanh) có thể đang chờ cùng — chỉ cần cờ `cancelled`
+  // để không setState sau khi component đã unmount.
   const [ranhThonData, setRanhThonData] = useState({ type: "FeatureCollection", features: [] });
 
   useEffect(() => {
-    const controller = new AbortController();
-    getRanhGioiThon({}, { signal: controller.signal })
-      .then((result) => setRanhThonData(result || { type: "FeatureCollection", features: [] }))
-      .catch((fetchError) => {
-        if (fetchError.name !== "AbortError") setRanhThonData({ type: "FeatureCollection", features: [] });
+    let cancelled = false;
+
+    getRanhGioiThonAllCached()
+      .then((result) => {
+        if (cancelled) return;
+        setRanhThonData(result || { type: "FeatureCollection", features: [] });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRanhThonData({ type: "FeatureCollection", features: [] });
       });
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Danh sách thôn của xã đang chọn trong bộ lọc (không phải xã đã tra

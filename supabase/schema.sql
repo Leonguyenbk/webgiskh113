@@ -197,8 +197,18 @@ create table if not exists public.ranh_gioi_thon (
     constraint ranh_gioi_thon_ma_xa_ten_thon_key unique (ma_xa, ten_thon)
 );
 
-create index if not exists ranh_gioi_thon_ma_xa_idx
-    on public.ranh_gioi_thon (ma_xa);
+-- ĐÍNH CHÍNH: bỏ ranh_gioi_thon_ma_xa_idx — trùng hoàn toàn với chỉ mục của
+-- ràng buộc UNIQUE ranh_gioi_thon_ma_xa_ten_thon_key (ma_xa dẫn đầu, Postgres
+-- tự dùng chỉ mục đó cho điều kiện "ma_xa = ..."), giữ cả 2 chỉ tốn thêm
+-- dung lượng vô ích — cùng lý do đã dọn ở thua_dat/dong_bo_du_lieu phía trên.
+drop index if exists public.ranh_gioi_thon_ma_xa_idx;
+
+-- GIST cho geom: get_dia_chi_thua_dat/search_parcels lọc theo p_ten_thon đều
+-- có ST_Contains(r.geom, ...) trên bảng này — thêm để sẵn sàng khi số thôn
+-- tăng lên (hiện bảng nhỏ, Postgres có thể chưa cần dùng tới, nhưng không
+-- có hại).
+create index if not exists ranh_gioi_thon_geom_gix
+    on public.ranh_gioi_thon using gist (geom);
 
 alter table public.ranh_gioi_thon enable row level security;
 
@@ -228,8 +238,113 @@ $$;
 revoke all on function public.delete_ranh_gioi_thon_not_in(text, text[]) from public;
 grant execute on function public.delete_ranh_gioi_thon_not_in(text, text[]) to service_role;
 
--- Đọc ranh giới thôn cho bản đồ — theo xã (p_ma_xa null thì trả hết, dataset
--- nhỏ nên không cần lọc theo khung bản đồ như get_parcels_in_view).
+-- =========================================================
+-- CACHE cho get_ranh_gioi_thon (khắc phục CPU Supabase bị đẩy cao).
+--
+-- SỰ CỐ: get_ranh_gioi_thon(p_ma_xa) trước đây build FeatureCollection
+-- TRỰC TIẾP từ ranh_gioi_thon bằng ST_AsGeoJSON(r.geom) mỗi lần gọi — kể
+-- cả khi p_ma_xa = null (lấy TOÀN BỘ thôn của TOÀN BỘ xã). Frontend
+-- (App.jsx) gọi đúng biến thể p_ma_xa=null này 1 lần mỗi khi component
+-- <App> MOUNT — mà main.jsx dùng router tự chế theo path (không phải
+-- React Router với cache) nên <App> bị UNMOUNT/MOUNT LẠI mỗi lần người
+-- dùng rời trang bản đồ rồi quay lại (bấm "Công cụ" rồi "Về bản đồ", nộp
+-- xong biểu Nhóm 4 rồi quay lại...) — không phải do pan/zoom. Đo thực tế
+-- trên production (2026-09-11, mới 7 xã / 149 thôn): 1 lần gọi mất ~18.7
+-- giây và trả về 1.4MB JSON — chứng tỏ hình học ranh thôn có mật độ đỉnh
+-- rất cao (số hoá trực tiếp từ Shapefile, chưa qua đơn giản hoá), và chi
+-- phí này lặp lại ở MỌI lượt quay lại trang của MỌI người dùng.
+--
+-- FIX: tách phần "tính JSON từ hình học" (nặng, hiếm khi cần tính lại) ra
+-- khỏi phần "trả JSON cho người dùng" (phải luôn nhẹ) — đúng khuôn mẫu
+-- cache đã dùng cho gcn_thu_thap_theo_xa_cache/bieu_thong_ke_theo_xa_cache
+-- trong file này. get_ranh_gioi_thon() SAU khi sửa chỉ đọc bảng cache nhỏ
+-- (đã có FeatureCollection tính sẵn theo từng xã), không còn ST_AsGeoJSON
+-- nào chạy trên đường đọc của người dùng.
+--
+-- Không dùng bảng cache 1 dòng "gộp hết" vì get_ranh_gioi_thon còn được
+-- gọi với p_ma_xa cụ thể (ImportRanhThonPage xem trước khi xoá) — cache
+-- theo TỪNG xã cho phép đọc đúng phần cần mà không phải giải nén JSON lớn.
+create table if not exists public.ranh_gioi_thon_cache (
+    ma_xa text primary key,
+    feature_collection jsonb not null,
+    so_thon integer not null default 0,
+    updated_at timestamptz not null default now()
+);
+
+alter table public.ranh_gioi_thon_cache enable row level security;
+
+-- Không tạo policy nào — cùng quy ước với ranh_gioi_thon: chỉ backend
+-- (Service Role) đọc/ghi qua RPC, frontend không gọi thẳng Supabase.
+
+-- Tính lại cache cho 1 xã (p_ma_xa chỉ định) hoặc TOÀN BỘ (p_ma_xa null).
+-- CHỦ ĐÍCH: chỉ được gọi khi dữ liệu ranh_gioi_thon thật sự đổi (sau
+-- import/xoá ở import_service.py) hoặc chạy tay 1 lần để backfill — KHÔNG
+-- được gọi trên đường đọc của người dùng (xem get_ranh_gioi_thon bên dưới).
+-- Tự dọn cache "mồ côi" (xã đã xoá hết thôn) bằng nhánh DELETE trước khi
+-- upsert lại các xã còn dữ liệu.
+create or replace function public.refresh_ranh_gioi_thon_cache(p_ma_xa text default null)
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+set statement_timeout = '120s'
+as $$
+declare
+    v_rows integer;
+begin
+    delete from public.ranh_gioi_thon_cache c
+    where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+      and not exists (
+          select 1 from public.ranh_gioi_thon r where r.ma_xa = c.ma_xa
+      );
+
+    with agg as (
+        select
+            r.ma_xa,
+            jsonb_build_object(
+                'type', 'FeatureCollection',
+                'features', jsonb_agg(
+                    jsonb_build_object(
+                        'type', 'Feature',
+                        'id', r.id,
+                        'geometry', ST_AsGeoJSON(r.geom)::jsonb,
+                        'properties', jsonb_build_object(
+                            'ma_xa', r.ma_xa,
+                            'ten_thon', r.ten_thon
+                        )
+                    )
+                    order by r.ten_thon
+                )
+            ) as feature_collection,
+            count(*)::integer as so_thon
+        from public.ranh_gioi_thon r
+        where p_ma_xa is null or r.ma_xa = p_ma_xa
+        group by r.ma_xa
+    )
+    insert into public.ranh_gioi_thon_cache (ma_xa, feature_collection, so_thon, updated_at)
+    select ma_xa, feature_collection, so_thon, now()
+    from agg
+    on conflict (ma_xa) do update set
+        feature_collection = excluded.feature_collection,
+        so_thon = excluded.so_thon,
+        updated_at = now();
+
+    get diagnostics v_rows = row_count;
+    return v_rows;
+end;
+$$;
+
+revoke all on function public.refresh_ranh_gioi_thon_cache(text) from public;
+grant execute on function public.refresh_ranh_gioi_thon_cache(text) to service_role;
+
+-- Đọc ranh giới thôn cho bản đồ — theo xã (p_ma_xa null thì trả hết).
+-- CHỈ đọc bảng cache (ranh_gioi_thon_cache) — không còn ST_AsGeoJSON/tính
+-- hình học nào ở đây, xem chú thích ở khối cache phía trên. Giữ nguyên
+-- chữ ký + kiểu trả về + cấu trúc JSON như trước (FeatureCollection, mỗi
+-- feature có properties.ma_xa/ten_thon) để không phá frontend hiện có.
+-- p_ma_xa = null: gộp feature của MỌI xã đã có cache, sắp lại theo
+-- ten_thon để giữ đúng thứ tự cũ (trước đây "order by r.ten_thon" áp dụng
+-- toàn cục, không phải theo từng xã).
 create or replace function public.get_ranh_gioi_thon(p_ma_xa text default null)
 returns jsonb
 language sql
@@ -239,26 +354,31 @@ set search_path = public, extensions
 as $$
     select jsonb_build_object(
         'type', 'FeatureCollection',
-        'features', coalesce(jsonb_agg(feature), '[]'::jsonb)
+        'features', coalesce(
+            jsonb_agg(feature order by feature->'properties'->>'ten_thon'),
+            '[]'::jsonb
+        )
     )
     from (
-        select jsonb_build_object(
-            'type', 'Feature',
-            'id', r.id,
-            'geometry', ST_AsGeoJSON(r.geom)::jsonb,
-            'properties', jsonb_build_object(
-                'ma_xa', r.ma_xa,
-                'ten_thon', r.ten_thon
-            )
-        ) as feature
-        from public.ranh_gioi_thon r
-        where p_ma_xa is null or r.ma_xa = p_ma_xa
-        order by r.ten_thon
+        select jsonb_array_elements(c.feature_collection -> 'features') as feature
+        from public.ranh_gioi_thon_cache c
+        where p_ma_xa is null or c.ma_xa = p_ma_xa
     ) features;
 $$;
 
 revoke all on function public.get_ranh_gioi_thon(text) from public;
 grant execute on function public.get_ranh_gioi_thon(text) to service_role;
+
+-- Backfill: tính cache ngay cho dữ liệu ranh_gioi_thon đang có sẵn — an
+-- toàn chạy lại (upsert), chỉ tốn thời gian bằng đúng 1 lần refresh toàn
+-- bộ (một lần, không phải trên mỗi request). Sau lần chạy schema.sql này,
+-- các lần nhập/xoá ranh giới thôn tiếp theo tự refresh qua
+-- backend/app/services/import_service.py — không cần chạy tay lại câu
+-- này trừ khi ranh_gioi_thon bị sửa trực tiếp ngoài luồng backend.
+select public.refresh_ranh_gioi_thon_cache(null);
+
+analyze public.ranh_gioi_thon;
+analyze public.ranh_gioi_thon_cache;
 
 -- Địa chỉ thửa đất cho biểu Nhóm 4:
 --   - Xã đã có ranh giới thôn VÀ tâm thửa nằm trong 1 thôn
