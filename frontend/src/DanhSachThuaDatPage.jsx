@@ -194,7 +194,6 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                       <th>Số tờ</th>
                       <th>Số thửa</th>
                       <th>Mã định danh</th>
-                      <th>madvhc_soto_sothua</th>
                       <th
                         onClick={handleToggleSort}
                         style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
@@ -208,7 +207,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                   <tbody>
                     {!loading && items.length === 0 ? (
                       <tr>
-                        <td colSpan={6}>Xã/phường này chưa có dữ liệu trong du_lieu_gcn</td>
+                        <td colSpan={5}>Xã/phường này chưa có dữ liệu trong du_lieu_gcn</td>
                       </tr>
                     ) : (
                       items.map((row, index) => (
@@ -217,7 +216,6 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                           <td>{row.so_to}</td>
                           <td>{row.so_thua}</td>
                           <td>{row.ma_dinh_danh || ""}</td>
-                          <td>{row.ma_xa_so_to_so_thua || ""}</td>
                           <td>{formatNgay(row.ngay_nhap)}</td>
                         </tr>
                       ))
