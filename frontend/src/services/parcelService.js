@@ -35,3 +35,11 @@ export function getGcnStats({ signal } = {}) {
 export function getBieuThongKe({ signal } = {}) {
   return request("/api/bieu-thong-ke", { signal });
 }
+
+export function getGcnDanhSach(params, { signal, errorFallback } = {}) {
+  return request("/api/gcn-danh-sach", {
+    params,
+    signal,
+    errorFallback: errorFallback || "Không tải được danh sách dữ liệu GCN",
+  });
+}

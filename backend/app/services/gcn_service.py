@@ -17,6 +17,12 @@ _NHOM_HOP_LE = {"NHÓM 1", "NHÓM 2"}
 _EXPORT_PAGE = 5000      # số dòng mỗi lần gọi RPC
 _EXPORT_MAX = 300_000    # trần an toàn cho 1 lần xuất
 
+# Trang "Danh sách thửa đã nhập" (/api/gcn-danh-sach) liệt kê thuộc tính
+# theo trang, không phải xuất toàn bộ — trần thấp hơn nhiều so với
+# _EXPORT_PAGE ở trên.
+_DANH_SACH_DEFAULT_LIMIT = 100
+_DANH_SACH_MAX_LIMIT = 200
+
 # File mẫu TANAN.xlsx (biểu tổng hợp dữ liệu GCN) — hàng 1-4 là tiêu đề
 # (có gộp ô), dữ liệu mẫu ở hàng 5 trở đi bị xóa và thay bằng dữ liệu thật
 # khi xuất. Đường dẫn tương đối tới backend/data/ (xem backend/data/Thua_Dat.xsd
@@ -200,6 +206,37 @@ def refresh_bieu_thong_ke_cache():
         return None, error_response
     rows = result if isinstance(result, int) else None
     return {"ok": True, "rows": rows}, None
+
+
+def get_danh_sach_da_nhap(ma_xa: str, sort_raw: str | None, limit_raw: str | None, offset_raw: str | None):
+    """Trang 'Danh sách thửa đã nhập' — liệt kê từng dòng public.du_lieu_gcn
+    theo xã (tên xã, số tờ, số thửa, mã định danh, ngày nhập). Bắt buộc
+    ma_xa (xem lý do CPU trong supabase/schema.sql,
+    list_du_lieu_gcn_da_nhap)."""
+    ma_xa = (ma_xa or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+
+    sort_asc = (sort_raw or "").strip().lower() == "asc"
+
+    try:
+        limit = min(
+            max(int(limit_raw or _DANH_SACH_DEFAULT_LIMIT), 1),
+            _DANH_SACH_MAX_LIMIT,
+        )
+        offset = max(int(offset_raw or 0), 0)
+    except (TypeError, ValueError):
+        return None, (jsonify({"error": "limit hoặc offset không hợp lệ"}), 400)
+
+    result, error_response = gcn_repository.list_da_nhap(ma_xa, sort_asc, limit, offset)
+    if error_response:
+        return None, error_response
+
+    if not isinstance(result, dict):
+        result = {}
+    result.setdefault("total", 0)
+    result.setdefault("items", [])
+    return result, None
 
 
 def export_bieu_thong_ke_xlsx():

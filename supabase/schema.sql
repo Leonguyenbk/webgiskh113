@@ -1549,4 +1549,88 @@ $$;
 revoke all on function public.export_du_lieu_gcn(text, boolean, integer, integer) from public;
 grant execute on function public.export_du_lieu_gcn(text, boolean, integer, integer) to service_role;
 
+-- =========================================================
+-- DANH SÁCH DỮ LIỆU GCN ĐÃ NHẬP (trang "Danh sách thửa đã nhập") — liệt
+-- kê từng dòng public.du_lieu_gcn theo xã, KHÔNG đụng tới thua_dat (khác
+-- export_du_lieu_gcn ở trên vốn EXISTS vào thua_dat).
+--
+-- Lọc theo g.madvhc (không phải g.ma_nguon) vì Nhóm 4 (biểu mẫu /nhom-4)
+-- ghi thẳng vào du_lieu_gcn với ma_nguon='NHOM4_FORM' cho MỌI xã — chỉ
+-- madvhc mới xác định đúng xã cho cả 2 nguồn (đồng bộ Sheet lẫn form
+-- Nhóm 4). Xem backend/app/services/nhom4_service.py (madvhc: ma_xa).
+--
+-- Đã đo thực tế trên Supabase trước khi viết hàm này: COUNT(*) không lọc
+-- xã trên du_lieu_gcn bị hủy vì statement timeout (57014) giống thua_dat.
+-- Lọc theo 1 xã (idx_du_lieu_gcn_madvhc có sẵn) thì count lẫn ORDER BY
+-- created_at đều dưới ~1.2s dù chưa có chỉ mục cho created_at (xã nhiều
+-- nhất đã thấy ~8.500 dòng) — vẫn thêm chỉ mục ghép (madvhc, created_at
+-- desc) trong sync_gcn/create_du_lieu_gcn.sql để an toàn khi 1 xã phình
+-- to hơn, và để ORDER BY dùng index scan thay vì filesort.
+--
+-- p_ma_xa bắt buộc (như search_parcels) — không cho liệt kê/đếm "tất cả
+-- xã" cùng lúc.
+-- =========================================================
+
+create or replace function public.list_du_lieu_gcn_da_nhap(
+    p_ma_xa text,
+    p_sort_asc boolean default false,
+    p_limit integer default 100,
+    p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '15s'
+as $$
+declare
+    v_total integer;
+    v_items jsonb;
+begin
+    select count(*) into v_total
+    from public.du_lieu_gcn g
+    where g.madvhc = p_ma_xa;
+
+    if p_sort_asc then
+        select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) into v_items
+        from (
+            select
+                g.madvhc as ma_xa,
+                xp.ten_xa,
+                public.normalize_so_text(g.soto) as so_to,
+                public.normalize_so_text(g.sothua) as so_thua,
+                g.madinhdanhthuadat as ma_dinh_danh,
+                g.created_at as ngay_nhap
+            from public.du_lieu_gcn g
+            left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
+            where g.madvhc = p_ma_xa
+            order by g.created_at asc
+            limit p_limit offset p_offset
+        ) x;
+    else
+        select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) into v_items
+        from (
+            select
+                g.madvhc as ma_xa,
+                xp.ten_xa,
+                public.normalize_so_text(g.soto) as so_to,
+                public.normalize_so_text(g.sothua) as so_thua,
+                g.madinhdanhthuadat as ma_dinh_danh,
+                g.created_at as ngay_nhap
+            from public.du_lieu_gcn g
+            left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
+            where g.madvhc = p_ma_xa
+            order by g.created_at desc
+            limit p_limit offset p_offset
+        ) x;
+    end if;
+
+    return jsonb_build_object('total', v_total, 'items', v_items);
+end;
+$$;
+
+revoke all on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer) from public;
+grant execute on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer) to service_role;
+
 

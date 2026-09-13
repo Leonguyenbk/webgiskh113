@@ -15,6 +15,7 @@ import MplisSyncPage from "./MplisSyncPage.jsx";
 import Nhom4FormPage from "./Nhom4FormPage.jsx";
 import ImportRanhThonPage from "./ImportRanhThonPage.jsx";
 import ManageBanDoNenPage from "./ManageBanDoNenPage.jsx";
+import DanhSachThuaDatPage from "./DanhSachThuaDatPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -65,6 +66,7 @@ function Root() {
         onNavigateNhom4={() => navigate("/nhom-4")}
         onNavigateRanhThon={() => navigate("/import-ranh-thon")}
         onNavigateBanDoNen={() => navigate("/ban-do-nen")}
+        onNavigateDanhSachThuaDat={() => navigate("/danh-sach-thua-dat")}
       />
     );
   }
@@ -100,6 +102,9 @@ function Root() {
   }
   if (path.startsWith("/ban-do-nen")) {
     return <ManageBanDoNenPage onNavigateHome={() => navigate("/")} />;
+  }
+  if (path.startsWith("/danh-sach-thua-dat")) {
+    return <DanhSachThuaDatPage onNavigateHome={() => navigate("/")} />;
   }
   return <App onNavigateTools={() => navigate("/tools")} onNavigateNhom4={navigateToNhom4} />;
 }

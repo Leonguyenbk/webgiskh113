@@ -30,6 +30,7 @@ export default function ToolsPage({
   onNavigateNhom4,
   onNavigateRanhThon,
   onNavigateBanDoNen,
+  onNavigateDanhSachThuaDat,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -88,6 +89,11 @@ export default function ToolsPage({
       name: "🗺️ Quản lý bản đồ nền",
       description: "Quản lý tờ bản đồ raster chuyển đổi từ DGN (mã xã + số tờ), tải tile lên Supabase Storage.",
       onNavigate: onNavigateBanDoNen,
+    },
+    {
+      name: "📋 Danh sách thửa đã nhập",
+      description: "Tra cứu từng dòng dữ liệu GCN (du_lieu_gcn) theo xã/phường — tên xã, số tờ, số thửa, mã định danh, ngày nhập.",
+      onNavigate: onNavigateDanhSachThuaDat,
     },
   ];
 

@@ -165,6 +165,15 @@ create index if not exists idx_du_lieu_gcn_madvhc_soto_sothua_key
 create index if not exists idx_du_lieu_gcn_sophathanhgcn
   on public.du_lieu_gcn (sophathanhgcn);
 
+-- Trang "Danh sách thửa đã nhập" (backend/app/routes/gcn_routes.py:
+-- GET /api/gcn-danh-sach, hàm public.list_du_lieu_gcn_da_nhap trong
+-- supabase/schema.sql) liệt kê theo xã (madvhc) sắp theo created_at —
+-- idx_du_lieu_gcn_madvhc ở trên chỉ lọc được madvhc, còn sắp theo
+-- created_at trong 1 xã vẫn phải filesort. Thêm chỉ mục ghép để ORDER BY
+-- created_at dùng index scan.
+create index if not exists idx_du_lieu_gcn_madvhc_created_at
+  on public.du_lieu_gcn (madvhc, created_at desc);
+
 alter table public.du_lieu_gcn enable row level security;
 
 -- Mặc định KHÔNG tạo policy nào: bật RLS mà không có policy nghĩa là
