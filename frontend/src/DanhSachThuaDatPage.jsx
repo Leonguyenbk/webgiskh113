@@ -89,7 +89,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Danh sách thửa đã nhập</h1>
-          <p>Tra cứu từng dòng dữ liệu GCN (du_lieu_gcn) đã nhập theo xã/phường, kèm ngày nhập</p>
+          <p>Tra cứu các thửa đã có dữ liệu GCN (du_lieu_gcn) theo xã/phường — mỗi thửa 1 dòng dù có nhiều chủ sử dụng</p>
         </div>
         <a
           className="backLink"
@@ -147,7 +147,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                 <label style={{ margin: 0 }}>
                   {loading
                     ? "Đang tải…"
-                    : `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} dòng`}
+                    : `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} thửa`}
                 </label>
                 <button
                   type="button"

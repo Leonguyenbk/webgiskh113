@@ -1569,6 +1569,13 @@ grant execute on function public.export_du_lieu_gcn(text, boolean, integer, inte
 --
 -- p_ma_xa bắt buộc (như search_parcels) — không cho liệt kê/đếm "tất cả
 -- xã" cùng lúc.
+--
+-- DISTINCT theo madvhc_soto_sothua: 1 thửa có thể có nhiều chủ sử dụng ->
+-- nhiều dòng trong du_lieu_gcn (xem export_gcn_theo_nhom: "mỗi chủ sử
+-- dụng 1 dòng") — mục đích trang này là đếm/xem ĐÃ NHẬP ĐƯỢC BAO NHIÊU
+-- THỬA nên mỗi thửa chỉ hiện đúng 1 dòng, lấy ngày nhập SỚM NHẤT
+-- (created_at nhỏ nhất) trong các dòng cùng thửa. Bảng bị lọc còn tối đa
+-- ~8.500 dòng/xã trước khi DISTINCT ON nên không tốn thêm CPU đáng kể.
 -- =========================================================
 
 create or replace function public.list_du_lieu_gcn_da_nhap(
@@ -1588,40 +1595,48 @@ declare
     v_total integer;
     v_items jsonb;
 begin
-    select count(*) into v_total
+    select count(distinct g.madvhc_soto_sothua) into v_total
     from public.du_lieu_gcn g
     where g.madvhc = p_ma_xa;
 
     if p_sort_asc then
         select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) into v_items
         from (
-            select
-                g.madvhc as ma_xa,
-                xp.ten_xa,
-                public.normalize_so_text(g.soto) as so_to,
-                public.normalize_so_text(g.sothua) as so_thua,
-                g.madinhdanhthuadat as ma_dinh_danh,
-                g.created_at as ngay_nhap
-            from public.du_lieu_gcn g
-            left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
-            where g.madvhc = p_ma_xa
-            order by g.created_at asc
+            select y.ma_xa, y.ten_xa, y.so_to, y.so_thua, y.ma_dinh_danh, y.ngay_nhap
+            from (
+                select distinct on (g.madvhc_soto_sothua)
+                    g.madvhc as ma_xa,
+                    xp.ten_xa,
+                    public.normalize_so_text(g.soto) as so_to,
+                    public.normalize_so_text(g.sothua) as so_thua,
+                    g.madinhdanhthuadat as ma_dinh_danh,
+                    g.created_at as ngay_nhap
+                from public.du_lieu_gcn g
+                left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
+                where g.madvhc = p_ma_xa
+                order by g.madvhc_soto_sothua, g.created_at asc
+            ) y
+            order by y.ngay_nhap asc
             limit p_limit offset p_offset
         ) x;
     else
         select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) into v_items
         from (
-            select
-                g.madvhc as ma_xa,
-                xp.ten_xa,
-                public.normalize_so_text(g.soto) as so_to,
-                public.normalize_so_text(g.sothua) as so_thua,
-                g.madinhdanhthuadat as ma_dinh_danh,
-                g.created_at as ngay_nhap
-            from public.du_lieu_gcn g
-            left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
-            where g.madvhc = p_ma_xa
-            order by g.created_at desc
+            select y.ma_xa, y.ten_xa, y.so_to, y.so_thua, y.ma_dinh_danh, y.ngay_nhap
+            from (
+                select distinct on (g.madvhc_soto_sothua)
+                    g.madvhc as ma_xa,
+                    xp.ten_xa,
+                    public.normalize_so_text(g.soto) as so_to,
+                    public.normalize_so_text(g.sothua) as so_thua,
+                    g.madinhdanhthuadat as ma_dinh_danh,
+                    g.created_at as ngay_nhap
+                from public.du_lieu_gcn g
+                left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
+                where g.madvhc = p_ma_xa
+                order by g.madvhc_soto_sothua, g.created_at asc
+            ) y
+            order by y.ngay_nhap desc
             limit p_limit offset p_offset
         ) x;
     end if;
