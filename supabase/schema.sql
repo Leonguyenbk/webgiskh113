@@ -1601,7 +1601,8 @@ begin
                 public.normalize_so_text(g.soto) as so_to,
                 public.normalize_so_text(g.sothua) as so_thua,
                 g.madinhdanhthuadat as ma_dinh_danh,
-                g.created_at as ngay_nhap
+                g.created_at as ngay_nhap,
+                g.madvhc_soto_sothua as ma_xa_so_to_so_thua
             from public.du_lieu_gcn g
             left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
             where g.madvhc = p_ma_xa
@@ -1617,7 +1618,8 @@ begin
                 public.normalize_so_text(g.soto) as so_to,
                 public.normalize_so_text(g.sothua) as so_thua,
                 g.madinhdanhthuadat as ma_dinh_danh,
-                g.created_at as ngay_nhap
+                g.created_at as ngay_nhap,
+                g.madvhc_soto_sothua as ma_xa_so_to_so_thua
             from public.du_lieu_gcn g
             left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
             where g.madvhc = p_ma_xa

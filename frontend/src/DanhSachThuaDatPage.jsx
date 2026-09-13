@@ -115,26 +115,64 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
           className="importCard statsTableCard"
           style={{ width: "80%", maxWidth: "80%", margin: "0 auto" }}
         >
-          <div style={{ flex: "1 1 260px", maxWidth: 360 }}>
-            <label htmlFor="daNhapXa">Xã / phường</label>
-            <select
-              id="daNhapXa"
-              value={maXa}
-              disabled={xaLoading}
-              onChange={(event) => handleChangeXa(event.target.value)}
-              style={{ width: "100%" }}
-            >
-              <option value="">-- Chọn xã/phường --</option>
-              {xaList.map((x) => (
-                <option key={x.ma_xa} value={x.ma_xa}>
-                  {x.ten_xa || x.ma_xa}
-                </option>
-              ))}
-            </select>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <div style={{ width: 280, maxWidth: "100%" }}>
+              <label htmlFor="daNhapXa">Xã / phường</label>
+              <select
+                id="daNhapXa"
+                value={maXa}
+                disabled={xaLoading}
+                onChange={(event) => handleChangeXa(event.target.value)}
+                style={{ width: "100%" }}
+              >
+                <option value="">-- Chọn xã/phường --</option>
+                {xaList.map((x) => (
+                  <option key={x.ma_xa} value={x.ma_xa}>
+                    {x.ten_xa || x.ma_xa}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {maXa && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <label style={{ margin: 0 }}>
+                  {loading
+                    ? "Đang tải…"
+                    : `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} dòng`}
+                </label>
+                <button
+                  type="button"
+                  className="downloadButton"
+                  disabled={!canPrev || loading}
+                  style={{ opacity: !canPrev || loading ? 0.5 : 1 }}
+                  onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
+                >
+                  ← Trang trước
+                </button>
+                <button
+                  type="button"
+                  className="downloadButton"
+                  disabled={!canNext || loading}
+                  style={{ opacity: !canNext || loading ? 0.5 : 1 }}
+                  onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
+                >
+                  Trang sau →
+                </button>
+              </div>
+            )}
           </div>
 
           {!maXa ? (
-            <div className="emptyState" style={{ marginTop: 16 }}>
+            <div className="emptyState" style={{ marginTop: 10 }}>
               <div>📋</div>
               <strong>Chưa chọn xã/phường</strong>
               <span>Chọn 1 xã/phường ở trên để xem danh sách đã nhập.</span>
@@ -142,50 +180,13 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
           ) : (
             <>
               {error && (
-                <div className="notice error" style={{ marginTop: 16 }}>
+                <div className="notice error" style={{ marginTop: 10 }}>
                   <strong>Không tải được dữ liệu</strong>
                   <span>{error}</span>
                 </div>
               )}
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginTop: 16,
-                }}
-              >
-                <label style={{ margin: 0 }}>
-                  {loading
-                    ? "Đang tải…"
-                    : `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} dòng`}
-                </label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    className="downloadButton"
-                    disabled={!canPrev || loading}
-                    style={{ opacity: !canPrev || loading ? 0.5 : 1 }}
-                    onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
-                  >
-                    ← Trang trước
-                  </button>
-                  <button
-                    type="button"
-                    className="downloadButton"
-                    disabled={!canNext || loading}
-                    style={{ opacity: !canNext || loading ? 0.5 : 1 }}
-                    onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
-                  >
-                    Trang sau →
-                  </button>
-                </div>
-              </div>
-
-              <div className="statsTableWrap" style={{ marginTop: 12 }}>
+              <div className="statsTableWrap" style={{ marginTop: 10 }}>
                 <table className="statsTable">
                   <thead>
                     <tr>
@@ -193,6 +194,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                       <th>Số tờ</th>
                       <th>Số thửa</th>
                       <th>Mã định danh</th>
+                      <th>madvhc_soto_sothua</th>
                       <th
                         onClick={handleToggleSort}
                         style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
@@ -206,7 +208,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                   <tbody>
                     {!loading && items.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>Xã/phường này chưa có dữ liệu trong du_lieu_gcn</td>
+                        <td colSpan={6}>Xã/phường này chưa có dữ liệu trong du_lieu_gcn</td>
                       </tr>
                     ) : (
                       items.map((row, index) => (
@@ -215,6 +217,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                           <td>{row.so_to}</td>
                           <td>{row.so_thua}</td>
                           <td>{row.ma_dinh_danh || ""}</td>
+                          <td>{row.ma_xa_so_to_so_thua || ""}</td>
                           <td>{formatNgay(row.ngay_nhap)}</td>
                         </tr>
                       ))
