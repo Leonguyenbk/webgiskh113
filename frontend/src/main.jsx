@@ -4,8 +4,6 @@ import "leaflet/dist/leaflet.css";
 import "./styles.css";
 import App from "./App.jsx";
 import ToolsPage from "./ToolsPage.jsx";
-import ImportGmlPage from "./ImportGmlPage.jsx";
-import ImportSyncPage from "./ImportSyncPage.jsx";
 import ManageGcnLinksPage from "./ManageGcnLinksPage.jsx";
 import GcnDashboardPage from "./GcnDashboardPage.jsx";
 import BieuThongKePage from "./BieuThongKePage.jsx";
@@ -55,8 +53,6 @@ function Root() {
     return (
       <ToolsPage
         onNavigateHome={() => navigate("/")}
-        onNavigateImport={() => navigate("/import-gml")}
-        onNavigateSync={() => navigate("/import-dong-bo")}
         onNavigateGcnLinks={() => navigate("/nguon-gcn")}
         onNavigateGcnDashboard={() => navigate("/thong-ke-gcn")}
         onNavigateBieuThongKe={() => navigate("/thong-ke-nhap-bieu")}
@@ -69,12 +65,6 @@ function Root() {
         onNavigateDanhSachThuaDat={() => navigate("/danh-sach-thua-dat")}
       />
     );
-  }
-  if (path.startsWith("/import-gml")) {
-    return <ImportGmlPage onNavigateHome={() => navigate("/")} />;
-  }
-  if (path.startsWith("/import-dong-bo")) {
-    return <ImportSyncPage onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/nguon-gcn")) {
     return <ManageGcnLinksPage onNavigateHome={() => navigate("/")} />;

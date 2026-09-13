@@ -19,8 +19,6 @@ const TOOLS = [
 
 export default function ToolsPage({
   onNavigateHome,
-  onNavigateImport,
-  onNavigateSync,
   onNavigateGcnLinks,
   onNavigateGcnDashboard,
   onNavigateBieuThongKe,
@@ -33,16 +31,6 @@ export default function ToolsPage({
   onNavigateDanhSachThuaDat,
 }) {
   const ADMIN_TOOLS = [
-    {
-      name: "⇪ Nhập GML",
-      description: "Nhập file GML thửa đất vào Supabase (bảng thua_dat).",
-      onNavigate: onNavigateImport,
-    },
-    {
-      name: "⇪ Nhập đồng bộ",
-      description: "Nhập file CSV/Excel dữ liệu đồng bộ (bảng dong_bo_du_lieu).",
-      onNavigate: onNavigateSync,
-    },
     {
       name: "⇪ Nhập đường link",
       description: "Quản lý danh sách link Google Sheet cho công cụ đồng bộ GCN.",
