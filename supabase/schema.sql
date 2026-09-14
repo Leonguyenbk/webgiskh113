@@ -1148,12 +1148,25 @@ grant execute on function public.bieu_thong_ke_theo_xa() to service_role;
 -- kiểu khi normalize_so_text(...) toàn chữ số (^[0-9]+$), tránh lỗi
 -- 22003 (giá trị rác kiểu "54168001108" từng gặp) — ép ::bigint chứ
 -- không ::integer để không tràn số.
+--
+-- Vẫn timeout ở 120s sau khi gộp lại 1 lượt quét — kiểm tra thực tế bằng
+-- count=planned (ước tính nhanh của Postgres, không quét thật) cho thấy
+-- các bảng đã lớn hơn NHIỀU so với ghi chú cũ trong file này ("1,36 triệu
+-- dòng"): thua_dat ~3,86 triệu, dong_bo_du_lieu ~2,4 triệu, du_lieu_gcn
+-- ~448 nghìn dòng — 2 LEFT JOIN cỡ này (dong_bo_du_lieu + gcn_keys) cộng
+-- thêm 3 tổng hợp FILTER nữa (so_thua_can_thu_thap/da_nhap_form/
+-- da_nhap_nguon_khac, hàm song sinh refresh_gcn_thu_thap_theo_xa_cache
+-- không có) khiến tổng thời gian vượt 120s dù đã tối ưu khóa join. Nới
+-- lên 240s (kèm timeout HTTP ở backend/app/repositories/gcn_repository.py
+-- nới theo) thay vì tối ưu tiếp — cùng cách dự án đã làm với các hàm nặng
+-- khác khi bảng phình to (xem "Nới statement_timeout cho
+-- get_dia_chi_thua_dat/search_parcels" trong lịch sử commit).
 create or replace function public.refresh_bieu_thong_ke_theo_xa_cache()
 returns integer
 language plpgsql
 security definer
 set search_path = public, extensions
-set statement_timeout = '120s'
+set statement_timeout = '240s'
 as $$
 declare
     v_now timestamptz := now();

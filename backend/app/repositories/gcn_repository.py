@@ -41,9 +41,11 @@ def bieu_thong_ke_theo_xa():
 
 def refresh_bieu_thong_ke_theo_xa_cache():
     # Nhánh chậm: quét toàn bộ thua_dat để tính lại cache. Gọi từ cron,
-    # KHÔNG bao giờ từ request người dùng.
+    # KHÔNG bao giờ từ request người dùng. Hàm SQL nới statement_timeout
+    # 240s (bảng đã lớn hơn nhiều so với trước — xem supabase/schema.sql)
+    # nên timeout HTTP ở đây phải lớn hơn.
     return supabase_client.call_rpc(
-        "refresh_bieu_thong_ke_theo_xa_cache", {}, timeout=180
+        "refresh_bieu_thong_ke_theo_xa_cache", {}, timeout=270
     )
 
 
