@@ -1136,11 +1136,16 @@ grant execute on function public.bieu_thong_ke_theo_xa() to service_role;
 --   1. thua_dat_stats: quét thua_dat 1 lần lấy tong_so_thua/so_thua_can_thu_thap
 --      — CÙNG kiểu quét đã chạy ổn định ở refresh_gcn_thu_thap_theo_xa_cache.
 --   2. gcn_stats: quét du_lieu_gcn (nhỏ hơn thua_dat nhiều), đối chiếu
---      từng dòng với thua_dat bằng EXISTS + so_to/so_thua ép kiểu integer
---      -> dùng ĐÚNG UNIQUE index (ma_xa, so_to, so_thua) để tra (index
---      scan/dòng) thay vì hash join cả bảng — cũng là cách EXISTS đã dùng
---      ở get_parcels_in_view.co_gcn/search_parcels, chỉ khác chỗ ép kiểu
---      integer thay vì so chuỗi để tận dụng được index.
+--      từng dòng với thua_dat bằng EXISTS + so_to/so_thua ép kiểu bigint
+--      (ÉP BIGINT, không phải integer: đã gặp giá trị rác kiểu
+--      "54168001108" trong soto/sothua vượt phạm vi integer, ::integer sẽ
+--      lỗi 22003 giữa chừng refresh — ::bigint so được với t2.so_to/
+--      so_thua (integer, Postgres tự nới kiểu) mà không lỗi, giá trị rác
+--      thì đơn giản là không khớp EXISTS nào nên bị loại đúng ý) -> dùng
+--      ĐÚNG UNIQUE index (ma_xa, so_to, so_thua) để tra (index scan/dòng)
+--      thay vì hash join cả bảng — cũng là cách EXISTS đã dùng ở
+--      get_parcels_in_view.co_gcn/search_parcels, chỉ khác chỗ ép kiểu số
+--      thay vì so chuỗi để tận dụng được index.
 --   Cuối cùng LEFT JOIN 2 CTE này theo ma_xa (mỗi bên chỉ ~102 dòng).
 create or replace function public.refresh_bieu_thong_ke_theo_xa_cache()
 returns integer
@@ -1194,8 +1199,8 @@ begin
           and exists (
               select 1 from public.thua_dat t2
               where t2.ma_xa = g.madvhc
-                and t2.so_to = public.normalize_so_text(g.soto)::integer
-                and t2.so_thua = public.normalize_so_text(g.sothua)::integer
+                and t2.so_to = public.normalize_so_text(g.soto)::bigint
+                and t2.so_thua = public.normalize_so_text(g.sothua)::bigint
           )
         group by g.madvhc
     )
