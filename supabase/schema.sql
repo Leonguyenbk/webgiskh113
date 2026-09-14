@@ -1124,6 +1124,24 @@ grant execute on function public.bieu_thong_ke_theo_xa() to service_role;
 
 -- TÍNH LẠI: phần quét nặng. Chỉ chạy bởi lịch (pg_cron) hoặc backend
 -- cron, KHÔNG bao giờ gọi từ request người dùng.
+--
+-- SỬA 2026-09: bản cũ build 1 CTE gcn_keys (GROUP BY + 2 bool_or trên
+-- TOÀN BỘ du_lieu_gcn) rồi HASH JOIN với ma_xa || '_' || so_to || '_' ||
+-- so_thua (chuỗi ghép tay, không dùng được index nào) trên TOÀN BỘ
+-- thua_dat — du_lieu_gcn phình to dần khiến bước này giờ bị hủy vì
+-- statement timeout (57014) sau 120s, cache đứng lại ~9 ngày không refresh
+-- (phát hiện qua xã 24400: cache báo 74 thửa "đã nhập form" trong khi
+-- thực tế 253). Viết lại theo 2 CTE ĐỘC LẬP, không hash-join 2 bảng lớn
+-- với nhau nữa:
+--   1. thua_dat_stats: quét thua_dat 1 lần lấy tong_so_thua/so_thua_can_thu_thap
+--      — CÙNG kiểu quét đã chạy ổn định ở refresh_gcn_thu_thap_theo_xa_cache.
+--   2. gcn_stats: quét du_lieu_gcn (nhỏ hơn thua_dat nhiều), đối chiếu
+--      từng dòng với thua_dat bằng EXISTS + so_to/so_thua ép kiểu integer
+--      -> dùng ĐÚNG UNIQUE index (ma_xa, so_to, so_thua) để tra (index
+--      scan/dòng) thay vì hash join cả bảng — cũng là cách EXISTS đã dùng
+--      ở get_parcels_in_view.co_gcn/search_parcels, chỉ khác chỗ ép kiểu
+--      integer thay vì so chuỗi để tận dụng được index.
+--   Cuối cùng LEFT JOIN 2 CTE này theo ma_xa (mỗi bên chỉ ~102 dòng).
 create or replace function public.refresh_bieu_thong_ke_theo_xa_cache()
 returns integer
 language plpgsql
@@ -1149,31 +1167,48 @@ begin
         ma_xa, tong_so_thua, so_thua_can_thu_thap, da_nhap_form,
         da_nhap_nguon_khac, da_nhap_bieu, computed_at
     )
-    with gcn_keys as (
+    with thua_dat_stats as (
         select
-            g.madvhc_soto_sothua,
-            bool_or(g.ma_nguon = 'NHOM4_FORM') as tu_form,
-            bool_or(g.ma_nguon <> 'NHOM4_FORM') as tu_nguon_khac
+            t.ma_xa,
+            count(*)::bigint as tong_so_thua,
+            count(*) filter (
+                where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
+            )::bigint as so_thua_can_thu_thap
+        from public.thua_dat t
+        left join public.dong_bo_du_lieu d
+            on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+        group by t.ma_xa
+    ),
+    gcn_stats as (
+        select
+            g.madvhc as ma_xa,
+            count(distinct g.madvhc_soto_sothua)
+                filter (where g.ma_nguon = 'NHOM4_FORM')::bigint as da_nhap_form,
+            count(distinct g.madvhc_soto_sothua)
+                filter (where g.ma_nguon <> 'NHOM4_FORM')::bigint as da_nhap_nguon_khac,
+            count(distinct g.madvhc_soto_sothua)::bigint as da_nhap_bieu
         from public.du_lieu_gcn g
         where g.madvhc_soto_sothua is not null
-        group by g.madvhc_soto_sothua
+          and public.normalize_so_text(g.soto) ~ '^[0-9]+$'
+          and public.normalize_so_text(g.sothua) ~ '^[0-9]+$'
+          and exists (
+              select 1 from public.thua_dat t2
+              where t2.ma_xa = g.madvhc
+                and t2.so_to = public.normalize_so_text(g.soto)::integer
+                and t2.so_thua = public.normalize_so_text(g.sothua)::integer
+          )
+        group by g.madvhc
     )
     select
-        t.ma_xa,
-        count(*)::bigint as tong_so_thua,
-        count(*) filter (
-            where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
-        )::bigint as so_thua_can_thu_thap,
-        count(*) filter (where k.tu_form)::bigint as da_nhap_form,
-        count(*) filter (where k.tu_nguon_khac)::bigint as da_nhap_nguon_khac,
-        count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
+        tds.ma_xa,
+        tds.tong_so_thua,
+        tds.so_thua_can_thu_thap,
+        coalesce(gs.da_nhap_form, 0),
+        coalesce(gs.da_nhap_nguon_khac, 0),
+        coalesce(gs.da_nhap_bieu, 0),
         v_now
-    from public.thua_dat t
-    left join public.dong_bo_du_lieu d
-        on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
-    left join gcn_keys k
-        on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-    group by t.ma_xa
+    from thua_dat_stats tds
+    left join gcn_stats gs on gs.ma_xa = tds.ma_xa
     on conflict (ma_xa) do update set
         tong_so_thua = excluded.tong_so_thua,
         so_thua_can_thu_thap = excluded.so_thua_can_thu_thap,
