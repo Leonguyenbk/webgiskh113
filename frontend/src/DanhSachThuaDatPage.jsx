@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getGcnDanhSach, getXaList } from "./services/parcelService";
 
@@ -21,6 +21,8 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const [xaError, setXaError] = useState("");
 
   const [maXa, setMaXa] = useState("");
+  const [xaQuery, setXaQuery] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   // Backend chỉ chấp nhận 'asc'/'desc' theo ngày nhập (created_at) —
   // hàm list_du_lieu_gcn_da_nhap trong supabase/schema.sql chỉ có chỉ mục
   // cho cột này, không sắp theo cột khác để tránh phải filesort cả xã.
@@ -68,8 +70,18 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
     return () => controller.abort();
   }, [maXa, sortDesc, offset]);
 
-  const handleChangeXa = (value) => {
-    setMaXa(value);
+  const filteredXaOptions = useMemo(() => {
+    const keyword = xaQuery.trim().toLocaleLowerCase("vi");
+    if (!keyword) return xaList;
+    return xaList.filter(({ ma_xa, ten_xa }) =>
+      `${ten_xa} ${ma_xa}`.toLocaleLowerCase("vi").includes(keyword),
+    );
+  }, [xaList, xaQuery]);
+
+  const handleSelectXa = (ma_xa, ten_xa) => {
+    setMaXa(ma_xa);
+    setXaQuery(ten_xa || ma_xa);
+    setDropdownOpen(false);
     setOffset(0);
   };
 
@@ -126,20 +138,46 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
           >
             <div style={{ width: 280, maxWidth: "100%" }}>
               <label htmlFor="daNhapXa">Xã / phường</label>
-              <select
-                id="daNhapXa"
-                value={maXa}
-                disabled={xaLoading}
-                onChange={(event) => handleChangeXa(event.target.value)}
-                style={{ width: "100%" }}
-              >
-                <option value="">-- Chọn xã/phường --</option>
-                {xaList.map((x) => (
-                  <option key={x.ma_xa} value={x.ma_xa}>
-                    {x.ten_xa || x.ma_xa}
-                  </option>
-                ))}
-              </select>
+              <div className="comboBox" style={{ marginBottom: 0 }}>
+                <input
+                  id="daNhapXa"
+                  type="text"
+                  className="filterInput"
+                  autoComplete="off"
+                  disabled={xaLoading}
+                  value={xaQuery}
+                  placeholder="Nhập tên xã/phường để tìm…"
+                  style={{ width: "100%" }}
+                  onChange={(event) => {
+                    setXaQuery(event.target.value);
+                    setMaXa("");
+                    setDropdownOpen(true);
+                  }}
+                  onFocus={() => setDropdownOpen(true)}
+                  onBlur={() => setDropdownOpen(false)}
+                />
+
+                {dropdownOpen && (
+                  <div className="comboBoxList">
+                    {filteredXaOptions.length === 0 ? (
+                      <div className="comboBoxEmpty">Không tìm thấy xã/phường</div>
+                    ) : (
+                      filteredXaOptions.map(({ ma_xa, ten_xa }) => (
+                        <div
+                          key={ma_xa}
+                          className={`comboBoxItem${ma_xa === maXa ? " active" : ""}`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            handleSelectXa(ma_xa, ten_xa);
+                          }}
+                        >
+                          {ten_xa || ma_xa}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {maXa && (
