@@ -1125,84 +1125,64 @@ grant execute on function public.bieu_thong_ke_theo_xa() to service_role;
 -- TÍNH LẠI: phần quét nặng. Chỉ chạy bởi lịch (pg_cron) hoặc backend
 -- cron, KHÔNG bao giờ gọi từ request người dùng.
 --
--- SỬA 2026-09: bản cũ build 1 CTE gcn_keys (GROUP BY + 2 bool_or trên
--- TOÀN BỘ du_lieu_gcn) rồi HASH JOIN với ma_xa || '_' || so_to || '_' ||
--- so_thua (chuỗi ghép tay CHO TỪNG DÒNG trong 1,36 triệu dòng thua_dat —
--- đây mới là chỗ tốn CPU thật, không phải bool_or) trên TOÀN BỘ thua_dat
--- — du_lieu_gcn phình to dần khiến bước này giờ bị hủy vì statement
--- timeout (57014) sau 120s, cache đứng lại ~9 ngày không refresh (phát
--- hiện qua xã 24400: cache báo 74 thửa "đã nhập form" trong khi thực tế
--- 253).
+-- SỬA 2026-09, lịch sử các lần thử (giữ lại để không lặp lại sai lầm):
+--   1. Bản gốc: 1 CTE gcn_keys (GROUP BY + 2 bool_or trên TOÀN BỘ
+--      du_lieu_gcn) rồi HASH JOIN với ma_xa || '_' || so_to || '_' ||
+--      so_thua (chuỗi ghép tay CHO TỪNG DÒNG thua_dat) — du_lieu_gcn
+--      phình to khiến bước này bị hủy vì statement timeout (57014) sau
+--      120s, cache đứng ~9 ngày (phát hiện qua xã 24400: cache báo 74
+--      thửa "đã nhập form" trong khi thực tế 253).
+--   2. Tách 2 CTE độc lập (thua_dat_stats + gcn_stats dùng EXISTS) — vẫn
+--      timeout: mỗi CTE tự quét thua_dat riêng, tổng quét 2 LẦN.
+--   3. Gộp lại 1 lượt quét, đổi khóa join sang số nguyên (so_to_n/
+--      so_thua_n) — vẫn hủy ở ~120s: kiểm tra bằng count=planned (ước
+--      tính nhanh, không quét thật) mới biết các bảng đã lớn hơn NHIỀU
+--      so với ghi chú cũ trong file này ("1,36 triệu dòng"): thua_dat
+--      ~3,86 triệu, dong_bo_du_lieu ~2,4 triệu, du_lieu_gcn ~448 nghìn.
+--   4. Nới statement_timeout 120s -> 240s — gọi thử vẫn hỏng, nhưng lần
+--      này lỗi đổi thành "504 upstream request timeout" ở giây ~126 (KHÔNG
+--      còn 57014 của Postgres) — tức bị giới hạn thời lượng 1 request ở
+--      TẦNG CỔNG API của Supabase (~120s), KHÔNG PHỤ THUỘC statement_timeout
+--      đặt trong Postgres. Nới statement_timeout vô nghĩa với giới hạn này.
 --
--- ĐÃ THỬ tách thành 2 CTE độc lập (thua_dat_stats + gcn_stats dùng EXISTS)
--- — vẫn timeout, vì mỗi CTE lại quét thua_dat (1,36 triệu dòng) RIÊNG,
--- tổng cộng quét 2 LẦN thay vì 1 (baseline đo được: 1 lần quét/join kiểu
--- này ở refresh_gcn_thu_thap_theo_xa_cache mất ~63s → quét 2 lần ~126s,
--- khớp đúng chỗ bị hủy ~120-122s).
+-- Fix đúng: TÁCH THÀNH 2 HÀM GỌI RIÊNG (2 request HTTP riêng) — mỗi hàm
+-- phải tự xong dưới ~70-90s (an toàn dưới trần ~120s của cổng API), tổng
+-- thời gian 2 hàm cộng lại không quan trọng vì không còn nằm trong 1
+-- request duy nhất nữa:
+--   - refresh_bieu_thong_ke_theo_xa_cache_phan1: quét thua_dat 1 lần lấy
+--     tong_so_thua/so_thua_can_thu_thap — CÙNG kiểu quét/join đã đo được
+--     ~63s ở refresh_gcn_thu_thap_theo_xa_cache (an toàn dưới trần).
+--   - refresh_bieu_thong_ke_theo_xa_cache_phan2: chỉ UPDATE da_nhap_form/
+--     da_nhap_nguon_khac/da_nhap_bieu cho các xã đã có sẵn trong cache
+--     (phan1 phải chạy trước) — quét du_lieu_gcn (nhỏ hơn thua_dat ~9
+--     lần) rồi JOIN thua_dat qua CỘT SỐ (không phải chuỗi ghép tay) để
+--     Postgres có thể chọn nested-loop qua UNIQUE index (ma_xa,so_to,
+--     so_thua) thay vì buộc phải hash join/quét lại toàn bộ thua_dat.
+--   Hàm refresh_bieu_thong_ke_theo_xa_cache() gốc GIỮ LẠI làm tiện ích
+--   gọi tay 1 lần trong Supabase SQL Editor (editor không qua cổng
+--   PostgREST nên không bị giới hạn ~120s này) — KHÔNG dùng hàm gộp này
+--   cho pg_cron/Render Cron, luôn gọi 2 hàm phan1/phan2 riêng ở đó.
 --
--- Bản đúng: VẪN 1 LƯỢT QUÉT thua_dat duy nhất (như bản gốc), chỉ đổi
--- KHÓA JOIN từ chuỗi ghép tay sang CỘT SỐ NGUYÊN (so_to_n/so_thua_n tính
--- 1 LẦN trong lúc GROUP BY gcn_keys, không tính lại cho từng dòng
--- thua_dat) — Postgres hash-join theo (madvhc, so_to_n, so_thua_n) ngay
--- trên số nguyên, không phải so chuỗi. CASE WHEN so_to_n/so_thua_n chỉ ép
--- kiểu khi normalize_so_text(...) toàn chữ số (^[0-9]+$), tránh lỗi
--- 22003 (giá trị rác kiểu "54168001108" từng gặp) — ép ::bigint chứ
--- không ::integer để không tràn số.
---
--- Vẫn timeout ở 120s sau khi gộp lại 1 lượt quét — kiểm tra thực tế bằng
--- count=planned (ước tính nhanh của Postgres, không quét thật) cho thấy
--- các bảng đã lớn hơn NHIỀU so với ghi chú cũ trong file này ("1,36 triệu
--- dòng"): thua_dat ~3,86 triệu, dong_bo_du_lieu ~2,4 triệu, du_lieu_gcn
--- ~448 nghìn dòng — 2 LEFT JOIN cỡ này (dong_bo_du_lieu + gcn_keys) cộng
--- thêm 3 tổng hợp FILTER nữa (so_thua_can_thu_thap/da_nhap_form/
--- da_nhap_nguon_khac, hàm song sinh refresh_gcn_thu_thap_theo_xa_cache
--- không có) khiến tổng thời gian vượt 120s dù đã tối ưu khóa join. Nới
--- lên 240s (kèm timeout HTTP ở backend/app/repositories/gcn_repository.py
--- nới theo) thay vì tối ưu tiếp — cùng cách dự án đã làm với các hàm nặng
--- khác khi bảng phình to (xem "Nới statement_timeout cho
--- get_dia_chi_thua_dat/search_parcels" trong lịch sử commit).
-create or replace function public.refresh_bieu_thong_ke_theo_xa_cache()
+-- CASE WHEN so_to_n/so_thua_n chỉ ép kiểu khi normalize_so_text(...)
+-- toàn chữ số (^[0-9]+$), tránh lỗi 22003 (giá trị rác kiểu
+-- "54168001108" từng gặp) — ép ::bigint chứ không ::integer để không
+-- tràn số khi so với t.so_to/so_thua (integer, Postgres tự nới kiểu).
+create or replace function public.refresh_bieu_thong_ke_theo_xa_cache_phan1()
 returns integer
 language plpgsql
 security definer
 set search_path = public, extensions
-set statement_timeout = '240s'
+set statement_timeout = '100s'
 as $$
 declare
     v_now timestamptz := now();
     v_rows integer;
 begin
-    perform pg_advisory_xact_lock(hashtext('refresh_bieu_thong_ke_theo_xa_cache'));
-
-    if exists (
-        select 1 from public.bieu_thong_ke_theo_xa_cache
-        where computed_at > v_now - interval '1 minute'
-    ) then
-        select count(*) into v_rows from public.bieu_thong_ke_theo_xa_cache;
-        return v_rows;
-    end if;
+    perform pg_advisory_xact_lock(hashtext('refresh_bieu_thong_ke_theo_xa_cache_phan1'));
 
     insert into public.bieu_thong_ke_theo_xa_cache (
         ma_xa, tong_so_thua, so_thua_can_thu_thap, da_nhap_form,
         da_nhap_nguon_khac, da_nhap_bieu, computed_at
-    )
-    with gcn_keys as (
-        select
-            g.madvhc_soto_sothua,
-            g.madvhc,
-            max(
-                case when public.normalize_so_text(g.soto) ~ '^[0-9]+$'
-                     then public.normalize_so_text(g.soto)::bigint end
-            ) as so_to_n,
-            max(
-                case when public.normalize_so_text(g.sothua) ~ '^[0-9]+$'
-                     then public.normalize_so_text(g.sothua)::bigint end
-            ) as so_thua_n,
-            bool_or(g.ma_nguon = 'NHOM4_FORM') as tu_form,
-            bool_or(g.ma_nguon <> 'NHOM4_FORM') as tu_nguon_khac
-        from public.du_lieu_gcn g
-        where g.madvhc_soto_sothua is not null
-        group by g.madvhc_soto_sothua, g.madvhc
     )
     select
         t.ma_xa,
@@ -1210,29 +1190,126 @@ begin
         count(*) filter (
             where upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) not in ('NHÓM 1', 'NHÓM 2')
         )::bigint as so_thua_can_thu_thap,
-        count(*) filter (where k.tu_form)::bigint as da_nhap_form,
-        count(*) filter (where k.tu_nguon_khac)::bigint as da_nhap_nguon_khac,
-        count(k.madvhc_soto_sothua)::bigint as da_nhap_bieu,
+        0::bigint, 0::bigint, 0::bigint,
         v_now
     from public.thua_dat t
     left join public.dong_bo_du_lieu d
         on d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
-    left join gcn_keys k
-        on k.madvhc = t.ma_xa and k.so_to_n = t.so_to and k.so_thua_n = t.so_thua
     group by t.ma_xa
     on conflict (ma_xa) do update set
         tong_so_thua = excluded.tong_so_thua,
         so_thua_can_thu_thap = excluded.so_thua_can_thu_thap,
-        da_nhap_form = excluded.da_nhap_form,
-        da_nhap_nguon_khac = excluded.da_nhap_nguon_khac,
-        da_nhap_bieu = excluded.da_nhap_bieu,
-        computed_at  = excluded.computed_at;
+        computed_at = excluded.computed_at;
+        -- KHÔNG đụng da_nhap_form/da_nhap_nguon_khac/da_nhap_bieu ở đây —
+        -- để nguyên giá trị phan2 đã tính. computed_at VẪN cập nhật (dùng
+        -- để dọn xã đã biến mất khỏi thua_dat bên dưới, giống cách bản
+        -- gộp cũ làm) — phan2 sẽ ghi đè lại computed_at của riêng nó sau,
+        -- không sao vì cột này chỉ có ý nghĩa "lần cập nhật gần nhất".
 
     get diagnostics v_rows = row_count;
 
-    -- Dọn xã không còn trong nguồn (nếu có) — DELETE này CÓ mệnh đề WHERE.
+    -- Dọn xã không còn trong nguồn (nếu có) — DELETE này CÓ mệnh đề WHERE,
+    -- so computed_at thay vì quét lại thua_dat lần nữa (rẻ, không thêm
+    -- lượt quét bảng lớn).
     delete from public.bieu_thong_ke_theo_xa_cache where computed_at < v_now;
 
+    return v_rows;
+end;
+$$;
+
+revoke all on function public.refresh_bieu_thong_ke_theo_xa_cache_phan1() from public;
+grant execute on function public.refresh_bieu_thong_ke_theo_xa_cache_phan1() to service_role;
+
+create or replace function public.refresh_bieu_thong_ke_theo_xa_cache_phan2()
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+set statement_timeout = '100s'
+as $$
+declare
+    v_now timestamptz := now();
+    v_rows integer;
+begin
+    perform pg_advisory_xact_lock(hashtext('refresh_bieu_thong_ke_theo_xa_cache_phan2'));
+
+    with gcn_norm as (
+        select
+            g.madvhc,
+            g.ma_nguon,
+            g.madvhc_soto_sothua,
+            public.normalize_so_text(g.soto) as so_to_txt,
+            public.normalize_so_text(g.sothua) as so_thua_txt
+        from public.du_lieu_gcn g
+        where g.madvhc_soto_sothua is not null
+    ),
+    -- Lớp riêng để ép kiểu AN TOÀN: so_to_txt/so_thua_txt chỉ được ép
+    -- ::bigint SAU KHI WHERE của CHÍNH gcn_valid đã lọc còn toàn chữ số —
+    -- không gộp điều kiện lọc và phép ép kiểu vào cùng 1 mệnh đề (AND/JOIN
+    -- ON) vì Postgres KHÔNG đảm bảo thứ tự tính các vế AND, có thể ép kiểu
+    -- trước khi lọc và lỗi 22003 giống lần trước.
+    gcn_valid as (
+        select
+            madvhc, ma_nguon, madvhc_soto_sothua,
+            so_to_txt::bigint as so_to_n,
+            so_thua_txt::bigint as so_thua_n
+        from gcn_norm
+        where so_to_txt ~ '^[0-9]+$'
+          and so_thua_txt ~ '^[0-9]+$'
+    ),
+    gcn_matched as (
+        select v.madvhc, v.ma_nguon, v.madvhc_soto_sothua
+        from gcn_valid v
+        join public.thua_dat t
+            on t.ma_xa = v.madvhc
+           and t.so_to = v.so_to_n
+           and t.so_thua = v.so_thua_n
+    ),
+    gcn_agg as (
+        select
+            madvhc as ma_xa,
+            count(distinct madvhc_soto_sothua) filter (where ma_nguon = 'NHOM4_FORM')::bigint as da_nhap_form,
+            count(distinct madvhc_soto_sothua) filter (where ma_nguon <> 'NHOM4_FORM')::bigint as da_nhap_nguon_khac,
+            count(distinct madvhc_soto_sothua)::bigint as da_nhap_bieu
+        from gcn_matched
+        group by madvhc
+    )
+    update public.bieu_thong_ke_theo_xa_cache c
+    set da_nhap_form = coalesce(a.da_nhap_form, 0),
+        da_nhap_nguon_khac = coalesce(a.da_nhap_nguon_khac, 0),
+        da_nhap_bieu = coalesce(a.da_nhap_bieu, 0),
+        computed_at = v_now
+    from (
+        select c2.ma_xa, ga.da_nhap_form, ga.da_nhap_nguon_khac, ga.da_nhap_bieu
+        from public.bieu_thong_ke_theo_xa_cache c2
+        left join gcn_agg ga on ga.ma_xa = c2.ma_xa
+    ) a
+    where a.ma_xa = c.ma_xa;
+
+    get diagnostics v_rows = row_count;
+    return v_rows;
+end;
+$$;
+
+revoke all on function public.refresh_bieu_thong_ke_theo_xa_cache_phan2() from public;
+grant execute on function public.refresh_bieu_thong_ke_theo_xa_cache_phan2() to service_role;
+
+-- Hàm gộp — CHỈ để chạy tay 1 lần trong Supabase SQL Editor (không qua
+-- cổng PostgREST nên không bị trần ~120s/request). KHÔNG gọi hàm này từ
+-- pg_cron/Render Cron/backend — luôn gọi phan1 rồi phan2 làm 2 request
+-- HTTP riêng ở những chỗ đó (xem backend/app/services/gcn_service.py).
+create or replace function public.refresh_bieu_thong_ke_theo_xa_cache()
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+set statement_timeout = '200s'
+as $$
+declare
+    v_rows integer;
+begin
+    perform public.refresh_bieu_thong_ke_theo_xa_cache_phan1();
+    v_rows := public.refresh_bieu_thong_ke_theo_xa_cache_phan2();
     return v_rows;
 end;
 $$;
@@ -1241,16 +1318,25 @@ revoke all on function public.refresh_bieu_thong_ke_theo_xa_cache() from public;
 grant execute on function public.refresh_bieu_thong_ke_theo_xa_cache() to service_role;
 
 -- LỊCH TÍNH LẠI — chạy TAY 1 lần trên Supabase SQL Editor (đã bật
--- pg_cron cho refresh-gcn-thu-thap thì thêm job này cùng chỗ):
+-- pg_cron cho refresh-gcn-thu-thap thì thêm 2 job này cùng chỗ — LUÔN
+-- tách phan1/phan2 thành 2 job riêng, không gọi hàm gộp
+-- refresh_bieu_thong_ke_theo_xa_cache() từ pg_cron):
 --
 --   select cron.schedule(
---       'refresh-bieu-thong-ke',
+--       'refresh-bieu-thong-ke-1',
 --       '*/15 * * * *',
---       $$select public.refresh_bieu_thong_ke_theo_xa_cache();$$
+--       $$select public.refresh_bieu_thong_ke_theo_xa_cache_phan1();$$
+--   );
+--   select cron.schedule(
+--       'refresh-bieu-thong-ke-2',
+--       '2-59/15 * * * *',
+--       $$select public.refresh_bieu_thong_ke_theo_xa_cache_phan2();$$
 --   );
 --
 -- Không dùng pg_cron thì cho Render Cron Job gọi mỗi 15 phút:
 --   POST <API>/api/bieu-thong-ke/refresh   (header X-Import-Token: <IMPORT_TOKEN>)
+--   — endpoint này tự gọi phan1 rồi phan2 làm 2 request Supabase riêng,
+--   xem backend/app/services/gcn_service.py.
 
 -- =========================================================
 -- BẢN ĐỒ NỀN (tờ bản đồ dạng raster) — quản lý theo từng tờ (ma_xa +

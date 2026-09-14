@@ -201,11 +201,19 @@ def get_bieu_thong_ke():
 
 
 def refresh_bieu_thong_ke_cache():
-    result, error_response = gcn_repository.refresh_bieu_thong_ke_theo_xa_cache()
+    # 2 request Supabase RIÊNG (không gộp 1 lần gọi) — xem lý do trong
+    # gcn_repository.refresh_bieu_thong_ke_theo_xa_cache_phan1.
+    result1, error_response = gcn_repository.refresh_bieu_thong_ke_theo_xa_cache_phan1()
     if error_response:
         return None, error_response
-    rows = result if isinstance(result, int) else None
-    return {"ok": True, "rows": rows}, None
+
+    result2, error_response = gcn_repository.refresh_bieu_thong_ke_theo_xa_cache_phan2()
+    if error_response:
+        return None, error_response
+
+    rows1 = result1 if isinstance(result1, int) else None
+    rows2 = result2 if isinstance(result2, int) else None
+    return {"ok": True, "rows_phan1": rows1, "rows_phan2": rows2}, None
 
 
 def get_danh_sach_da_nhap(

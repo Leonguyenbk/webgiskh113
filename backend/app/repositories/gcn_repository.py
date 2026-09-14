@@ -39,13 +39,25 @@ def bieu_thong_ke_theo_xa():
     return supabase_client.call_rpc("bieu_thong_ke_theo_xa", {}, timeout=15)
 
 
-def refresh_bieu_thong_ke_theo_xa_cache():
-    # Nhánh chậm: quét toàn bộ thua_dat để tính lại cache. Gọi từ cron,
-    # KHÔNG bao giờ từ request người dùng. Hàm SQL nới statement_timeout
-    # 240s (bảng đã lớn hơn nhiều so với trước — xem supabase/schema.sql)
-    # nên timeout HTTP ở đây phải lớn hơn.
+def refresh_bieu_thong_ke_theo_xa_cache_phan1():
+    # Nhánh chậm: quét toàn bộ thua_dat để tính lại tong_so_thua/
+    # so_thua_can_thu_thap. Gọi từ cron, KHÔNG bao giờ từ request người
+    # dùng. TÁCH RIÊNG khỏi phan2 (2 request HTTP riêng) vì cổng API của
+    # Supabase giới hạn ~120s/request — xem chú thích dài trong
+    # supabase/schema.sql (đã thử nới statement_timeout Postgres không
+    # ăn thua, lỗi đổi thành "504 upstream request timeout" chứ không
+    # phải statement timeout của Postgres nữa).
     return supabase_client.call_rpc(
-        "refresh_bieu_thong_ke_theo_xa_cache", {}, timeout=270
+        "refresh_bieu_thong_ke_theo_xa_cache_phan1", {}, timeout=110
+    )
+
+
+def refresh_bieu_thong_ke_theo_xa_cache_phan2():
+    # Nhánh chậm thứ 2: quét du_lieu_gcn, JOIN thua_dat để cập nhật
+    # da_nhap_form/da_nhap_nguon_khac/da_nhap_bieu. PHẢI gọi sau phan1 (cần
+    # có sẵn dòng cache theo xã). Xem chú thích refresh_bieu_thong_ke_theo_xa_cache_phan1.
+    return supabase_client.call_rpc(
+        "refresh_bieu_thong_ke_theo_xa_cache_phan2", {}, timeout=110
     )
 
 
