@@ -69,7 +69,9 @@ def export_du_lieu_gcn_page(ma_xa: str, chi_nhom3: bool, limit: int, offset: int
     )
 
 
-def list_da_nhap(ma_xa: str, sort_asc: bool, limit: int, offset: int):
+def list_da_nhap(
+    ma_xa: str, sort_asc: bool, limit: int, offset: int, so_to: str | None, so_thua: str | None
+):
     # 1 trang danh sách du_lieu_gcn theo xã (trang "Danh sách thửa đã
     # nhập") — xem public.list_du_lieu_gcn_da_nhap trong supabase/schema.sql.
     return supabase_client.call_rpc(
@@ -79,6 +81,8 @@ def list_da_nhap(ma_xa: str, sort_asc: bool, limit: int, offset: int):
             "p_sort_asc": sort_asc,
             "p_limit": limit,
             "p_offset": offset,
+            "p_so_to": so_to,
+            "p_so_thua": so_thua,
         },
         timeout=20,
     )

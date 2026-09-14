@@ -1576,13 +1576,26 @@ grant execute on function public.export_du_lieu_gcn(text, boolean, integer, inte
 -- THỬA nên mỗi thửa chỉ hiện đúng 1 dòng, lấy ngày nhập SỚM NHẤT
 -- (created_at nhỏ nhất) trong các dòng cùng thửa. Bảng bị lọc còn tối đa
 -- ~8.500 dòng/xã trước khi DISTINCT ON nên không tốn thêm CPU đáng kể.
+--
+-- p_so_to/p_so_thua: lọc thêm theo số tờ/số thửa (tùy chọn) NGAY TRONG
+-- xã đã chọn — so bằng normalize_so_text() cả 2 vế để không lệch bởi số
+-- 0 ở đầu/đuôi ".0". Không cần thêm chỉ mục: WHERE đã lọc còn tối đa
+-- ~8.500 dòng/xã trước khi so khớp số tờ/thửa nên vẫn rẻ.
 -- =========================================================
+
+-- Thêm p_so_to/p_so_thua (lọc theo số tờ/số thửa trong xã đã chọn) —
+-- phải DROP bản 4 tham số cũ trước vì thêm tham số ở cuối tạo ra 1 chữ ký
+-- hàm khác, PostgREST sẽ thấy 2 overload cùng tên gây lỗi "could not
+-- choose the best candidate function" nếu không dọn bản cũ.
+drop function if exists public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer);
 
 create or replace function public.list_du_lieu_gcn_da_nhap(
     p_ma_xa text,
     p_sort_asc boolean default false,
     p_limit integer default 100,
-    p_offset integer default 0
+    p_offset integer default 0,
+    p_so_to text default null,
+    p_so_thua text default null
 )
 returns jsonb
 language plpgsql
@@ -1597,7 +1610,9 @@ declare
 begin
     select count(distinct g.madvhc_soto_sothua) into v_total
     from public.du_lieu_gcn g
-    where g.madvhc = p_ma_xa;
+    where g.madvhc = p_ma_xa
+      and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
+      and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua));
 
     if p_sort_asc then
         select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) into v_items
@@ -1614,6 +1629,8 @@ begin
                 from public.du_lieu_gcn g
                 left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
                 where g.madvhc = p_ma_xa
+                  and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
+                  and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua))
                 order by g.madvhc_soto_sothua, g.created_at asc
             ) y
             order by y.ngay_nhap asc
@@ -1634,6 +1651,8 @@ begin
                 from public.du_lieu_gcn g
                 left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
                 where g.madvhc = p_ma_xa
+                  and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
+                  and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua))
                 order by g.madvhc_soto_sothua, g.created_at asc
             ) y
             order by y.ngay_nhap desc
@@ -1645,7 +1664,7 @@ begin
 end;
 $$;
 
-revoke all on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer) from public;
-grant execute on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer) to service_role;
+revoke all on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer, text, text) from public;
+grant execute on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer, text, text) to service_role;
 
 

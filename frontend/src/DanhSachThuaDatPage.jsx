@@ -23,6 +23,8 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const [maXa, setMaXa] = useState("");
   const [xaQuery, setXaQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [soToFilter, setSoToFilter] = useState("");
+  const [soThuaFilter, setSoThuaFilter] = useState("");
   // Backend chỉ chấp nhận 'asc'/'desc' theo ngày nhập (created_at) —
   // hàm list_du_lieu_gcn_da_nhap trong supabase/schema.sql chỉ có chỉ mục
   // cho cột này, không sắp theo cột khác để tránh phải filesort cả xã.
@@ -55,7 +57,14 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
     setError("");
 
     getGcnDanhSach(
-      { ma_xa: maXa, sort: sortDesc ? "desc" : "asc", limit: PAGE_SIZE, offset },
+      {
+        ma_xa: maXa,
+        sort: sortDesc ? "desc" : "asc",
+        limit: PAGE_SIZE,
+        offset,
+        so_to: soToFilter.trim() || undefined,
+        so_thua: soThuaFilter.trim() || undefined,
+      },
       { signal: controller.signal },
     )
       .then((result) => {
@@ -68,7 +77,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [maXa, sortDesc, offset]);
+  }, [maXa, sortDesc, offset, soToFilter, soThuaFilter]);
 
   const filteredXaOptions = useMemo(() => {
     const keyword = xaQuery.trim().toLocaleLowerCase("vi");
@@ -82,6 +91,16 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
     setMaXa(ma_xa);
     setXaQuery(ten_xa || ma_xa);
     setDropdownOpen(false);
+    setOffset(0);
+  };
+
+  const handleChangeSoTo = (value) => {
+    setSoToFilter(value);
+    setOffset(0);
+  };
+
+  const handleChangeSoThua = (value) => {
+    setSoThuaFilter(value);
     setOffset(0);
   };
 
@@ -136,47 +155,79 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
               gap: 12,
             }}
           >
-            <div style={{ width: 280, maxWidth: "100%" }}>
-              <label htmlFor="daNhapXa">Xã / phường</label>
-              <div className="comboBox" style={{ marginBottom: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+              <div style={{ width: 280, maxWidth: "100%" }}>
+                <label htmlFor="daNhapXa">Xã / phường</label>
+                <div className="comboBox" style={{ marginBottom: 0 }}>
+                  <input
+                    id="daNhapXa"
+                    type="text"
+                    className="filterInput"
+                    autoComplete="off"
+                    disabled={xaLoading}
+                    value={xaQuery}
+                    placeholder="Nhập tên xã/phường để tìm…"
+                    style={{ width: "100%" }}
+                    onChange={(event) => {
+                      setXaQuery(event.target.value);
+                      setMaXa("");
+                      setDropdownOpen(true);
+                    }}
+                    onFocus={() => setDropdownOpen(true)}
+                    onBlur={() => setDropdownOpen(false)}
+                  />
+
+                  {dropdownOpen && (
+                    <div className="comboBoxList">
+                      {filteredXaOptions.length === 0 ? (
+                        <div className="comboBoxEmpty">Không tìm thấy xã/phường</div>
+                      ) : (
+                        filteredXaOptions.map(({ ma_xa, ten_xa }) => (
+                          <div
+                            key={ma_xa}
+                            className={`comboBoxItem${ma_xa === maXa ? " active" : ""}`}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              handleSelectXa(ma_xa, ten_xa);
+                            }}
+                          >
+                            {ten_xa || ma_xa}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ width: 100 }}>
+                <label htmlFor="daNhapSoTo">Số tờ</label>
                 <input
-                  id="daNhapXa"
+                  id="daNhapSoTo"
                   type="text"
+                  inputMode="numeric"
                   className="filterInput"
                   autoComplete="off"
-                  disabled={xaLoading}
-                  value={xaQuery}
-                  placeholder="Nhập tên xã/phường để tìm…"
-                  style={{ width: "100%" }}
-                  onChange={(event) => {
-                    setXaQuery(event.target.value);
-                    setMaXa("");
-                    setDropdownOpen(true);
-                  }}
-                  onFocus={() => setDropdownOpen(true)}
-                  onBlur={() => setDropdownOpen(false)}
+                  value={soToFilter}
+                  placeholder="Tất cả"
+                  style={{ width: "100%", marginBottom: 0 }}
+                  onChange={(event) => handleChangeSoTo(event.target.value)}
                 />
+              </div>
 
-                {dropdownOpen && (
-                  <div className="comboBoxList">
-                    {filteredXaOptions.length === 0 ? (
-                      <div className="comboBoxEmpty">Không tìm thấy xã/phường</div>
-                    ) : (
-                      filteredXaOptions.map(({ ma_xa, ten_xa }) => (
-                        <div
-                          key={ma_xa}
-                          className={`comboBoxItem${ma_xa === maXa ? " active" : ""}`}
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            handleSelectXa(ma_xa, ten_xa);
-                          }}
-                        >
-                          {ten_xa || ma_xa}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
+              <div style={{ width: 100 }}>
+                <label htmlFor="daNhapSoThua">Số thửa</label>
+                <input
+                  id="daNhapSoThua"
+                  type="text"
+                  inputMode="numeric"
+                  className="filterInput"
+                  autoComplete="off"
+                  value={soThuaFilter}
+                  placeholder="Tất cả"
+                  style={{ width: "100%", marginBottom: 0 }}
+                  onChange={(event) => handleChangeSoThua(event.target.value)}
+                />
               </div>
             </div>
 

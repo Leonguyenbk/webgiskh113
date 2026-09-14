@@ -208,16 +208,25 @@ def refresh_bieu_thong_ke_cache():
     return {"ok": True, "rows": rows}, None
 
 
-def get_danh_sach_da_nhap(ma_xa: str, sort_raw: str | None, limit_raw: str | None, offset_raw: str | None):
+def get_danh_sach_da_nhap(
+    ma_xa: str,
+    sort_raw: str | None,
+    limit_raw: str | None,
+    offset_raw: str | None,
+    so_to_raw: str | None = None,
+    so_thua_raw: str | None = None,
+):
     """Trang 'Danh sách thửa đã nhập' — liệt kê từng dòng public.du_lieu_gcn
-    theo xã (tên xã, số tờ, số thửa, mã định danh, ngày nhập). Bắt buộc
-    ma_xa (xem lý do CPU trong supabase/schema.sql,
-    list_du_lieu_gcn_da_nhap)."""
+    theo xã (tên xã, số tờ, số thửa, mã định danh, ngày nhập), lọc thêm
+    theo số tờ/số thửa (tùy chọn). Bắt buộc ma_xa (xem lý do CPU trong
+    supabase/schema.sql, list_du_lieu_gcn_da_nhap)."""
     ma_xa = (ma_xa or "").strip()
     if not ma_xa:
         return None, (jsonify({"error": "Thiếu mã xã"}), 400)
 
     sort_asc = (sort_raw or "").strip().lower() == "asc"
+    so_to = (so_to_raw or "").strip() or None
+    so_thua = (so_thua_raw or "").strip() or None
 
     try:
         limit = min(
@@ -228,7 +237,9 @@ def get_danh_sach_da_nhap(ma_xa: str, sort_raw: str | None, limit_raw: str | Non
     except (TypeError, ValueError):
         return None, (jsonify({"error": "limit hoặc offset không hợp lệ"}), 400)
 
-    result, error_response = gcn_repository.list_da_nhap(ma_xa, sort_asc, limit, offset)
+    result, error_response = gcn_repository.list_da_nhap(
+        ma_xa, sort_asc, limit, offset, so_to, so_thua
+    )
     if error_response:
         return None, error_response
 

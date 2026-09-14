@@ -32,12 +32,14 @@ def bieu_thong_ke():
 def gcn_danh_sach():
     # Danh sách dòng du_lieu_gcn theo xã (trang "Danh sách thửa đã nhập")
     # — tên xã, số tờ, số thửa, mã định danh, ngày nhập. ?ma_xa=<mã
-    # xã>&sort=asc|desc&limit=&offset=
+    # xã>&sort=asc|desc&limit=&offset=&so_to=&so_thua=
     data, error_response = gcn_service.get_danh_sach_da_nhap(
         request.args.get("ma_xa", ""),
         request.args.get("sort"),
         request.args.get("limit"),
         request.args.get("offset"),
+        request.args.get("so_to"),
+        request.args.get("so_thua"),
     )
     if error_response:
         return error_response
