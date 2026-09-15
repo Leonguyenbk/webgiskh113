@@ -14,6 +14,15 @@ const BOUNDARY_STYLE = {
   fillOpacity: 0,
 };
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 // Viền + nhãn số tờ bản đồ nền — tách khỏi lớp raster (MapSheetTilesLayer)
 // vì đây là vector nhẹ, luôn hữu ích để biết đang đứng ở tờ nào kể cả khi
 // chưa có tile thật (trạng thái draft/uploaded/processing).
@@ -39,18 +48,30 @@ export default function MapSheetBoundaryLayer({ sheets }) {
   return (
     <GeoJSON
       ref={groupRef}
-      key={sheets.map((feature) => feature.properties?.id).join(",")}
+      key={sheets
+        .map((feature) => {
+          const p = feature.properties || {};
+          return `${p.id}:${p.updated_at || ""}:${p.ghi_chu || ""}`;
+        })
+        .join(",")}
       data={collection}
       style={BOUNDARY_STYLE}
       onEachFeature={(feature, layer) => {
         const p = feature.properties || {};
-        layer.bindTooltip(`Tờ ${p.so_to}`, {
+        const sheetLabel = `Tờ ${p.so_to}`;
+        const description = String(p.ghi_chu || "").trim();
+        layer.bindTooltip(
+          description
+            ? `<strong>${escapeHtml(sheetLabel)}</strong><span>${escapeHtml(description)}</span>`
+            : escapeHtml(sheetLabel),
+          {
           permanent: true,
           direction: "center",
           className: "mapSheetLabel",
-        });
+          },
+        );
         layer.bindPopup(
-          `<strong>Bản đồ địa chính</strong><br/>Mã xã: ${p.ma_xa}<br/>Tờ bản đồ: ${p.so_to}`,
+          `<strong>Bản đồ địa chính</strong><br/>Mã xã: ${escapeHtml(p.ma_xa)}<br/>Tờ bản đồ: ${escapeHtml(p.so_to)}${description ? `<br/>Mô tả: ${escapeHtml(description)}` : ""}`,
         );
         layer.on("add", () => {
           if (zoom >= MIN_LABEL_ZOOM) layer.openTooltip();

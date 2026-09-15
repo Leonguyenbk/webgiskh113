@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from flask import jsonify, request
 
 from ..repositories import ban_do_nen_repository
@@ -102,6 +104,8 @@ def update_sheet(id_: int, body: dict):
 
     if not updates:
         return None, (jsonify({"error": "Không có trường nào để cập nhật"}), 400)
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     result, error_response = ban_do_nen_repository.update(id_, updates)
     if error_response:

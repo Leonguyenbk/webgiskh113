@@ -784,14 +784,15 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                     <option value="">
                       — Tất cả tờ ({banDoNenXaSheets.length}) —
                     </option>
-                    {banDoNenXaSheets.map((feature) => (
-                      <option
-                        key={feature.properties.id}
-                        value={feature.properties.so_to}
-                      >
-                        Tờ {feature.properties.so_to}
-                      </option>
-                    ))}
+                    {banDoNenXaSheets.map((feature) => {
+                      const p = feature.properties;
+                      const displayName = String(p.ghi_chu || "").trim();
+                      return (
+                        <option key={p.id} value={p.so_to}>
+                          {displayName || `Tờ ${p.so_to}`}
+                        </option>
+                      );
+                    })}
                   </select>
 
                   {banDoNenFilterMaXa && (

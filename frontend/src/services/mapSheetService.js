@@ -30,9 +30,13 @@ export function deleteBanDoNen(id, token) {
 }
 
 export function toggleBanDoNen(id, kichHoat, token) {
+  return updateBanDoNen(id, { kich_hoat: kichHoat }, token);
+}
+
+export function updateBanDoNen(id, updates, token) {
   return request(`/api/ban-do-nen/${id}`, {
     method: "PATCH",
-    body: { kich_hoat: kichHoat },
+    body: updates,
     token,
     errorFallback: "Cập nhật thất bại",
   });

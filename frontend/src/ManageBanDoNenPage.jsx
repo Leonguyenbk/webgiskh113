@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { deleteBanDoNen, listBanDoNen, toggleBanDoNen } from "./services/mapSheetService";
+import {
+  deleteBanDoNen,
+  listBanDoNen,
+  toggleBanDoNen,
+  updateBanDoNen,
+} from "./services/mapSheetService";
 
 const TRANG_THAI_LABELS = {
   ready: "Sẵn sàng",
@@ -19,6 +24,8 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
   const [filterTrangThai, setFilterTrangThai] = useState("");
 
   const [busyId, setBusyId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [description, setDescription] = useState("");
 
   const loadList = useCallback(() => {
     setLoadingList(true);
@@ -71,13 +78,33 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
     }
   };
 
+  const startEditingDescription = (item) => {
+    setEditingId(item.id);
+    setDescription(item.ghi_chu || "");
+    setListError("");
+  };
+
+  const handleSaveDescription = async (item) => {
+    setBusyId(item.id);
+    try {
+      await updateBanDoNen(item.id, { ghi_chu: description }, token);
+      setEditingId(null);
+      setDescription("");
+      await loadList();
+    } catch (err) {
+      setListError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <main className="toolsShell">
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
           <h1>Quản lý bản đồ nền</h1>
-          <p>Tờ bản đồ raster (mã xã + số tờ) — chỉ xem/lọc/bật-tắt/xóa metadata</p>
+          <p>Tờ bản đồ raster (mã xã + số tờ) — xem, ghi mô tả, bật-tắt hoặc xóa metadata</p>
         </div>
         <a
           className="backLink"
@@ -193,11 +220,64 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
                       {item.updated_at ? new Date(item.updated_at).toLocaleString("vi-VN") : ""}
                     </span>
 
+                    {editingId === item.id ? (
+                      <div className="mapSheetDescriptionEditor">
+                        <label htmlFor={`banDoNenGhiChu-${item.id}`}>Mô tả hiển thị trên bản đồ</label>
+                        <textarea
+                          id={`banDoNenGhiChu-${item.id}`}
+                          rows={2}
+                          value={description}
+                          onChange={(event) => setDescription(event.target.value)}
+                          placeholder="Ví dụ: Bản đồ địa chính đo đạc năm 2024"
+                        />
+                        <span className="importHint">
+                          Mô tả này là nhãn chung của cả tờ; nội dung chữ chi tiết phải có trong
+                          ảnh tile hoặc dữ liệu nhãn từ Tool Windows.
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="gcnLinkUrl">
+                        Mô tả: {item.ghi_chu || "Chưa có"}
+                      </span>
+                    )}
+
                     <div className="gcnLinkActions">
+                      {editingId === item.id ? (
+                        <>
+                          <button
+                            type="button"
+                            className="searchButton"
+                            disabled={isBusy}
+                            onClick={() => handleSaveDescription(item)}
+                          >
+                            {isBusy ? "Đang lưu…" : "Lưu mô tả"}
+                          </button>
+                          <button
+                            type="button"
+                            className="resetButton"
+                            disabled={isBusy}
+                            onClick={() => {
+                              setEditingId(null);
+                              setDescription("");
+                            }}
+                          >
+                            Hủy
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="searchButton"
+                          disabled={isBusy}
+                          onClick={() => startEditingDescription(item)}
+                        >
+                          Sửa mô tả
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="searchButton"
-                        disabled={isBusy}
+                        disabled={isBusy || editingId === item.id}
                         onClick={() => handleToggle(item)}
                       >
                         {item.kich_hoat ? "Tắt" : "Bật"}
@@ -205,7 +285,7 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
                       <button
                         type="button"
                         className="resetButton"
-                        disabled={isBusy}
+                        disabled={isBusy || editingId === item.id}
                         onClick={() => handleDelete(item)}
                       >
                         {isBusy ? "…" : "Xóa"}

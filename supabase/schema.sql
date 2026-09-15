@@ -1504,6 +1504,7 @@ as $$
                 'tile_version', b.tile_version,
                 'min_zoom', b.min_zoom,
                 'max_zoom', b.max_zoom,
+                'ghi_chu', b.ghi_chu,
                 'trang_thai', b.trang_thai,
                 'updated_at', b.updated_at
             )
@@ -1550,6 +1551,7 @@ as $$
                 'tile_version', b.tile_version,
                 'min_zoom', b.min_zoom,
                 'max_zoom', b.max_zoom,
+                'ghi_chu', b.ghi_chu,
                 'trang_thai', b.trang_thai,
                 'updated_at', b.updated_at
             )

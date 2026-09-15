@@ -315,7 +315,13 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   background: #0f172acc; color: #fff; font-weight: 600;
   padding: 2px 7px; box-shadow: none;
 }
+.mapSheetLabel strong, .mapSheetLabel span { display: block; text-align: center; }
+.mapSheetLabel span { margin-top: 1px; font-size: 10px; font-weight: 500; white-space: normal; }
 .mapSheetLabel::before { display: none; }
+
+.mapSheetDescriptionEditor { display: grid; gap: 6px; }
+.mapSheetDescriptionEditor textarea { width: 100%; resize: vertical; }
+.mapSheetDescriptionEditor .importHint { margin: 0; }
 
 .toolsShell { min-height: 100vh; display: flex; flex-direction: column; }
 .toolsGrid {
