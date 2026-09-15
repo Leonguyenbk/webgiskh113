@@ -12,7 +12,7 @@ function formatNgay(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("vi-VN");
+  return `${d.toLocaleDateString("vi-VN")} ${d.toLocaleTimeString("vi-VN")}`;
 }
 
 export default function DanhSachThuaDatPage({ onNavigateHome }) {
@@ -25,9 +25,11 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [soToFilter, setSoToFilter] = useState("");
   const [soThuaFilter, setSoThuaFilter] = useState("");
-  // Backend chỉ chấp nhận 'asc'/'desc' theo ngày nhập (created_at) —
-  // hàm list_du_lieu_gcn_da_nhap trong supabase/schema.sql chỉ có chỉ mục
-  // cho cột này, không sắp theo cột khác để tránh phải filesort cả xã.
+  // Backend chỉ chấp nhận 'asc'/'desc' theo ngày nhập (created_at) trong
+  // TỪNG nhóm nguồn — hàm list_du_lieu_gcn_da_nhap trong
+  // supabase/schema.sql luôn xếp thửa nhập từ biểu Nhóm 4 lên trước thửa
+  // chỉ đồng bộ từ Google Sheet (bất kể ngày nhập), rồi mới áp asc/desc
+  // trong từng nhóm.
   const [sortDesc, setSortDesc] = useState(true);
   const [offset, setOffset] = useState(0);
 
