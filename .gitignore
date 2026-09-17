@@ -11,6 +11,12 @@ backend/venv/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/data/*.geojson
+
+# Tile ảnh bản đồ nền (đã tải hết từ Supabase Storage về + tool bandonentools
+# ghi thêm sau này) và file hồ sơ quét PDF Nhóm 4 (chứa CCCD/thông tin cá
+# nhân) — dữ liệu thật, dung lượng lớn, không đưa lên git.
+backend/data/ban_do_nen_tiles/
+backend/data/nhom4_scans/
 *.gml
 frontend/.env
 frontend/node_modules/

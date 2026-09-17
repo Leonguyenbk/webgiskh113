@@ -1,11 +1,35 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_from_directory
 
 from ..services import ban_do_nen_service
 from ..utils.validators import check_import_token
 
 ban_do_nen_bp = Blueprint("ban_do_nen", __name__)
+
+
+@ban_do_nen_bp.get("/tiles/ban-do-nen/<ma_xa>/<so_to>/v<int:version>/<int:z>/<int:x>/<int:y>.png")
+def get_ban_do_nen_tile(ma_xa: str, so_to: str, version: int, z: int, x: int, y: int):
+    directory = ban_do_nen_service.tile_dir(ma_xa, so_to, version, z, x)
+    return send_from_directory(directory, f"{y}.png")
+
+
+@ban_do_nen_bp.post("/api/ban-do-nen/upload-tiles")
+def upload_ban_do_nen_tiles():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    ma_xa = request.form.get("ma_xa", "").strip()
+    so_to = request.form.get("so_to", "").strip()
+    tile_version = request.form.get("tile_version", "").strip()
+    tiles_zip = request.files.get("tiles_zip")
+
+    data, error_response = ban_do_nen_service.save_tiles_zip(
+        ma_xa, so_to, tile_version, tiles_zip
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
 
 
 @ban_do_nen_bp.get("/api/ban-do-nen")

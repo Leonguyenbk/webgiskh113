@@ -1,12 +1,26 @@
 from __future__ import annotations
 
+import re
+import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 
 from flask import jsonify, request
 
 from ..repositories import ban_do_nen_repository
 
 LIST_FILTER_FIELDS = ("ma_xa", "so_to", "trang_thai")
+
+# Tile raster (bản đồ nền) chạy local — trước đây file .png nằm trên
+# Supabase Storage, giờ lưu thẳng trên đĩa, Flask tự serve qua route
+# GET /tiles/ban-do-nen/... (xem app/routes/ban_do_nen_routes.py). Giữ
+# đúng cấu trúc cũ {ma_xa}/{so_to}/v{version}/{z}/{x}/{y}.png để chỉ cần
+# đổi domain/gốc đường dẫn trong tile_url, không đổi gì khác.
+TILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "ban_do_nen_tiles"
+
+# Tên entry hợp lệ trong file zip tile: "{z}/{x}/{y}.png" (chỉ số nguyên) —
+# chặn zip-slip (đường dẫn "../", tuyệt đối, ký tự lạ).
+_TILE_ENTRY_RE = re.compile(r"^(\d{1,2})/(\d{1,10})/(\d{1,10})\.png$")
 
 
 def list_sheets():
@@ -136,3 +150,62 @@ def search(ma_xa: str, so_to=None):
     if error_response:
         return None, error_response
     return result, None
+
+
+# Chỉ cho phép ma_xa/so_to là chữ/số/gạch dưới/gạch ngang — dùng trực tiếp
+# làm tên thư mục trên đĩa (xem save_tiles_zip/tile_dir bên dưới), phải
+# chặn "../" và ký tự đường dẫn khác ngay từ đây.
+_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def tile_dir(ma_xa: str, so_to: str, version: int, z: int, x: int) -> Path:
+    return TILES_DIR / ma_xa / so_to / f"v{version}" / str(z) / str(x)
+
+
+def save_tiles_zip(ma_xa: str, so_to: str, tile_version_raw: str, tiles_zip):
+    if not ma_xa or not so_to:
+        return None, (jsonify({"error": "Thiếu ma_xa hoặc so_to"}), 400)
+    if not _PATH_SEGMENT_RE.match(ma_xa) or not _PATH_SEGMENT_RE.match(so_to):
+        return None, (
+            jsonify({"error": "ma_xa/so_to chỉ được chứa chữ, số, gạch dưới, gạch ngang"}),
+            400,
+        )
+
+    try:
+        tile_version = int(tile_version_raw)
+        if tile_version < 1:
+            raise ValueError
+    except (TypeError, ValueError):
+        return None, (jsonify({"error": "tile_version phải là số nguyên >= 1"}), 400)
+
+    if tiles_zip is None:
+        return None, (jsonify({"error": "Thiếu file tiles_zip"}), 400)
+
+    try:
+        archive = zipfile.ZipFile(tiles_zip)
+    except zipfile.BadZipFile:
+        return None, (jsonify({"error": "tiles_zip không phải file .zip hợp lệ"}), 400)
+
+    target_dir = TILES_DIR / ma_xa / so_to / f"v{tile_version}"
+    saved = 0
+    skipped = 0
+    with archive:
+        for name in archive.namelist():
+            match = _TILE_ENTRY_RE.match(name.replace("\\", "/"))
+            if not match:
+                skipped += 1
+                continue
+            z, x, y = match.groups()
+            out_path = target_dir / z / x / f"{y}.png"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(name) as src, open(out_path, "wb") as dst:
+                dst.write(src.read())
+            saved += 1
+
+    if saved == 0:
+        return None, (
+            jsonify({"error": "Không có tile hợp lệ trong file zip (cần đúng dạng {z}/{x}/{y}.png)"}),
+            400,
+        )
+
+    return {"ok": True, "saved": saved, "skipped": skipped}, None

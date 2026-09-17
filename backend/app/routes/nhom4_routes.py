@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import json
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_from_directory
 
+from ..repositories.local_file_storage import SCANS_DIR
 from ..services import nhom4_service
+from ..utils.validators import check_import_token
 
 nhom4_bp = Blueprint("nhom4", __name__)
+
+
+@nhom4_bp.get("/files/nhom4-scans/<ma_xa>/<filename>")
+def get_nhom4_scan(ma_xa: str, filename: str):
+    # Hồ sơ quét chứa CCCD/thông tin cá nhân — không public như tile bản đồ
+    # nền, phải có đúng mã xác thực admin mới tải được.
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+    return send_from_directory(SCANS_DIR / ma_xa, filename)
 
 
 @nhom4_bp.get("/api/nhom4/kiem-tra-trung-thua")

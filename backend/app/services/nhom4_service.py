@@ -5,7 +5,7 @@ import uuid
 
 from flask import current_app, jsonify
 
-from ..repositories import google_drive_client, nhom4_repository
+from ..repositories import local_file_storage, nhom4_repository
 from ..repositories.nhom4_repository import NHOM4_MA_NGUON, NHOM4_TEN_NGUON
 from ..utils.nhom4_validation import normalize_thoi_han_su_dung, validate_payload
 
@@ -405,7 +405,7 @@ def submit_ho_so(payload: dict, file_chinh, file_phu, file_tbxn=None):
 
     return {
         "ok": True,
-        "message": f"Đã lưu {len(parcels)} thửa, tổng {len(rows)} dòng, kèm file quét trên Drive.",
+        "message": f"Đã lưu {len(parcels)} thửa, tổng {len(rows)} dòng, kèm file quét trên máy chủ.",
         "so_thua": len(parcels),
         "so_dong": len(rows),
     }, None
@@ -415,35 +415,35 @@ def _upload_files(
     ma_xa: str, ten_xa, base_name: str, chinh_suffix: str,
     chinh_bytes: bytes, phu_bytes: bytes | None, tbxn_bytes: bytes | None,
 ) -> tuple[dict | None, tuple | None]:
-    """Upload PDF hồ sơ quét lên Drive ngay trong request. Trả
-    (file_info, None) khi mọi file đã lên, hoặc (None, (jsonify, 502)) nếu
-    Drive lỗi — caller dừng luôn, KHÔNG ghi thửa nào (khác cơ chế thread
-    nền cũ: ghi trước rồi upload sau, lỗi thì file rớt âm thầm)."""
+    """Lưu PDF hồ sơ quét vào đĩa máy chủ ngay trong request. Trả
+    (file_info, None) khi mọi file đã lưu, hoặc (None, (jsonify, 502)) nếu
+    lỗi — caller dừng luôn, KHÔNG ghi thửa nào (khác cơ chế thread nền cũ:
+    ghi trước rồi lưu file sau, lỗi thì file rớt âm thầm)."""
     file_info: dict = {}
     try:
-        folder_id = google_drive_client.resolve_xa_folder(ma_xa, ten_xa)
-        uploaded_chinh = google_drive_client.upload_pdf(
+        folder_id = local_file_storage.resolve_xa_folder(ma_xa, ten_xa)
+        uploaded_chinh = local_file_storage.upload_pdf(
             folder_id, f"{base_name}-{chinh_suffix}.pdf", chinh_bytes
         )
         file_info["chinh_id"] = uploaded_chinh["id"]
         file_info["chinh_name"] = uploaded_chinh["name"]
 
         if phu_bytes:
-            uploaded_phu = google_drive_client.upload_pdf(folder_id, f"{base_name}-GT.pdf", phu_bytes)
+            uploaded_phu = local_file_storage.upload_pdf(folder_id, f"{base_name}-GT.pdf", phu_bytes)
             file_info["phu_id"] = uploaded_phu["id"]
             file_info["phu_name"] = uploaded_phu["name"]
 
         if tbxn_bytes:
-            uploaded_tbxn = google_drive_client.upload_pdf(folder_id, f"{base_name}-TBXN.pdf", tbxn_bytes)
+            uploaded_tbxn = local_file_storage.upload_pdf(folder_id, f"{base_name}-TBXN.pdf", tbxn_bytes)
             file_info["tbxn_id"] = uploaded_tbxn["id"]
             file_info["tbxn_name"] = uploaded_tbxn["name"]
     except Exception as exc:
-        current_app.logger.exception("Upload Drive cho hồ sơ Nhóm 4 thất bại")
+        current_app.logger.exception("Lưu file hồ sơ quét Nhóm 4 thất bại")
         return None, (
             jsonify(
                 {
                     "error": (
-                        "Tải file quét lên Google Drive thất bại "
+                        "Lưu file quét vào máy chủ thất bại "
                         f"({exc}). Chưa ghi thửa nào — vui lòng thử nộp lại."
                     )
                 }

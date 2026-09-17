@@ -1326,7 +1326,10 @@ grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, text) to se
 -- "Xuất GCN theo nhóm"). Join du_lieu_gcn với dong_bo_du_lieu qua khóa
 -- madvhc_soto_sothua = ma_xa_sốtờ_sốthửa để lọc theo phan_loai_ke_hoach_2959.
 -- Trả về NGUYÊN các dòng du_lieu_gcn (mỗi chủ sử dụng 1 dòng) — backend
--- dựng file .xlsx. Lọc theo g.ma_nguon (= mã xã với nguồn Google Sheet).
+-- dựng file .xlsx. Lọc theo g.madvhc (KHÔNG phải g.ma_nguon — trước đây lọc
+-- theo ma_nguon = p_ma_xa, chỉ đúng cho nguồn Google Sheet, lặng lẽ bỏ sót
+-- toàn bộ dòng nhập từ biểu Nhóm 4 vì ma_nguon của nguồn đó luôn là
+-- 'NHOM4_FORM' bất kể xã nào — xem chú thích ở list_du_lieu_gcn_da_nhap).
 -- =========================================================
 -- returns json (KHÔNG "returns setof": PostgREST cắt setof ở 1000 dòng;
 -- KHÔNG jsonb: kiểu jsonb sắp lại thứ tự key -> cột Excel loạn). json_agg
@@ -1360,7 +1363,7 @@ as $$
             on d.ma_xa = p_ma_xa
            and g.madvhc_soto_sothua =
                d.ma_xa || '_' || d.so_to::text || '_' || d.so_thua::text
-        where g.ma_nguon = p_ma_xa
+        where g.madvhc = p_ma_xa
           and upper(trim(coalesce(d.phan_loai_ke_hoach_2959, ''))) in (
               select upper(trim(x)) from unnest(p_nhom) as x
           )
@@ -1415,7 +1418,7 @@ as $$
             on d.ma_xa = p_ma_xa
            and g.madvhc_soto_sothua =
                d.ma_xa || '_' || d.so_to::text || '_' || d.so_thua::text
-        where g.ma_nguon = p_ma_xa
+        where g.madvhc = p_ma_xa
           and exists (
               select 1
               from public.thua_dat t

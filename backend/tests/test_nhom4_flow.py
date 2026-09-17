@@ -151,7 +151,7 @@ class Nhom4FlowTest(unittest.TestCase):
         self._orig["get_phan_loai"] = nhom4_repository.get_phan_loai
         nhom4_repository.get_phan_loai = lambda ma_xa, so_to, so_thua: (None, None)
 
-        # Không đụng tới Google Drive trong test — upload "thành công" giả.
+        # Không đụng tới lưu file thật trong test — "thành công" giả.
         self._orig_bg = nhom4_service._upload_files
         nhom4_service._upload_files = lambda *a, **k: (
             {"chinh_id": "id-chinh", "chinh_name": "chinh.pdf"},
@@ -278,7 +278,7 @@ class Nhom4FlowTest(unittest.TestCase):
 
 
 class FakeDrive:
-    """google_drive_client giả: ghi lại các lần upload_pdf để kiểm tên file."""
+    """local_file_storage giả: ghi lại các lần upload_pdf để kiểm tên file."""
 
     def __init__(self):
         self.uploads: list[tuple[str, bytes]] = []
@@ -292,7 +292,7 @@ class FakeDrive:
 
 
 class Nhom4FileUploadTest(unittest.TestCase):
-    """_upload_files: đặt tên file quét trên Drive -DDK/-GCN (file chính),
+    """_upload_files: đặt tên file quét lưu trên đĩa -DDK/-GCN (file chính),
     -GT (giấy tờ), -TBXN (thông báo xác nhận, tùy chọn) và trả file_info
     để _build_rows ghi thẳng vào du_lieu_gcn."""
 
@@ -301,11 +301,11 @@ class Nhom4FileUploadTest(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         self.drive = FakeDrive()
-        self._orig_drive = nhom4_service.google_drive_client
-        nhom4_service.google_drive_client = self.drive
+        self._orig_drive = nhom4_service.local_file_storage
+        nhom4_service.local_file_storage = self.drive
 
     def tearDown(self):
-        nhom4_service.google_drive_client = self._orig_drive
+        nhom4_service.local_file_storage = self._orig_drive
         self.ctx.pop()
 
     def _run(self, tbxn_bytes):

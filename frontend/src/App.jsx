@@ -71,6 +71,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [meta, setMeta] = useState({ loaded: 0 });
   const [focusTick, setFocusTick] = useState(0);
   const layerRef = useRef(null);
+  const ranhThonLayerRef = useRef(null);
 
   // Instance bản đồ Leaflet, để các nút ở header (ngoài MapContainer) vẫn
   // gọi được map.getBounds()/fitBounds()...
@@ -128,12 +129,20 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   // huỷ ở đây sẽ huỷ nhầm request mà 1 nơi gọi khác đang chờ) — chỉ để
   // chặn setState sau khi <App> đã unmount.
   const ranhThonMountedRef = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // PHẢI đặt lại true ở đây (không chỉ ở giá trị khởi tạo useRef) — React
+    // StrictMode (dev) mount/unmount/remount 1 lần lúc tải trang: cleanup
+    // chạy đặt false, nhưng nếu mount lại không đặt về true, cờ này kẹt
+    // false vĩnh viễn, khiến MỌI setRanhThonData() sau đó (dù fetch vẫn
+    // chạy đúng, vẫn 200) bị chặn im lặng — bản đồ không bao giờ hiện ranh
+    // giới thôn. Bug có sẵn, trước đây không lộ vì luôn deploy bản build
+    // production (Vercel tự tắt StrictMode double-invoke), chỉ lộ ra khi
+    // chạy thẳng qua Vite dev server (không build) như hiện tại.
+    ranhThonMountedRef.current = true;
+    return () => {
       ranhThonMountedRef.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const ensureRanhThonLoaded = useCallback(() => {
     if (ranhThonLoadedRef.current) return;
@@ -507,6 +516,20 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     if (!layer) return;
     layer.setStyle(style);
   }, [style]);
+
+  // Ranh giới thôn: PHẢI cập nhật bằng clearLayers()+addData() giống layer
+  // "Thửa đất" ở trên, KHÔNG remount qua key — nếu remount, Leaflet coi đây
+  // là 1 layer hoàn toàn mới và không tự thêm lại vào bản đồ (mất trạng
+  // thái đã tick trong LayersControl), dữ liệu tải đúng nhưng bản đồ không
+  // hiện gì (đã gặp thực tế: bật lớp trước rồi dữ liệu mới tải xong sau).
+  useEffect(() => {
+    const layer = ranhThonLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (ranhThonData?.features?.length) {
+      layer.addData(ranhThonData);
+    }
+  }, [ranhThonData]);
 
   const shownCount = filtered?.features?.length ?? 0;
   const isFiltering = query.trim().length > 0;
@@ -1041,8 +1064,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
 
               <LayersControl.Overlay name="Ranh giới thôn">
                 <GeoJSON
-                  key={JSON.stringify(ranhThonData.features.map((f) => f.id))}
-                  data={ranhThonData}
+                  ref={ranhThonLayerRef}
+                  data={{ type: "FeatureCollection", features: [] }}
                   style={{
                     color: "#dc2626",
                     weight: 2,
