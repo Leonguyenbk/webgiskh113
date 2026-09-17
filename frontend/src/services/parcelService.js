@@ -32,10 +32,6 @@ export function getGcnStats({ signal } = {}) {
   return request("/api/gcn-stats", { signal });
 }
 
-export function getBieuThongKe({ signal } = {}) {
-  return request("/api/bieu-thong-ke", { signal });
-}
-
 export function getGcnDanhSach(params, { signal, errorFallback } = {}) {
   return request("/api/gcn-danh-sach", {
     params,

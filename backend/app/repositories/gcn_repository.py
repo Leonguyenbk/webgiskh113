@@ -32,35 +32,6 @@ def refresh_gcn_thu_thap_theo_xa_cache():
     )
 
 
-def bieu_thong_ke_theo_xa():
-    # Đọc cache bieu_thong_ke_theo_xa_cache — thống kê thửa đã nhập biểu
-    # theo xã, tách form/nguồn khác, KHÔNG loại nhóm KH 2959 nào (khác
-    # gcn_thu_thap_theo_xa ở trên). Xem supabase/schema.sql.
-    return supabase_client.call_rpc("bieu_thong_ke_theo_xa", {}, timeout=15)
-
-
-def refresh_bieu_thong_ke_theo_xa_cache_phan1():
-    # Nhánh chậm: quét toàn bộ thua_dat để tính lại tong_so_thua/
-    # so_thua_can_thu_thap. Gọi từ cron, KHÔNG bao giờ từ request người
-    # dùng. TÁCH RIÊNG khỏi phan2 (2 request HTTP riêng) vì cổng API của
-    # Supabase giới hạn ~120s/request — xem chú thích dài trong
-    # supabase/schema.sql (đã thử nới statement_timeout Postgres không
-    # ăn thua, lỗi đổi thành "504 upstream request timeout" chứ không
-    # phải statement timeout của Postgres nữa).
-    return supabase_client.call_rpc(
-        "refresh_bieu_thong_ke_theo_xa_cache_phan1", {}, timeout=110
-    )
-
-
-def refresh_bieu_thong_ke_theo_xa_cache_phan2():
-    # Nhánh chậm thứ 2: quét du_lieu_gcn, JOIN thua_dat để cập nhật
-    # da_nhap_form/da_nhap_nguon_khac/da_nhap_bieu. PHẢI gọi sau phan1 (cần
-    # có sẵn dòng cache theo xã). Xem chú thích refresh_bieu_thong_ke_theo_xa_cache_phan1.
-    return supabase_client.call_rpc(
-        "refresh_bieu_thong_ke_theo_xa_cache_phan2", {}, timeout=110
-    )
-
-
 def export_gcn_theo_nhom_page(ma_xa: str, nhom: list[str], limit: int, offset: int):
     # 1 trang: join du_lieu_gcn x dong_bo_du_lieu, lọc thửa đã thu thập GCN
     # thuộc nhóm KH 2959. RPC trả jsonb (mảng object) — không bị PostgREST
