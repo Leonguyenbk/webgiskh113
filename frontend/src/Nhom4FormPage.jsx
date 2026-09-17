@@ -404,7 +404,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Nhập biểu Nhóm 4</h1>
-          <p>Nhập dữ liệu thu thập thửa đất, lưu vào Supabase, hồ sơ quét lên Google Drive</p>
+          <p>Nhập dữ liệu thu thập thửa đất, lưu vào cơ sở dữ liệu, hồ sơ quét lên Google Drive</p>
         </div>
         <a
           className="backLink"

@@ -318,7 +318,7 @@ export default function MplisSyncPage({ onNavigateHome }) {
 
           <p className="importHint">
             Token và Cookie chỉ dùng cho lần cập nhật này — backend không lưu
-            lại (không ghi Supabase, không ghi file, không ghi log). Mỗi lần
+            lại (không ghi cơ sở dữ liệu, không ghi file, không ghi log). Mỗi lần
             cập nhật phải nhập lại.
           </p>
         </form>

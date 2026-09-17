@@ -122,8 +122,8 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
         <div className="importCard">
           <p className="importHint">
             Tờ bản đồ được thêm bằng <strong>Tool Windows</strong> chạy riêng (đọc KMZ MicroStation
-            xuất từ DGN → georeference → EPSG:3857 → sinh tile XYZ → upload thẳng lên Supabase
-            Storage → tự đăng ký với WebGIS khi upload xong 100%). Trang này không upload gì cả,
+            xuất từ DGN → georeference → EPSG:3857 → sinh tile XYZ → upload thẳng lên máy chủ
+            lưu trữ → tự đăng ký với WebGIS khi upload xong 100%). Trang này không upload gì cả,
             chỉ xem danh sách và bật/tắt hiển thị hoặc xóa bản ghi.
           </p>
 

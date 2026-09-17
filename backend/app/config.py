@@ -20,8 +20,9 @@ class Config:
     được kể cả khi thiếu vài biến chưa cần dùng trong lần chạy đó.
     """
 
-    SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-    SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5433/webgis"
+    )
 
     FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
     IMPORT_TOKEN = os.getenv("IMPORT_TOKEN", "")

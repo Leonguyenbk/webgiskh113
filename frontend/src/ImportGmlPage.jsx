@@ -33,7 +33,7 @@ export default function ImportGmlPage({ onNavigateHome }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Nhập dữ liệu GML</h1>
-          <p>Đẩy file thửa đất (.gml) vào Supabase</p>
+          <p>Đẩy file thửa đất (.gml) vào cơ sở dữ liệu</p>
         </div>
         <a
           className="backLink"
@@ -71,14 +71,14 @@ export default function ImportGmlPage({ onNavigateHome }) {
             className="importButton"
             disabled={!file || status === "uploading"}
           >
-            {status === "uploading" ? "Đang tải lên…" : "Đẩy vào Supabase"}
+            {status === "uploading" ? "Đang tải lên…" : "Đẩy vào cơ sở dữ liệu"}
           </button>
 
           {status === "done" && result && (
             <div className="notice">
               <strong>Hoàn tất</strong>
               <span>
-                Đã nhập {result.imported}/{result.total} thửa vào Supabase.
+                Đã nhập {result.imported}/{result.total} thửa vào cơ sở dữ liệu.
                 {result.deleted > 0 && (
                   <>
                     {" "}

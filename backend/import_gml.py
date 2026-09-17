@@ -4,7 +4,8 @@ import argparse
 import os
 from pathlib import Path
 
-import requests
+import psycopg2
+import psycopg2.extras
 from dotenv import load_dotenv
 
 from gml_reader import read_gml, rows_from_geojson, write_geojson
@@ -17,30 +18,26 @@ DEFAULT_OUTPUT = BASE_DIR / "data" / "thua_dat_4326.geojson"
 
 def upload_rows(rows: list[dict], batch_size: int = 100) -> None:
     load_dotenv()
-    url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    if not url or not service_key:
-        raise RuntimeError(
-            "Thiếu SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY trong backend/.env"
-        )
+    database_url = os.getenv("DATABASE_URL", "")
+    if not database_url:
+        raise RuntimeError("Thiếu DATABASE_URL trong backend/.env")
 
-    endpoint = f"{url}/rest/v1/thua_dat?on_conflict=ma_xa,so_to,so_thua"
-    headers = {
-        "apikey": service_key,
-        "Content-Type": "application/json",
-        "Prefer": "resolution=ignore-duplicates,return=minimal",
-    }
-    if not service_key.startswith("sb_secret_"):
-        headers["Authorization"] = f"Bearer {service_key}"
-
-    for start in range(0, len(rows), batch_size):
-        batch = rows[start : start + batch_size]
-        response = requests.post(endpoint, headers=headers, json=batch, timeout=120)
-        if not response.ok:
-            raise RuntimeError(
-                f"Supabase trả lỗi {response.status_code}: {response.text}"
-            )
-        print(f"Đã nhập {min(start + len(batch), len(rows))}/{len(rows)} thửa")
+    # Gọi thẳng hàm Postgres public.upsert_thua_dat_diff (xem
+    # supabase/schema.sql) — cùng hàm mà backend Flask dùng cho luồng nhập
+    # GML qua web (app/services/import_service.py), nên hành vi upsert
+    # (insert thửa mới, cập nhật thửa đổi hình học/thuộc tính) giống hệt.
+    conn = psycopg2.connect(database_url)
+    try:
+        with conn, conn.cursor() as cur:
+            for start in range(0, len(rows), batch_size):
+                batch = rows[start : start + batch_size]
+                cur.execute(
+                    "select public.upsert_thua_dat_diff(%s::jsonb)",
+                    (psycopg2.extras.Json(batch),),
+                )
+                print(f"Đã nhập {min(start + len(batch), len(rows))}/{len(rows)} thửa")
+    finally:
+        conn.close()
 
 
 def main() -> None:

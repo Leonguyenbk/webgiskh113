@@ -20,3 +20,17 @@ sync_gcn/service_account.json
 sync_gcn/venv/
 sync_gcn/__pycache__/
 
+# Chạy local qua NSSM (Windows service) + Cloudflare Tunnel — log runtime,
+# không phải mã nguồn.
+backend/service-std*.log
+frontend/service-std*.log
+tunnel-std*.log
+
+# Thư mục tạm dùng để cài PostgreSQL/PostGIS + bản dump di chuyển dữ liệu
+# từ Supabase — không đưa lên git (dump chứa dữ liệu thật, dung lượng lớn).
+.setup_tmp/
+
+# Bản export zone DNS dùng để đối chiếu lúc chuyển domain — không phải mã
+# nguồn, không cần theo dõi trong git.
+kh2959bmt.net.txt
+

@@ -259,7 +259,7 @@ export default function ManageGcnLinksPage({ onNavigateHome }) {
 
           <p className="importHint">
             Bấm <strong>Đồng bộ</strong> ở từng nguồn bên dưới để đọc lại
-            Google Sheet và cập nhật ngay vào Supabase. Ngoài ra hệ thống tự
+            Google Sheet và cập nhật ngay vào cơ sở dữ liệu. Ngoài ra hệ thống tự
             động đồng bộ tất cả nguồn đang kích hoạt mỗi 30 phút (GitHub
             Actions). Vẫn có thể chạy <code>python main.py</code> trong
             <code> sync_gcn/</code> nếu muốn đồng bộ từ máy cá nhân, xem

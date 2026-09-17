@@ -520,7 +520,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
         <div className="brandMark">GIS</div>
         <div className="topbarTitle">
           <h1>Bản đồ phân loại thửa đất</h1>
-          <p>VN-2000 Đắk Lắk · Dữ liệu Supabase</p>
+          <p>VN-2000 Đắk Lắk</p>
         </div>
         <div className="count">
           <strong>{shownCount.toLocaleString("vi-VN")}</strong>
@@ -835,7 +835,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             <div className="notice">
               {meta.loaded > 0
                 ? `Đang tải… ${meta.loaded.toLocaleString("vi-VN")} thửa`
-                : "Đang tra cứu Supabase…"}
+                : "Đang tra cứu…"}
             </div>
           )}
 

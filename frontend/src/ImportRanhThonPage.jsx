@@ -91,7 +91,7 @@ export default function ImportRanhThonPage({ onNavigateHome }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Nhập ranh giới thôn</h1>
-          <p>Đẩy file Shapefile (.zip gồm .shp/.shx/.dbf/.prj) vào Supabase</p>
+          <p>Đẩy file Shapefile (.zip gồm .shp/.shx/.dbf/.prj) vào cơ sở dữ liệu</p>
         </div>
         <a
           className="backLink"
@@ -133,14 +133,14 @@ export default function ImportRanhThonPage({ onNavigateHome }) {
             className="importButton"
             disabled={!file || status === "uploading"}
           >
-            {status === "uploading" ? "Đang tải lên…" : "Đẩy vào Supabase"}
+            {status === "uploading" ? "Đang tải lên…" : "Đẩy vào cơ sở dữ liệu"}
           </button>
 
           {status === "done" && result && (
             <div className="notice">
               <strong>Hoàn tất</strong>
               <span>
-                Đã nhập {result.imported}/{result.total} thôn vào Supabase.
+                Đã nhập {result.imported}/{result.total} thôn vào cơ sở dữ liệu.
                 {result.deleted > 0 && (
                   <>
                     {" "}
@@ -180,7 +180,7 @@ export default function ImportRanhThonPage({ onNavigateHome }) {
             placeholder="Nhập mã xã, ví dụ 24235"
           />
           <p className="importHint">
-            Xóa toàn bộ thôn của xã này khỏi Supabase. Dùng khi cần vẽ lại từ đầu. Bấm “Xem trước” để kiểm tra danh
+            Xóa toàn bộ thôn của xã này khỏi cơ sở dữ liệu. Dùng khi cần vẽ lại từ đầu. Bấm “Xem trước” để kiểm tra danh
             sách thôn sẽ bị xóa. Thao tác không thể hoàn tác.
           </p>
 

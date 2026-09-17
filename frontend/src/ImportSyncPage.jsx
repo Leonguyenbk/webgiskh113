@@ -33,7 +33,7 @@ export default function ImportSyncPage({ onNavigateHome }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Nhập dữ liệu đồng bộ</h1>
-          <p>Đẩy file CSV/Excel trạng thái đồng bộ vào Supabase</p>
+          <p>Đẩy file CSV/Excel trạng thái đồng bộ vào cơ sở dữ liệu</p>
         </div>
         <a
           className="backLink"
@@ -75,14 +75,14 @@ export default function ImportSyncPage({ onNavigateHome }) {
             className="importButton"
             disabled={!file || status === "uploading"}
           >
-            {status === "uploading" ? "Đang tải lên…" : "Đẩy vào Supabase"}
+            {status === "uploading" ? "Đang tải lên…" : "Đẩy vào cơ sở dữ liệu"}
           </button>
 
           {status === "done" && result && (
             <div className="notice">
               <strong>Hoàn tất</strong>
               <span>
-                Đã nhập {result.imported}/{result.total} dòng vào Supabase.
+                Đã nhập {result.imported}/{result.total} dòng vào cơ sở dữ liệu.
               </span>
             </div>
           )}
