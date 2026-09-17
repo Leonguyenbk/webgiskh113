@@ -375,7 +375,15 @@ grant execute on function public.get_ranh_gioi_thon(text) to service_role;
 -- các lần nhập/xoá ranh giới thôn tiếp theo tự refresh qua
 -- backend/app/services/import_service.py — không cần chạy tay lại câu
 -- này trừ khi ranh_gioi_thon bị sửa trực tiếp ngoài luồng backend.
-select public.refresh_ranh_gioi_thon_cache(null);
+--
+-- ĐÃ COMMENT (2026-09-14): cache đã được backfill từ lần chạy trước, và
+-- mọi lần nhập/xoá ranh giới thôn sau đó đã tự refresh qua
+-- import_service.py (xem comment trên) — để nguyên câu lệnh ở đây khiến
+-- MỌI lần áp dụng lại schema.sql (kể cả chỉ để sửa 1 hàm khác) vô tình
+-- quét lại toàn bộ ranh_gioi_thon, tốn tải Postgres không cần thiết.
+-- Cần backfill lại (VD sau khi sửa ranh_gioi_thon ngoài luồng backend) thì
+-- bỏ comment dòng dưới rồi chạy tay 1 lần trong SQL Editor.
+-- select public.refresh_ranh_gioi_thon_cache(null);
 
 analyze public.ranh_gioi_thon;
 analyze public.ranh_gioi_thon_cache;
@@ -901,6 +909,12 @@ language plpgsql
 security definer
 set search_path = public, extensions
 set statement_timeout = '120s'
+-- work_mem mặc định (~4MB) không đủ cho hash join/group aggregate quét
+-- 1,36 triệu dòng thua_dat -> tràn ra đĩa (đo thực tế bằng EXPLAIN ANALYZE
+-- BUFFERS 2026-09-14: temp read=39370 written=39370, ~315MB spill mỗi
+-- chiều, góp phần lớn vào 35.7s thực thi). Nới work_mem RIÊNG cho hàm này
+-- (không ảnh hưởng session/role khác) để hash/sort vừa trong RAM.
+set work_mem = '512MB'
 as $$
 declare
     v_now timestamptz := now();
@@ -962,11 +976,15 @@ grant execute on function public.refresh_gcn_thu_thap_theo_xa_cache() to service
 --   create extension if not exists pg_cron;
 --   select cron.schedule(
 --       'refresh-gcn-thu-thap',
---       '*/15 * * * *',
+--       '10 0,12 * * *',
 --       $$select public.refresh_gcn_thu_thap_theo_xa_cache();$$
 --   );
 --
--- Không dùng pg_cron thì cho Render Cron Job gọi mỗi 15 phút:
+-- 2 lần/ngày (không phải */15 phút) — hàm quét toàn bộ thua_dat, chạy dày
+-- (15 phút/lần) từng làm nghẽn Postgres khi bảng lớn lên, khiến cả các
+-- truy vấn nhẹ khác (vd list_xa_phuong) cũng bị statement timeout theo
+-- (statement timeout 57014 hàng loạt, 2026-09-14). Không dùng pg_cron thì
+-- cho Render Cron Job gọi 2 lần/ngày:
 --   POST <API>/api/gcn-stats/refresh   (header X-Import-Token: <IMPORT_TOKEN>)
 
 -- =========================================================
@@ -1173,6 +1191,10 @@ language plpgsql
 security definer
 set search_path = public, extensions
 set statement_timeout = '100s'
+-- work_mem: cùng lý do đã đo/ghi ở refresh_gcn_thu_thap_theo_xa_cache
+-- (hash join + group aggregate quét thua_dat tràn ra đĩa với work_mem mặc
+-- định) — hàm này quét cùng 2 bảng theo cùng kiểu JOIN nên nới tương tự.
+set work_mem = '512MB'
 as $$
 declare
     v_now timestamptz := now();
@@ -1226,6 +1248,10 @@ language plpgsql
 security definer
 set search_path = public, extensions
 set statement_timeout = '100s'
+-- work_mem: cùng lý do đã đo/ghi ở refresh_gcn_thu_thap_theo_xa_cache —
+-- hàm này JOIN du_lieu_gcn (đã lọc còn dòng hợp lệ) với thua_dat, cũng dễ
+-- tràn work_mem mặc định khi 2 bảng đủ lớn.
+set work_mem = '512MB'
 as $$
 declare
     v_now timestamptz := now();
@@ -1320,20 +1346,22 @@ grant execute on function public.refresh_bieu_thong_ke_theo_xa_cache() to servic
 -- LỊCH TÍNH LẠI — chạy TAY 1 lần trên Supabase SQL Editor (đã bật
 -- pg_cron cho refresh-gcn-thu-thap thì thêm 2 job này cùng chỗ — LUÔN
 -- tách phan1/phan2 thành 2 job riêng, không gọi hàm gộp
--- refresh_bieu_thong_ke_theo_xa_cache() từ pg_cron):
+-- refresh_bieu_thong_ke_theo_xa_cache() từ pg_cron). 2 lần/ngày, KHÔNG
+-- phải */15 phút — cùng lý do đã ghi ở lịch refresh-gcn-thu-thap phía
+-- trên (bảng thua_dat lớn, quét dày làm nghẽn Postgres):
 --
 --   select cron.schedule(
 --       'refresh-bieu-thong-ke-1',
---       '*/15 * * * *',
+--       '15 0,12 * * *',
 --       $$select public.refresh_bieu_thong_ke_theo_xa_cache_phan1();$$
 --   );
 --   select cron.schedule(
 --       'refresh-bieu-thong-ke-2',
---       '2-59/15 * * * *',
+--       '20 0,12 * * *',
 --       $$select public.refresh_bieu_thong_ke_theo_xa_cache_phan2();$$
 --   );
 --
--- Không dùng pg_cron thì cho Render Cron Job gọi mỗi 15 phút:
+-- Không dùng pg_cron thì cho Render Cron Job gọi 2 lần/ngày:
 --   POST <API>/api/bieu-thong-ke/refresh   (header X-Import-Token: <IMPORT_TOKEN>)
 --   — endpoint này tự gọi phan1 rồi phan2 làm 2 request Supabase riêng,
 --   xem backend/app/services/gcn_service.py.
@@ -1698,30 +1726,34 @@ grant execute on function public.export_du_lieu_gcn(text, boolean, integer, inte
 -- Lọc theo 1 xã (idx_du_lieu_gcn_madvhc có sẵn) thì count lẫn ORDER BY
 -- created_at đều dưới ~1.2s dù chưa có chỉ mục cho created_at (xã nhiều
 -- nhất đã thấy ~8.500 dòng) — vẫn thêm chỉ mục ghép (madvhc, created_at
--- desc) trong sync_gcn/create_du_lieu_gcn.sql để an toàn khi 1 xã phình
--- to hơn, và để ORDER BY dùng index scan thay vì filesort.
+-- desc) trong sync_gcn/create_du_lieu_gcn.sql để quét/lọc theo xã rẻ,
+-- an toàn khi 1 xã phình to hơn (ORDER BY cuối cùng theo is_form/ngay_nhap
+-- vẫn phải filesort vì đã GROUP BY trước đó — chấp nhận được với ~8.500
+-- dòng/xã).
 --
 -- p_ma_xa bắt buộc (như search_parcels) — không cho liệt kê/đếm "tất cả
 -- xã" cùng lúc.
 --
--- DISTINCT theo madvhc_soto_sothua: 1 thửa có thể có nhiều chủ sử dụng ->
+-- GROUP theo madvhc_soto_sothua: 1 thửa có thể có nhiều chủ sử dụng ->
 -- nhiều dòng trong du_lieu_gcn (xem export_gcn_theo_nhom: "mỗi chủ sử
--- dụng 1 dòng") — mục đích trang này là đếm/xem ĐÃ NHẬP ĐƯỢC BAO NHIÊU
--- THỬA nên mỗi thửa chỉ hiện đúng 1 dòng, lấy ngày nhập SỚM NHẤT
--- (created_at nhỏ nhất) trong các dòng cùng thửa. Bảng bị lọc còn tối đa
--- ~8.500 dòng/xã trước khi DISTINCT ON nên không tốn thêm CPU đáng kể.
+-- dụng 1 dòng"), và có thể vừa có dòng nhập từ biểu Nhóm 4
+-- (ma_nguon='NHOM4_FORM') vừa có dòng đồng bộ Google Sheet (ma_nguon =
+-- mã xã) cho CÙNG 1 thửa — mục đích trang này là đếm/xem ĐÃ NHẬP ĐƯỢC BAO
+-- NHIÊU THỬA nên mỗi thửa chỉ hiện đúng 1 dòng. Bảng bị lọc còn tối đa
+-- ~8.500 dòng/xã trước khi GROUP BY nên không tốn thêm CPU đáng kể.
+--
+-- ƯU TIÊN NGUỒN (yêu cầu nghiệp vụ): thửa có ít nhất 1 dòng nhập từ biểu
+-- Nhóm 4 (ma_nguon='NHOM4_FORM') luôn xếp TRƯỚC thửa chỉ có dữ liệu đồng
+-- bộ Google Sheet, bất kể ngày nhập — is_form desc là khóa sắp xếp đầu
+-- tiên. Trong từng nhóm, sắp theo ngay_nhap (created_at SỚM NHẤT của
+-- nguồn tương ứng: form nếu thửa có form, ngược lại nguồn khác) theo
+-- chiều p_sort_asc do người dùng chọn.
 --
 -- p_so_to/p_so_thua: lọc thêm theo số tờ/số thửa (tùy chọn) NGAY TRONG
 -- xã đã chọn — so bằng normalize_so_text() cả 2 vế để không lệch bởi số
 -- 0 ở đầu/đuôi ".0". Không cần thêm chỉ mục: WHERE đã lọc còn tối đa
 -- ~8.500 dòng/xã trước khi so khớp số tờ/thửa nên vẫn rẻ.
 -- =========================================================
-
--- Thêm p_so_to/p_so_thua (lọc theo số tờ/số thửa trong xã đã chọn) —
--- phải DROP bản 4 tham số cũ trước vì thêm tham số ở cuối tạo ra 1 chữ ký
--- hàm khác, PostgREST sẽ thấy 2 overload cùng tên gây lỗi "could not
--- choose the best candidate function" nếu không dọn bản cũ.
-drop function if exists public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer);
 
 create or replace function public.list_du_lieu_gcn_da_nhap(
     p_ma_xa text,
@@ -1748,51 +1780,34 @@ begin
       and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
       and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua));
 
-    if p_sort_asc then
-        select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) into v_items
-        from (
-            select y.ma_xa, y.ten_xa, y.so_to, y.so_thua, y.ma_dinh_danh, y.ngay_nhap
-            from (
-                select distinct on (g.madvhc_soto_sothua)
-                    g.madvhc as ma_xa,
-                    xp.ten_xa,
-                    public.normalize_so_text(g.soto) as so_to,
-                    public.normalize_so_text(g.sothua) as so_thua,
-                    g.madinhdanhthuadat as ma_dinh_danh,
-                    g.created_at as ngay_nhap
-                from public.du_lieu_gcn g
-                left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
-                where g.madvhc = p_ma_xa
-                  and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
-                  and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua))
-                order by g.madvhc_soto_sothua, g.created_at asc
-            ) y
-            order by y.ngay_nhap asc
-            limit p_limit offset p_offset
-        ) x;
-    else
-        select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) into v_items
-        from (
-            select y.ma_xa, y.ten_xa, y.so_to, y.so_thua, y.ma_dinh_danh, y.ngay_nhap
-            from (
-                select distinct on (g.madvhc_soto_sothua)
-                    g.madvhc as ma_xa,
-                    xp.ten_xa,
-                    public.normalize_so_text(g.soto) as so_to,
-                    public.normalize_so_text(g.sothua) as so_thua,
-                    g.madinhdanhthuadat as ma_dinh_danh,
-                    g.created_at as ngay_nhap
-                from public.du_lieu_gcn g
-                left join public.danhsachxaphuong xp on xp.ma_xa = g.madvhc
-                where g.madvhc = p_ma_xa
-                  and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
-                  and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua))
-                order by g.madvhc_soto_sothua, g.created_at asc
-            ) y
-            order by y.ngay_nhap desc
-            limit p_limit offset p_offset
-        ) x;
-    end if;
+    with grouped as (
+        select
+            max(g.madvhc) as ma_xa,
+            max(public.normalize_so_text(g.soto)) as so_to,
+            max(public.normalize_so_text(g.sothua)) as so_thua,
+            max(g.madinhdanhthuadat) as ma_dinh_danh,
+            bool_or(g.ma_nguon = 'NHOM4_FORM') as is_form,
+            coalesce(
+                min(g.created_at) filter (where g.ma_nguon = 'NHOM4_FORM'),
+                min(g.created_at) filter (where g.ma_nguon <> 'NHOM4_FORM')
+            ) as ngay_nhap
+        from public.du_lieu_gcn g
+        where g.madvhc = p_ma_xa
+          and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
+          and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua))
+        group by g.madvhc_soto_sothua
+    )
+    select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
+    from (
+        select x.ma_xa, xp.ten_xa, x.so_to, x.so_thua, x.ma_dinh_danh, x.ngay_nhap
+        from grouped x
+        left join public.danhsachxaphuong xp on xp.ma_xa = x.ma_xa
+        order by
+            x.is_form desc,
+            case when p_sort_asc then x.ngay_nhap end asc,
+            case when not p_sort_asc then x.ngay_nhap end desc
+        limit p_limit offset p_offset
+    ) y;
 
     return jsonb_build_object('total', v_total, 'items', v_items);
 end;
