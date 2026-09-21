@@ -635,6 +635,12 @@ label[for="mplisCookie"] {
      phải bản đồ) nếu thật sự cần. */
   .banDoNenFilterSection { display: none; }
   .banDoNenOpacitySlider { display: none; }
+
+  /* Tra cứu xong (bộ lọc thu gọn về dòng tóm tắt) -> nhường phần lớn màn
+     hình cho bản đồ thay vì giữ nguyên 42% cho sidebar dù nội dung đã
+     ngắn lại. Mở lại bộ lọc ("Đổi bộ lọc") thì trả về đúng tỉ lệ cũ. */
+  .shell.filtersCollapsed .workspace { grid-template-rows: auto 1fr; }
+  .shell.filtersCollapsed .sidebar { max-height: 40vh; overflow-y: auto; }
   /* Leaflet tự cộng thêm margin-top 10px cho control bên trong
      .leaflet-top, nên trừ sẵn 10px ở đây để nút chọn lớp nền ngang
      hàng với nút ẩn/hiện (top: 20px). */
@@ -1085,6 +1091,12 @@ label[for="mplisCookie"] {
   box-shadow: none;
 }
 
+/* Tay kéo bottom-sheet — chỉ có ý nghĩa trên điện thoại (xem @media bên
+   dưới); trên desktop panel đã hiện đầy đủ sẵn nên ẩn đi. */
+.drawerHandle {
+  display: none;
+}
+
 @keyframes drawerSlideIn {
   from {
     opacity: 0;
@@ -1106,6 +1118,28 @@ label[for="mplisCookie"] {
 
     width: auto;
     max-height: 72%;
+    /* Chiều cao đổi giữa thu gọn/mở rộng -> có animation mượt thay vì
+       giật cục, khớp với thao tác kéo. */
+    transition: max-height 0.2s ease-out;
+  }
+
+  /* Thu gọn: chỉ còn tay kéo + số tờ/số thửa (~1/6 màn hình), ẩn phần chi
+     tiết. Kéo tay cầm lên hoặc bấm vào nó để xem đầy đủ. */
+  .parcelDrawer.collapsed { max-height: 22vh; }
+  .parcelDrawer.collapsed .drawerDetails { display: none; }
+
+  .drawerHandle {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 2px;
+    cursor: grab;
+    touch-action: none;
+  }
+  .drawerHandleBar {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: #b9ccc8;
   }
 }
 

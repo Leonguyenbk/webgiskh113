@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 import { GCN_COLOR, GCN_LABEL, GROUP_LABELS, getGroupColor, getGroupKey, isNhom12 } from "../../utils/constants";
 import { googleMapsDirectionsUrl } from "../../utils/geometry";
 import ParcelMissingInfo from "./ParcelMissingInfo";
@@ -6,9 +8,15 @@ function EmptyValue({ children }) {
   return children ? children : <span className="empty">Chưa có</span>;
 }
 
-// Khung "Thông tin thửa đất" bên phải bản đồ — chỉ bố trí giao diện và
-// truyền dữ liệu xuống component con (ParcelMissingInfo), không tự chứa
-// logic gọi API/validate.
+// Ngưỡng kéo (px) để tính là "kéo" thay vì bấm — dưới ngưỡng này thì coi
+// như tap, đảo trạng thái thu gọn/mở rộng.
+const DRAG_TAP_THRESHOLD = 6;
+const DRAG_SNAP_THRESHOLD = 24;
+
+// Khung "Thông tin thửa đất" bên phải bản đồ (desktop) / bottom-sheet kéo
+// được (điện thoại, xem @media max-width:760px trong styles.css) — chỉ
+// bố trí giao diện và truyền dữ liệu xuống component con
+// (ParcelMissingInfo), không tự chứa logic gọi API/validate.
 export default function ParcelInfoPanel({
   parcel,
   feature,
@@ -17,12 +25,63 @@ export default function ParcelInfoPanel({
   onZoom,
   onNhapNhom4,
 }) {
+  // Trên điện thoại mặc định thu gọn (chỉ hiện số tờ/số thửa) — đỡ che
+  // bản đồ. Đổi sang thửa khác thì thu gọn lại từ đầu, không giữ trạng
+  // thái mở rộng của thửa trước.
+  const [expanded, setExpanded] = useState(false);
+  const dragRef = useRef(null);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [parcel?.id]);
+
   if (!parcel) return null;
 
   const dangNhom12 = isNhom12(parcel.dong_bo?.phan_loai_ke_hoach_2959);
 
+  const handleHandlePointerDown = (event) => {
+    dragRef.current = { startY: event.clientY, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleHandlePointerMove = (event) => {
+    if (!dragRef.current) return;
+    if (Math.abs(event.clientY - dragRef.current.startY) > DRAG_TAP_THRESHOLD) {
+      dragRef.current.moved = true;
+    }
+  };
+
+  const handleHandlePointerUp = (event) => {
+    if (!dragRef.current) return;
+    const dy = event.clientY - dragRef.current.startY;
+    if (!dragRef.current.moved) {
+      setExpanded((value) => !value);
+    } else if (dy < -DRAG_SNAP_THRESHOLD) {
+      setExpanded(true);
+    } else if (dy > DRAG_SNAP_THRESHOLD) {
+      setExpanded(false);
+    }
+    dragRef.current = null;
+  };
+
   return (
-    <aside className="parcelDrawer">
+    <aside className={`parcelDrawer${expanded ? " expanded" : " collapsed"}`}>
+      <div
+        className="drawerHandle"
+        onPointerDown={handleHandlePointerDown}
+        onPointerMove={handleHandlePointerMove}
+        onPointerUp={handleHandlePointerUp}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        aria-label={expanded ? "Thu gọn thông tin thửa" : "Kéo lên để xem chi tiết thửa"}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") setExpanded((value) => !value);
+        }}
+      >
+        <span className="drawerHandleBar" />
+      </div>
+
       <div className="drawerHeader">
         <div>
           <strong>Thông tin thửa đất</strong>
@@ -49,6 +108,7 @@ export default function ParcelInfoPanel({
           </div>
         </div>
 
+        <div className="drawerDetails">
         <dl>
           <div>
             <dt>Xã / phường</dt>
@@ -125,6 +185,7 @@ export default function ParcelInfoPanel({
             🧭 Chỉ đường Google Maps
           </a>
         )}
+        </div>
       </div>
     </aside>
   );

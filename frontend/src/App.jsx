@@ -551,7 +551,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   );
 
   return (
-    <main className={`shell${uiHidden ? " uiHidden" : ""}`}>
+    <main
+      className={`shell${uiHidden ? " uiHidden" : ""}${
+        !filtersOpen ? " filtersCollapsed" : ""
+      }`}
+    >
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div className="topbarTitle">
