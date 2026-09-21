@@ -31,18 +31,14 @@ def cap_nhat_phan_loai(body: dict):
     if not cookie:
         return None, (jsonify({"error": "Chưa nhập Cookie MPLIS."}), 400)
 
-    base_url = supabase_client.get_base_url()
-    if not base_url:
+    database_url = supabase_client.get_base_url()
+    if not database_url:
         return None, supabase_client.missing_base_url_response()
-    try:
-        headers = supabase_client.get_service_headers()
-    except RuntimeError as exc:
-        return None, (jsonify({"error": str(exc)}), 500)
 
     if mode == "single":
         try:
             result = mplis_sync.update_single_parcel(
-                ma_xa, so_to, so_thua, token, cookie, base_url, headers
+                ma_xa, so_to, so_thua, token, cookie, database_url
             )
         except mplis_sync.MplisSessionError as exc:
             return None, (jsonify({"error": str(exc)}), 401)
@@ -57,7 +53,7 @@ def cap_nhat_phan_loai(body: dict):
         return {"mode": "single", **result}, None
 
     # mode == "ward"
-    job = mplis_sync.try_start_ward_job(ma_xa, so_to, so_thua, token, cookie, base_url, headers)
+    job = mplis_sync.try_start_ward_job(ma_xa, so_to, so_thua, token, cookie, database_url)
     if job is None:
         return None, (jsonify({"error": "Đang có một tiến trình cập nhật khác đang chạy."}), 409)
 

@@ -9,7 +9,7 @@ from flask import current_app, jsonify
 from openpyxl import Workbook, load_workbook
 
 import gcn_sync
-from ..repositories import gcn_repository, supabase_client
+from ..repositories import gcn_repository
 
 # Nhóm KH 2959 hợp lệ cho chức năng "Xuất GCN theo nhóm".
 _NHOM_HOP_LE = {"NHÓM 1", "NHÓM 2"}
@@ -358,22 +358,7 @@ def delete_source(ma_nguon: str):
     return {"ok": True}, None
 
 
-def _get_supabase_context():
-    base_url = supabase_client.get_base_url()
-    if not base_url:
-        return None, None, supabase_client.missing_base_url_response()
-    try:
-        headers = supabase_client.get_service_headers()
-    except RuntimeError as exc:
-        return None, None, (jsonify({"error": str(exc)}), 500)
-    return base_url, headers, None
-
-
 def sync_one(ma_nguon: str):
-    base_url, headers, error_response = _get_supabase_context()
-    if error_response:
-        return None, error_response
-
     try:
         source, error_response = gcn_repository.fetch_nguon_row(ma_nguon)
     except requests.RequestException as exc:
@@ -387,7 +372,7 @@ def sync_one(ma_nguon: str):
 
     try:
         imported = gcn_sync.sync_source(
-            base_url, headers, ma_nguon, source.get("ten_nguon") or "", source["url"]
+            ma_nguon, source.get("ten_nguon") or "", source["url"]
         )
     except RuntimeError as exc:
         return None, (jsonify({"error": str(exc)}), 500)
@@ -399,10 +384,6 @@ def sync_one(ma_nguon: str):
 
 
 def sync_all():
-    base_url, headers, error_response = _get_supabase_context()
-    if error_response:
-        return None, error_response
-
     try:
         sources, error_response = gcn_repository.list_active_sources()
     except requests.RequestException as exc:
@@ -418,9 +399,7 @@ def sync_all():
             continue
 
         try:
-            imported = gcn_sync.sync_source(
-                base_url, headers, ma_nguon, source.get("ten_nguon") or "", url
-            )
+            imported = gcn_sync.sync_source(ma_nguon, source.get("ten_nguon") or "", url)
         except Exception as exc:  # noqa: BLE001 - 1 nguồn lỗi không được chặn các nguồn khác
             current_app.logger.exception("Đồng bộ GCN lỗi: ma_nguon=%s", ma_nguon)
             results.append({"ma_nguon": ma_nguon, "ok": False, "error": str(exc)})

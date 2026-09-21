@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 import gspread
-import requests
 from google.oauth2.service_account import Credentials
+
+from app.repositories import supabase_client
 
 # Đọc Google Sheet bằng Service Account — khác sync_gcn/ (chạy local, đọc
 # credentials từ file service_account.json), ở đây backend chạy trên Render
@@ -156,48 +157,48 @@ def read_sheet_rows(sheet_url: str) -> list[dict[str, Any]]:
     return records
 
 
-def _replace_source_rows(
-    base_url: str, headers: dict[str, str], ma_nguon: str, rows: list[dict[str, Any]]
-) -> int:
+def _check_rest_error(response, error_response) -> None:
+    if error_response is not None:
+        try:
+            message = error_response[0].get_json().get("error", "Lỗi cơ sở dữ liệu")
+        except Exception:  # noqa: BLE001 - chỉ để lấy thông báo, không để lỗi ở đây che lỗi gốc
+            message = "Lỗi cơ sở dữ liệu"
+        raise RuntimeError(message)
+    if not response.ok:
+        raise RuntimeError(response.text or "Lỗi cơ sở dữ liệu")
+
+
+def _replace_source_rows(ma_nguon: str, rows: list[dict[str, Any]]) -> int:
     # Giống sync_gcn/supabase_sync.replace_source: xóa dữ liệu cũ của nguồn
     # rồi insert lại theo batch — không phải transaction thật sự, nhưng chỉ
     # chạy sau khi đã đọc + chuẩn hóa xong toàn bộ Sheet ở read_sheet_rows.
-    delete_response = requests.delete(
-        f"{base_url}/rest/v1/{DU_LIEU_GCN_TABLE}",
-        headers=headers,
+    # Đi thẳng vào Postgres local qua supabase_client (không còn REST HTTP
+    # Supabase — base_url giờ là DATABASE_URL, không phải URL REST).
+    response, error_response = supabase_client.rest_request(
+        "DELETE",
+        DU_LIEU_GCN_TABLE,
         params={"ma_nguon": f"eq.{ma_nguon}"},
         timeout=60,
     )
-    delete_response.raise_for_status()
-
-    insert_headers = {
-        **headers,
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-    }
+    _check_rest_error(response, error_response)
 
     inserted = 0
     for start in range(0, len(rows), BATCH_SIZE):
         batch = rows[start : start + BATCH_SIZE]
-        response = requests.post(
-            f"{base_url}/rest/v1/{DU_LIEU_GCN_TABLE}",
-            headers=insert_headers,
-            json=batch,
+        response, error_response = supabase_client.rest_request(
+            "POST",
+            DU_LIEU_GCN_TABLE,
+            json_body=batch,
+            extra_headers={"Prefer": "return=minimal"},
             timeout=120,
         )
-        response.raise_for_status()
+        _check_rest_error(response, error_response)
         inserted += len(batch)
 
     return inserted
 
 
-def sync_source(
-    base_url: str,
-    headers: dict[str, str],
-    ma_nguon: str,
-    ten_nguon: str,
-    sheet_url: str,
-) -> int:
+def sync_source(ma_nguon: str, ten_nguon: str, sheet_url: str) -> int:
     """Đồng bộ 1 nguồn: đọc Google Sheet rồi thay toàn bộ dữ liệu cũ của
     ma_nguon đó trong public.du_lieu_gcn. Trả về số dòng đã ghi."""
     records = read_sheet_rows(sheet_url)
@@ -220,4 +221,4 @@ def sync_source(
             row["madvhc"] = ma_nguon
         rows.append(row)
 
-    return _replace_source_rows(base_url, headers, ma_nguon, rows)
+    return _replace_source_rows(ma_nguon, rows)

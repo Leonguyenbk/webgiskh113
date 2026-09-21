@@ -8,6 +8,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
 import requests
 
 logger = logging.getLogger(__name__)
@@ -227,14 +230,30 @@ def map_record(row: dict[str, Any]) -> dict[str, Any] | None:
 
 
 # =========================================================
-# GHI SUPABASE (batch UPSERT — có thì UPDATE, chưa có thì INSERT)
+# GHI POSTGRESQL (batch UPSERT — có thì UPDATE, chưa có thì INSERT)
+#
+# Job cả-xã chạy trong thread nền, KHÔNG có Flask application context, nên
+# không thể dùng app.repositories.supabase_client (phụ thuộc current_app) —
+# tự quản lý pool psycopg2 riêng ở đây, nhận DATABASE_URL dạng chuỗi (lấy
+# 1 lần trong request handler, trước khi spawn thread).
 # =========================================================
 
+_pg_pools: dict[str, "psycopg2.pool.ThreadedConnectionPool"] = {}
+_pg_pools_lock = threading.Lock()
 
-def batch_upsert_supabase(
-    base_url: str, headers: dict[str, str], rows: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """Gọi RPC batch_upsert_dong_bo_du_lieu, trả về danh sách
+
+def _get_pg_pool(database_url: str) -> "psycopg2.pool.ThreadedConnectionPool":
+    with _pg_pools_lock:
+        pool = _pg_pools.get(database_url)
+        if pool is None:
+            pool = _pg_pools[database_url] = psycopg2.pool.ThreadedConnectionPool(
+                1, 5, database_url
+            )
+        return pool
+
+
+def batch_upsert_db(database_url: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Gọi hàm Postgres batch_upsert_dong_bo_du_lieu, trả về danh sách
     {ma_xa, so_to, so_thua, was_insert} đã ghi được. `rows` không được
     chứa khóa (ma_xa, so_to, so_thua) trùng nhau — insert...on conflict
     không update được cùng 1 dòng 2 lần trong 1 câu lệnh, cả batch sẽ
@@ -242,14 +261,19 @@ def batch_upsert_supabase(
     if not rows:
         return []
 
-    response = requests.post(
-        f"{base_url}/rest/v1/rpc/{BATCH_UPSERT_RPC}",
-        headers={**headers, "Content-Type": "application/json"},
-        json={"p_rows": rows},
-        timeout=60,
-    )
-    response.raise_for_status()
-    return response.json()
+    pool = _get_pg_pool(database_url)
+    conn = pool.getconn()
+    try:
+        conn.autocommit = True
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("set statement_timeout = %s", (60_000,))
+            cur.execute(
+                f"select * from public.{BATCH_UPSERT_RPC}(p_rows => %(p_rows)s)",
+                {"p_rows": psycopg2.extras.Json(rows)},
+            )
+            return [dict(r) for r in cur.fetchall()]
+    finally:
+        pool.putconn(conn)
 
 
 def update_single_parcel(
@@ -258,8 +282,7 @@ def update_single_parcel(
     so_thua: str,
     token: str,
     cookie: str,
-    base_url: str,
-    headers: dict[str, str],
+    database_url: str,
 ) -> dict[str, Any]:
     """Chế độ 1 thửa — chạy đồng bộ trong 1 request, không qua job."""
     body = fetch_page(ma_xa, so_to, so_thua, 0, 10, token, cookie)
@@ -285,7 +308,7 @@ def update_single_parcel(
     if mapped is None:
         return {"status": "not_found_mplis"}
 
-    written = batch_upsert_supabase(base_url, headers, [mapped])
+    written = batch_upsert_db(database_url, [mapped])
     if not written:
         # Không lẽ xảy ra (upsert luôn ghi được 1 dòng), nhưng vẫn xử lý
         # rõ ràng thay vì để lỗi mơ hồ.
@@ -369,8 +392,7 @@ def _process_page(
     job: JobState,
     data: list[dict[str, Any]],
     seen_keys: set[tuple[str, int, int]],
-    base_url: str,
-    headers: dict[str, str],
+    database_url: str,
 ) -> None:
     batch: list[dict[str, Any]] = []
     batch_keys: list[tuple[str, int, int]] = []
@@ -397,8 +419,8 @@ def _process_page(
         sub_keys = batch_keys[start : start + UPSERT_BATCH_SIZE]
 
         try:
-            written = batch_upsert_supabase(base_url, headers, sub_batch)
-        except requests.RequestException:
+            written = batch_upsert_db(database_url, sub_batch)
+        except psycopg2.Error:
             logger.exception(
                 "batch_upsert_dong_bo_du_lieu lỗi (ma_xa=%s, %d dòng)",
                 job.ma_xa,
@@ -431,8 +453,7 @@ def _run_ward_job(
     so_thua: str,
     token: str,
     cookie: str,
-    base_url: str,
-    headers: dict[str, str],
+    database_url: str,
 ) -> None:
     try:
         body, length = probe_page_length(ma_xa, so_to, so_thua, token, cookie)
@@ -456,7 +477,7 @@ def _run_ward_job(
             if not data:
                 break
 
-            _process_page(job, data, seen_keys, base_url, headers)
+            _process_page(job, data, seen_keys, database_url)
 
             received = len(data)
             next_start = start + received
@@ -493,8 +514,7 @@ def try_start_ward_job(
     so_thua: str,
     token: str,
     cookie: str,
-    base_url: str,
-    headers: dict[str, str],
+    database_url: str,
 ) -> JobState | None:
     """Tạo job mới và chạy nền bằng thread. Trả None nếu đã có job khác
     đang chạy (chỉ cho phép 1 job cập nhật-cả-xã cùng lúc)."""
@@ -511,7 +531,7 @@ def try_start_ward_job(
 
     thread = threading.Thread(
         target=_run_ward_job,
-        args=(job, ma_xa, so_to, so_thua, token, cookie, base_url, headers),
+        args=(job, ma_xa, so_to, so_thua, token, cookie, database_url),
         daemon=True,
     )
     thread.start()
