@@ -652,8 +652,21 @@ label[for="mplisCookie"] {
 
   /* Tra cứu xong (bộ lọc thu gọn về dòng tóm tắt) -> nhường phần lớn màn
      hình cho bản đồ thay vì giữ nguyên 42% cho sidebar dù nội dung đã
-     ngắn lại. Mở lại bộ lọc ("Đổi bộ lọc") thì trả về đúng tỉ lệ cũ. */
-  .shell.filtersCollapsed .workspace { grid-template-rows: auto 1fr; }
+     ngắn lại. Mở lại bộ lọc ("Đổi bộ lọc") thì trả về đúng tỉ lệ cũ.
+
+     THỨ TỰ "1fr auto" (không phải "auto 1fr") LÀ CỐ Ý — đã kiểm chứng
+     trực tiếp trên trang thật bằng getBoundingClientRect(): .mapWrap có
+     order:1, .sidebar có order:2 (đổi chỗ hiển thị so với thứ tự trong
+     DOM), và grid tự đặt item vào ô theo "order-modified document
+     order" — tức .mapWrap (order nhỏ hơn) luôn rơi vào Ô ĐẦU TIÊN,
+     .sidebar vào ô thứ hai, bất kể ai đứng trước trong HTML. Viết
+     "auto 1fr" (auto cho ô đầu = mapWrap) làm mapWrap bị auto-size về
+     ~0 (nó không có nội dung nào tự quyết định chiều cao), còn sidebar
+     rơi vào 1fr thì lại phình to chiếm hết do overflow:auto + không có
+     max-height nào chặn ở ô đó — kết quả: sidebar che gần hết màn hình,
+     bản đồ mất tăm (đúng lỗi đã gặp). Bản đồ giờ xuất hiện Ở TRÊN, tóm
+     tắt bộ lọc Ở DƯỚI khi đã thu gọn. */
+  .shell.filtersCollapsed .workspace { grid-template-rows: 1fr auto; }
   /* min-height: 0 BẮT BUỘC — item trong grid mặc định min-height: auto
      (co theo nội dung con), nên dù max-height giới hạn 40vh, hàng "auto"
      vẫn tự tính theo chiều cao thật của danh sách thửa bên trong và đẩy
