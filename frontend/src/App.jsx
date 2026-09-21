@@ -1023,16 +1023,16 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
 
           {/* Cùng điều kiện với nút "Bộ lọc" ở trên — landLegend (góc dưới
               trái) dễ bị panel thông tin thửa (bottom-sheet) che mất trên
-              điện thoại, nên khi đang tra cứu đưa thanh độ mờ thửa đất lên
-              đây, ngay cạnh nút bộ lọc. Dùng chung state parcelOpacity với
-              thanh trong landLegend (chỉ 1 cái hiện tại 1 thời điểm qua
-              CSS, id khác nhau để tránh trùng id). */}
+              điện thoại, nên khi đang tra cứu đưa thanh độ mờ thửa đất ra
+              đây, dạng dọc, ngay trên nút "Vị trí của tôi" (.locateButton).
+              Dùng chung state parcelOpacity với thanh trong landLegend
+              (chỉ 1 cái hiện tại 1 thời điểm qua CSS, id khác nhau để
+              tránh trùng id). */}
           {hasActiveQuery && !filtersOpen && (
             <div className="parcelOpacityFloating">
-              <label htmlFor="parcelOpacityMobile">
-                Độ mờ thửa đất
-                <span>{Math.round(parcelOpacity * 100)}%</span>
-              </label>
+              <span className="parcelOpacityValue">
+                {Math.round(parcelOpacity * 100)}%
+              </span>
               <input
                 id="parcelOpacityMobile"
                 type="range"
@@ -1042,6 +1042,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 onChange={(event) =>
                   setParcelOpacity(Number(event.target.value) / 100)
                 }
+                aria-label="Độ mờ thửa đất"
+                aria-orientation="vertical"
               />
             </div>
           )}
