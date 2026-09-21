@@ -624,7 +624,17 @@ label[for="mplisCookie"] {
   .headerMapButton span { display: none; }
   .toolsGrid { padding: 16px; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: 42% 58%; }
-  .sidebar { order: 2; padding: 14px; border-right: 0; border-top: 1px solid #cfddda; }
+  /* min-height: 0 BẮT BUỘC ở đây (không chỉ riêng .filtersCollapsed bên
+     dưới) — item trong grid mặc định min-height: auto, nên nếu nội dung
+     form bộ lọc (kể cả lúc đang MỞ, mới vào trang) cao hơn 42% màn hình
+     thật, hàng grid vẫn tự giãn theo và đẩy/che mất .mapWrap. */
+  .sidebar {
+    order: 2;
+    padding: 14px;
+    border-right: 0;
+    border-top: 1px solid #cfddda;
+    min-height: 0;
+  }
   .mapWrap { order: 1; }
   .sectionTitle { margin-top: 15px; }
   .mapHint { display: none; }
