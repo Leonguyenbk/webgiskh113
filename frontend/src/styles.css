@@ -614,6 +614,7 @@ label[for="mplisCookie"] {
 
 .uiToggleButton { display: none; }
 .filtersToggleButton { display: none; }
+.parcelOpacityFloating { display: none; }
 
 @media (max-width: 760px) {
   .topbar { height: 66px; flex-basis: 66px; padding: 0 13px; }
@@ -718,6 +719,38 @@ label[for="mplisCookie"] {
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
   }
 
+  .parcelOpacityFloating {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    position: absolute;
+    top: 66px;         /* ngay dưới hàng nút .uiToggleButton/.filtersToggleButton (20px + 38px + 8px) */
+    left: 10px;
+    z-index: 1200;
+    width: 180px;
+    padding: 8px 12px;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  }
+  .parcelOpacityFloating label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .parcelOpacityFloating span { color: #64748b; font-weight: 500; }
+  .parcelOpacityFloating input[type="range"] { width: 100%; accent-color: #0f766e; }
+
+  /* landLegend dễ bị parcelDrawer (bottom-sheet) che khi đang tra cứu —
+     thanh độ mờ thửa đất đã có bản riêng (.parcelOpacityFloating) ở
+     trên cạnh nút bộ lọc, nên ẩn luôn cả landLegend cho đỡ chồng lấp. */
+  .shell.filtersCollapsed .landLegend { display: none; }
+
   /* Ẩn header + sidebar để xem trọn bản đồ trên điện thoại. Không ẩn
      parcelDrawer: chọn thửa lúc đang ẩn UI vẫn phải thấy thông tin thửa
      đó, không cần hiện lại cả header + bộ lọc. Ẩn chú giải + zoom +
@@ -726,6 +759,7 @@ label[for="mplisCookie"] {
   .shell.uiHidden .topbar { display: none; }
   .shell.uiHidden .sidebar { display: none; }
   .shell.uiHidden .landLegend { display: none; }
+  .shell.uiHidden .parcelOpacityFloating { display: none; }
   .shell.uiHidden .leaflet-bottom { display: none; }
   .shell.uiHidden .workspace { grid-template-rows: 1fr; }
 
