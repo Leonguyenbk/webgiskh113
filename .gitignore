@@ -32,6 +32,7 @@ backend/service-std*.log
 frontend/service-std*.log
 tunnel-std*.log
 backend/refresh_gcn_stats.log
+backend/backup_webgis_db.log
 
 # Thư mục tạm dùng để cài PostgreSQL/PostGIS + bản dump di chuyển dữ liệu
 # từ Supabase — không đưa lên git (dump chứa dữ liệu thật, dung lượng lớn).
