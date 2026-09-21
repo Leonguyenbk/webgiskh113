@@ -1006,6 +1006,21 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             {uiHidden ? "☰" : "✕"}
           </button>
 
+          {/* Trên điện thoại, sau khi tra cứu ẩn hẳn sidebar (xem
+              @media max-width:760px trong styles.css) để bản đồ chiếm
+              trọn màn hình — nút nổi này là cách duy nhất mở lại bộ lọc
+              lúc đó. Desktop/tablet không cần vì sidebar vẫn luôn hiện. */}
+          {hasActiveQuery && !filtersOpen && (
+            <button
+              type="button"
+              className="filtersToggleButton"
+              onClick={() => setFiltersOpen(true)}
+              title="Mở lại bộ lọc"
+            >
+              🔎 Bộ lọc
+            </button>
+          )}
+
           <MapContainer
             center={[12.67, 108.05]}
             zoom={15}

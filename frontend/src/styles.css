@@ -613,6 +613,7 @@ label[for="mplisCookie"] {
 }
 
 .uiToggleButton { display: none; }
+.filtersToggleButton { display: none; }
 
 @media (max-width: 760px) {
   .topbar { height: 66px; flex-basis: 66px; padding: 0 13px; }
@@ -650,32 +651,18 @@ label[for="mplisCookie"] {
      khi màn hình nhỏ. */
   .resultsListSection { display: none; }
 
-  /* Tra cứu xong (bộ lọc thu gọn về dòng tóm tắt) -> nhường phần lớn màn
-     hình cho bản đồ thay vì giữ nguyên 42% cho sidebar dù nội dung đã
-     ngắn lại. Mở lại bộ lọc ("Đổi bộ lọc") thì trả về đúng tỉ lệ cũ.
-
-     THỨ TỰ "1fr auto" (không phải "auto 1fr") LÀ CỐ Ý — đã kiểm chứng
-     trực tiếp trên trang thật bằng getBoundingClientRect(): .mapWrap có
-     order:1, .sidebar có order:2 (đổi chỗ hiển thị so với thứ tự trong
-     DOM), và grid tự đặt item vào ô theo "order-modified document
-     order" — tức .mapWrap (order nhỏ hơn) luôn rơi vào Ô ĐẦU TIÊN,
-     .sidebar vào ô thứ hai, bất kể ai đứng trước trong HTML. Viết
-     "auto 1fr" (auto cho ô đầu = mapWrap) làm mapWrap bị auto-size về
-     ~0 (nó không có nội dung nào tự quyết định chiều cao), còn sidebar
-     rơi vào 1fr thì lại phình to chiếm hết do overflow:auto + không có
-     max-height nào chặn ở ô đó — kết quả: sidebar che gần hết màn hình,
-     bản đồ mất tăm (đúng lỗi đã gặp). Bản đồ giờ xuất hiện Ở TRÊN, tóm
-     tắt bộ lọc Ở DƯỚI khi đã thu gọn. */
-  .shell.filtersCollapsed .workspace { grid-template-rows: 1fr auto; }
-  /* min-height: 0 BẮT BUỘC — item trong grid mặc định min-height: auto
-     (co theo nội dung con), nên dù max-height giới hạn 40vh, hàng "auto"
-     vẫn tự tính theo chiều cao thật của danh sách thửa bên trong và đẩy
-     hàng bản đồ (1fr) về gần như 0. Đây là lỗi "grid blowout" kinh điển. */
-  .shell.filtersCollapsed .sidebar {
-    max-height: 40vh;
-    min-height: 0;
-    overflow-y: auto;
-  }
+  /* Tra cứu xong trên điện thoại -> ẩn hẳn sidebar, nhường trọn màn hình
+     cho bản đồ (giống hệt cách .shell.uiHidden đã làm ở dưới — cách này
+     đơn giản và chắc chắn hơn nhiều so với cố co chiều cao sidebar bằng
+     grid: từng thử grid-template-rows auto/1fr + max-height, dính đúng
+     lỗi "order-modified document order" của CSS Grid — .mapWrap có
+     order:1 nên luôn rơi vào Ô ĐẦU TIÊN bất kể giá trị track đó là gì,
+     làm 2 phần tranh nhau/đè lên nhau tùy trường hợp. display:none thì
+     phần tử biến mất khỏi grid hoàn toàn, không còn tranh ô nữa.
+     Mở lại bộ lọc qua nút nổi "🔎 Bộ lọc" trên bản đồ (.filtersToggleButton
+     trong App.jsx), vì nút "Đổi bộ lọc" trong sidebar cũng bị ẩn theo. */
+  .shell.filtersCollapsed .workspace { grid-template-rows: 1fr; }
+  .shell.filtersCollapsed .sidebar { display: none; }
   /* Leaflet tự cộng thêm margin-top 10px cho control bên trong
      .leaflet-top, nên trừ sẵn 10px ở đây để nút chọn lớp nền ngang
      hàng với nút ẩn/hiện (top: 20px). */
@@ -712,6 +699,25 @@ label[for="mplisCookie"] {
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
   }
 
+  .filtersToggleButton {
+    display: flex;
+    position: absolute;
+    top: 20px;
+    left: 56px;         /* ngay bên phải .uiToggleButton (10px + 38px + 8px) */
+    z-index: 1200;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  }
+
   /* Ẩn header + sidebar để xem trọn bản đồ trên điện thoại. Không ẩn
      parcelDrawer: chọn thửa lúc đang ẩn UI vẫn phải thấy thông tin thửa
      đó, không cần hiện lại cả header + bộ lọc. Ẩn chú giải + zoom +
@@ -729,6 +735,7 @@ label[for="mplisCookie"] {
      đúng khoảng topbar đã mất để 2 nút này giữ nguyên khoảng cách an
      toàn với mép trên, và vẫn ngang hàng nhau. */
   .shell.uiHidden .uiToggleButton { top: 54px; }
+  .shell.uiHidden .filtersToggleButton { top: 54px; }
   .shell.uiHidden .map .leaflet-top.leaflet-right { top: 44px; }
 }
 
