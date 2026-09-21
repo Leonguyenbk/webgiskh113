@@ -628,6 +628,13 @@ label[for="mplisCookie"] {
   .mapWrap { order: 1; }
   .sectionTitle { margin-top: 15px; }
   .mapHint { display: none; }
+  /* Không cần trên điện thoại: bộ lọc theo tờ + độ mờ bản đồ nền địa
+     chính (ảnh quét) chiếm nhiều chỗ mà việc chính trên mobile là xác
+     định vị trí thửa trên bản đồ vệ tinh, không phải đối chiếu bản đồ
+     giấy. Lớp bản đồ nền vẫn bật/tắt được qua nút chọn lớp nền (góc
+     phải bản đồ) nếu thật sự cần. */
+  .banDoNenFilterSection { display: none; }
+  .banDoNenOpacitySlider { display: none; }
   /* Leaflet tự cộng thêm margin-top 10px cho control bên trong
      .leaflet-top, nên trừ sẵn 10px ở đây để nút chọn lớp nền ngang
      hàng với nút ẩn/hiện (top: 20px). */

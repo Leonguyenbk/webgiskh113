@@ -416,6 +416,19 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     setSelected(null);
   }, []);
 
+  // Tra cứu (bộ lọc / quanh đây / quét viewport) ra ĐÚNG 1 thửa -> tự mở
+  // luôn panel thông tin thửa đó, đỡ phải bấm thêm lần nữa trên điện
+  // thoại. Nhiều thửa thì vẫn để người dùng tự bấm chọn như bình thường —
+  // chỉ set lúc data đổi (kết quả tra cứu mới), không đụng khi lọc/tìm
+  // kiếm phía client (query, onlySelected) chỉ thu hẹp "filtered".
+  useEffect(() => {
+    if (!data || data.features.length !== 1) return;
+    const feature = data.features[0];
+    setSelectedIds(new Set([feature.id]));
+    setSelected({ id: feature.id, feature, ...feature.properties });
+    setFocusTick((value) => value + 1);
+  }, [data]);
+
   const filtered = useMemo(() => {
     if (!data) return null;
 
@@ -781,69 +794,73 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 )}
               </div>
 
-              <div className="filterDivider">
-                <span>bản đồ nền</span>
+              {/* Không cần trên điện thoại — ưu tiên bản đồ lớn để xác định
+                  vị trí thửa, xem @media (max-width: 760px) trong styles.css. */}
+              <div className="banDoNenFilterSection">
+                <div className="filterDivider">
+                  <span>bản đồ nền</span>
+                </div>
+
+                {!maXa ? (
+                  <div className="nearMeHint">
+                    Chọn xã / phường ở trên để xem bản đồ nền của xã đó.
+                  </div>
+                ) : banDoNenXaSheets.length === 0 ? (
+                  <div className="nearMeHint">Xã này chưa có bản đồ nền.</div>
+                ) : (
+                  <>
+                    <label htmlFor="banDoNenTo">Tờ bản đồ nền</label>
+                    <select
+                      id="banDoNenTo"
+                      className="filterInput"
+                      value={banDoNenSheetChoice}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setBanDoNenSheetChoice(value);
+                        applyBanDoNenFilter(value);
+                      }}
+                    >
+                      <option value="">
+                        — Tất cả tờ ({banDoNenXaSheets.length}) —
+                      </option>
+                      {banDoNenXaSheets.map((feature) => {
+                        const p = feature.properties;
+                        const displayName = String(p.ghi_chu || "").trim();
+                        return (
+                          <option key={p.id} value={p.so_to}>
+                            {displayName || `Tờ ${p.so_to}`}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    {banDoNenFilterMaXa && (
+                      <div className="filterActions">
+                        <button
+                          type="button"
+                          className="resetButton"
+                          onClick={handleClearBanDoNenFilter}
+                          title="Bỏ lọc, cho lớp bản đồ nền tự tải theo khung nhìn"
+                        >
+                          Bỏ lọc bản đồ nền
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {banDoNenSearchError && (
+                  <div className="notice error">{banDoNenSearchError}</div>
+                )}
+
+                {banDoNenFilterMaXa && !banDoNenLayerOn && (
+                  <div className="notice">
+                    Đã chọn bản đồ nền của xã{" "}
+                    {xaNameByCode[banDoNenFilterMaXa] || banDoNenFilterMaXa}. Bật lớp
+                    “Bản đồ địa chính” (góc phải bản đồ) để xem.
+                  </div>
+                )}
               </div>
-
-              {!maXa ? (
-                <div className="nearMeHint">
-                  Chọn xã / phường ở trên để xem bản đồ nền của xã đó.
-                </div>
-              ) : banDoNenXaSheets.length === 0 ? (
-                <div className="nearMeHint">Xã này chưa có bản đồ nền.</div>
-              ) : (
-                <>
-                  <label htmlFor="banDoNenTo">Tờ bản đồ nền</label>
-                  <select
-                    id="banDoNenTo"
-                    className="filterInput"
-                    value={banDoNenSheetChoice}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setBanDoNenSheetChoice(value);
-                      applyBanDoNenFilter(value);
-                    }}
-                  >
-                    <option value="">
-                      — Tất cả tờ ({banDoNenXaSheets.length}) —
-                    </option>
-                    {banDoNenXaSheets.map((feature) => {
-                      const p = feature.properties;
-                      const displayName = String(p.ghi_chu || "").trim();
-                      return (
-                        <option key={p.id} value={p.so_to}>
-                          {displayName || `Tờ ${p.so_to}`}
-                        </option>
-                      );
-                    })}
-                  </select>
-
-                  {banDoNenFilterMaXa && (
-                    <div className="filterActions">
-                      <button
-                        type="button"
-                        className="resetButton"
-                        onClick={handleClearBanDoNenFilter}
-                        title="Bỏ lọc, cho lớp bản đồ nền tự tải theo khung nhìn"
-                      >
-                        Bỏ lọc bản đồ nền
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {banDoNenSearchError && (
-                <div className="notice error">{banDoNenSearchError}</div>
-              )}
-
-              {banDoNenFilterMaXa && !banDoNenLayerOn && (
-                <div className="notice">
-                  Đã chọn bản đồ nền của xã{" "}
-                  {xaNameByCode[banDoNenFilterMaXa] || banDoNenFilterMaXa}. Bật lớp
-                  “Bản đồ địa chính” (góc phải bản đồ) để xem.
-                </div>
-              )}
             </>
           )}
 
@@ -1152,7 +1169,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               />
             </div>
 
-            <div className="opacitySlider">
+            <div className="opacitySlider banDoNenOpacitySlider">
               <label htmlFor="banDoNenOpacity">
                 Độ mờ bản đồ nền
                 <span>{Math.round(banDoNenOpacity * 100)}%</span>
