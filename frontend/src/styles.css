@@ -184,20 +184,25 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
 
-  padding: 8px 12px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background-color: #000;
   color: #fff;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 16px;
   cursor: pointer;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
   transition: background-color 0.16s ease-out;
 }
+
+/* Chỉ giữ biểu tượng — chữ "Vị trí của tôi" vẫn nằm trong DOM (title
+   attribute làm tooltip khi hover/focus) nhưng ẩn hẳn phần <span>. */
+.locateButton span { display: none; }
 
 .locateButton:hover {
   background-color: #3c4043;
@@ -323,6 +328,11 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15) !important;
 }
 .leaflet-bar a {
+  /* Bằng đúng kích thước .locateButton (40x40) cho thẳng hàng, đẹp mắt —
+     mặc định Leaflet chỉ 26x26. */
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 40px !important;
   background-color: #000 !important;
   color: #fff !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
@@ -697,14 +707,7 @@ label[for="mplisCookie"] {
 
   .locateButton {
     bottom: 130px;         /* cao hơn để tránh thanh công cụ trình duyệt di động */
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    gap: 0;
-    justify-content: center;
-    font-size: 16px;
   }
-  .locateButton span { display: none; }
   .locationError { bottom: 178px; }
   .landLegend { left: 8px; bottom: 8px; min-width: 0; max-width: 175px; max-height: 120px; }
 
