@@ -78,6 +78,14 @@ class FakePdf:
         return b"%PDF-1.4 fake body"
 
 
+def files_for(payload, chinh=None, phu=None, tbxn=None):
+    """submit_ho_so nay nhận 1 bộ file/thửa (files_by_parcel) thay vì 1 bộ
+    dùng chung cho cả lô — helper này tạo bộ CÙNG file cho mỗi thửa trong
+    payload["thua_list"] (test build_payload() luôn tạo đúng 1 thửa)."""
+    n = len(payload.get("thua_list") or [])
+    return [{"chinh": chinh or FakePdf(), "phu": phu, "tbxn": tbxn} for _ in range(n)]
+
+
 def build_payload(so_to="10", so_thua="200", owners=None, loai_dat="ONT", thoi_han="Lâu dài"):
     if owners is None:
         owners = [
@@ -166,14 +174,16 @@ class Nhom4FlowTest(unittest.TestCase):
 
     # 1) Thửa chưa có trong du_lieu_gcn -> nộp thành công.
     def test_1_submit_new_parcel_ok(self):
-        data, err = nhom4_service.submit_ho_so(build_payload(), FakePdf(), None)
+        payload = build_payload()
+        data, err = nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertIsNone(err, err)
         self.assertTrue(data["ok"])
         self.assertEqual(data["so_dong"], 1)
 
     # 2) Sau khi nộp -> dữ liệu xuất hiện trong du_lieu_gcn với ma_nguon đúng.
     def test_2_row_persisted_with_ma_nguon(self):
-        nhom4_service.submit_ho_so(build_payload(), FakePdf(), None)
+        payload = build_payload()
+        nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertEqual(len(self.store.rows), 1)
         self.assertEqual(self.store.rows[0]["ma_nguon"], "NHOM4_FORM")
         self.assertEqual(self.store.rows[0]["madvhc"], "26317")
@@ -181,7 +191,8 @@ class Nhom4FlowTest(unittest.TestCase):
     # 3) Thửa vừa nộp -> WebGIS nhận diện đã có dữ liệu / màu xanh.
     def test_3_has_gcn_true_after_submit(self):
         self.assertFalse(self.store.has_gcn("26317", 10, 200))
-        nhom4_service.submit_ho_so(build_payload(), FakePdf(), None)
+        payload = build_payload()
+        nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertTrue(self.store.has_gcn("26317", 10, 200))
         # check_trung_thua (endpoint kiểm tra realtime) cũng thấy trùng.
         res, err = nhom4_service.check_trung_thua("26317", "10", "200")
@@ -190,8 +201,10 @@ class Nhom4FlowTest(unittest.TestCase):
 
     # 4) Nộp lại cùng mã xã + tờ + thửa -> bị từ chối 409, thông báo rõ.
     def test_4_resubmit_rejected(self):
-        nhom4_service.submit_ho_so(build_payload(), FakePdf(), None)
-        data, err = nhom4_service.submit_ho_so(build_payload(), FakePdf(), None)
+        payload = build_payload()
+        nhom4_service.submit_ho_so(payload, files_for(payload))
+        payload2 = build_payload()
+        data, err = nhom4_service.submit_ho_so(payload2, files_for(payload2))
         self.assertIsNone(data)
         body, status = err
         self.assertEqual(status, 409)
@@ -206,9 +219,8 @@ class Nhom4FlowTest(unittest.TestCase):
         res, err = nhom4_service.check_trung_thua("26317", "999", "888")
         self.assertIsNone(err)
         self.assertFalse(res["trung"])
-        data, err = nhom4_service.submit_ho_so(
-            build_payload(so_to="999", so_thua="888"), FakePdf(), None
-        )
+        payload = build_payload(so_to="999", so_thua="888")
+        data, err = nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertIsNone(err, err)
         self.assertTrue(data["ok"])
 
@@ -226,9 +238,8 @@ class Nhom4FlowTest(unittest.TestCase):
             }
             for i in range(2)
         ]
-        data, err = nhom4_service.submit_ho_so(
-            build_payload(owners=owners), FakePdf(), None
-        )
+        payload = build_payload(owners=owners)
+        data, err = nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertIsNone(err, err)
         self.assertEqual(data["so_dong"], 2)
         self.assertEqual(len(self.store.rows), 2)
@@ -236,7 +247,8 @@ class Nhom4FlowTest(unittest.TestCase):
         self.assertEqual(keys, {"26317_10_200"})  # cùng 1 thửa, 2 chủ
 
         # Thửa đó giờ đã "có dữ liệu" -> lần nộp sau bị chặn.
-        _, err2 = nhom4_service.submit_ho_so(build_payload(owners=owners), FakePdf(), None)
+        payload2 = build_payload(owners=owners)
+        _, err2 = nhom4_service.submit_ho_so(payload2, files_for(payload2))
         self.assertIsNotNone(err2)
         self.assertEqual(err2[1], 409)
 
@@ -380,8 +392,9 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
     # _upload_files(ma_xa, ten_xa, base_name, chinh_suffix, chinh_bytes,
     #               phu_bytes, tbxn_bytes)
     def test_submit_with_tbxn_ok_and_bytes_forwarded(self):
+        payload = build_payload()
         data, err = nhom4_service.submit_ho_so(
-            build_payload(), FakePdf("chinh.pdf"), None, FakePdf("tbxn.pdf")
+            payload, files_for(payload, chinh=FakePdf("chinh.pdf"), tbxn=FakePdf("tbxn.pdf"))
         )
         self.assertIsNone(err, err)
         self.assertTrue(data["ok"])
@@ -392,14 +405,15 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
         payload["che_do"] = "Đã có GCN"
         payload["gcn"] = {"so_phat_hanh": "1234567890", "ngay_cap": "01/01/2020", "so_vao_so": "1"}
         data, err = nhom4_service.submit_ho_so(
-            payload, FakePdf("gcn.pdf"), None, FakePdf("tbxn.pdf")
+            payload, files_for(payload, chinh=FakePdf("gcn.pdf"), tbxn=FakePdf("tbxn.pdf"))
         )
         self.assertIsNone(err, err)
         self.assertIsNone(self.up_calls[0][6])  # tbxn_bytes = None
 
     def test_drive_loi_thi_khong_ghi_thua(self):
         nhom4_service._upload_files = lambda *a: (None, ("boom", 502))
-        data, err = nhom4_service.submit_ho_so(build_payload(), FakePdf(), None)
+        payload = build_payload()
+        data, err = nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertIsNone(data)
         self.assertEqual(err[1], 502)
         self.assertEqual(len(self.store.rows), 0)  # upload lỗi -> không insert
@@ -407,7 +421,8 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
     # base_name (tham số thứ 3) + chinh_suffix (thứ 4) đặt tên file quét
     # trên Drive — phải khớp bieumau/Validate.js.
     def test_base_name_chua_co_giay_has_chuacogiay_prefix(self):
-        nhom4_service.submit_ho_so(build_payload(so_to="10", so_thua="200"), FakePdf(), None)
+        payload = build_payload(so_to="10", so_thua="200")
+        nhom4_service.submit_ho_so(payload, files_for(payload))
         _ma_xa, _ten_xa, base_name, chinh_suffix = self.up_calls[0][:4]
         self.assertEqual(base_name, "CHUACOGIAY_26317_10_200")
         self.assertEqual(chinh_suffix, "DDK")
@@ -416,10 +431,91 @@ class Nhom4SubmitTbxnTest(unittest.TestCase):
         payload = build_payload()
         payload["che_do"] = "Đã có GCN"
         payload["gcn"] = {"so_phat_hanh": "1234567890", "ngay_cap": "01/01/2020", "so_vao_so": "1"}
-        nhom4_service.submit_ho_so(payload, FakePdf("gcn.pdf"), None)
+        nhom4_service.submit_ho_so(payload, files_for(payload, chinh=FakePdf("gcn.pdf")))
         _ma_xa, _ten_xa, base_name, chinh_suffix = self.up_calls[0][:4]
         self.assertEqual(base_name, "1234567890")
         self.assertEqual(chinh_suffix, "GCN")
+
+    # Gửi nhiều thửa 1 lúc — mỗi thửa có 1 bộ hồ sơ quét RIÊNG, không dùng
+    # chung 1 bộ như trước. Kiểm tra: _upload_files được gọi 1 lần/thửa với
+    # đúng nội dung file của thửa đó, và mỗi dòng ghi vào du_lieu_gcn tham
+    # chiếu đúng file quét của thửa đó (không lẫn giữa các thửa).
+    def test_multi_parcel_each_has_own_scan_files(self):
+        nhom4_repository.existing_thua_dat_keys = lambda ma_xa, keys: (
+            {(10, 200), (11, 201)},
+            None,
+        )
+        payload = build_payload()
+        payload["thua_list"] = [
+            {
+                "thua": {
+                    "so_to": "10",
+                    "so_thua": "200",
+                    "dien_tich_thua_dat": "100",
+                    "dia_chi_thua_dat": "Thon 1",
+                },
+                "dat1": {
+                    "loai_dat": "ONT",
+                    "dien_tich": "100",
+                    "nguon_goc_su_dung": "Nhà nước giao có thu tiền",
+                    "hinh_thuc_su_dung": "Sử dụng riêng",
+                    "thoi_han_su_dung": "Lâu dài",
+                },
+                "dat2": None,
+            },
+            {
+                "thua": {
+                    "so_to": "11",
+                    "so_thua": "201",
+                    "dien_tich_thua_dat": "150",
+                    "dia_chi_thua_dat": "Thon 2",
+                },
+                "dat1": {
+                    "loai_dat": "ONT",
+                    "dien_tich": "150",
+                    "nguon_goc_su_dung": "Nhà nước giao có thu tiền",
+                    "hinh_thuc_su_dung": "Sử dụng riêng",
+                    "thoi_han_su_dung": "Lâu dài",
+                },
+                "dat2": None,
+            },
+        ]
+        files = [
+            {"chinh": FakePdf("thua1-chinh.pdf"), "phu": None, "tbxn": None},
+            {"chinh": FakePdf("thua2-chinh.pdf"), "phu": FakePdf("thua2-gt.pdf"), "tbxn": None},
+        ]
+
+        # up_calls trả về theo tên file đã "upload" để phân biệt 2 thửa
+        # (mặc định trong setUp() trả cứng "chinh.pdf" cho mọi lần gọi).
+        def fake_upload(*a):
+            base_name = a[2]
+            self.up_calls.append(a)
+            return {"chinh_id": f"id-{base_name}", "chinh_name": f"{base_name}.pdf"}, None
+
+        nhom4_service._upload_files = fake_upload
+
+        data, err = nhom4_service.submit_ho_so(payload, files)
+        self.assertIsNone(err, err)
+        self.assertTrue(data["ok"])
+
+        # 2 lần gọi _upload_files — 1 lần/thửa — với base_name khác nhau.
+        self.assertEqual(len(self.up_calls), 2)
+        base_names = [c[2] for c in self.up_calls]
+        self.assertEqual(base_names, ["CHUACOGIAY_26317_10_200", "CHUACOGIAY_26317_11_201"])
+
+        # Mỗi dòng ghi vào du_lieu_gcn tham chiếu đúng file quét của CHÍNH
+        # thửa đó — không bị lẫn/dùng chung file của thửa còn lại.
+        rows_by_thua = {r["sothua"]: r for r in self.store.rows}
+        self.assertEqual(
+            rows_by_thua["200"]["file_chinh_ten_file"], "CHUACOGIAY_26317_10_200.pdf"
+        )
+        self.assertEqual(
+            rows_by_thua["201"]["file_chinh_ten_file"], "CHUACOGIAY_26317_11_201.pdf"
+        )
+        self.assertNotEqual(
+            rows_by_thua["200"]["file_chinh_ten_file"],
+            rows_by_thua["201"]["file_chinh_ten_file"],
+        )
 
 
 class ThoiHanSoNamTest(unittest.TestCase):
@@ -472,14 +568,14 @@ class ThoiHanSoNamTest(unittest.TestCase):
 
     def test_submit_with_year_count_stored_as_nam(self):
         payload = build_payload(loai_dat="NTS", thoi_han="50")
-        data, err = nhom4_service.submit_ho_so(payload, FakePdf(), None)
+        data, err = nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertIsNone(err, err)
         self.assertEqual(self.store.rows[0]["loaidat1"], "NTS")
         self.assertEqual(self.store.rows[0]["thoihansudung1"], "50 năm")
 
     def test_submit_rejects_ddmmyyyy_thoi_han(self):
         payload = build_payload(loai_dat="CLN", thoi_han="31/12/2050")
-        data, err = nhom4_service.submit_ho_so(payload, FakePdf(), None)
+        data, err = nhom4_service.submit_ho_so(payload, files_for(payload))
         self.assertIsNone(data)
         self.assertEqual(err[1], 400)
         self.assertIn("số năm", err[0].get_json()["error"])

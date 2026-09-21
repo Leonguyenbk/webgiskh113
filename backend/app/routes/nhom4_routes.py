@@ -52,11 +52,20 @@ def submit_ho_so():
     except ValueError:
         return jsonify({"error": "Dữ liệu payload không phải JSON hợp lệ"}), 400
 
-    file_chinh = request.files.get("file_chinh")
-    file_phu = request.files.get("file_phu")
-    file_tbxn = request.files.get("file_tbxn")
+    # Mỗi thửa trong payload["thua_list"] có 1 bộ hồ sơ quét riêng — frontend
+    # gửi field name đánh số theo thứ tự: file_chinh_0/file_phu_0/file_tbxn_0
+    # cho thửa đầu, file_chinh_1/... cho thửa kế tiếp, v.v.
+    so_thua = len(payload.get("thua_list") or [])
+    files_by_parcel = [
+        {
+            "chinh": request.files.get(f"file_chinh_{i}"),
+            "phu": request.files.get(f"file_phu_{i}"),
+            "tbxn": request.files.get(f"file_tbxn_{i}"),
+        }
+        for i in range(so_thua)
+    ]
 
-    data, error_response = nhom4_service.submit_ho_so(payload, file_chinh, file_phu, file_tbxn)
+    data, error_response = nhom4_service.submit_ho_so(payload, files_by_parcel)
     if error_response:
         return error_response
     return jsonify(data)

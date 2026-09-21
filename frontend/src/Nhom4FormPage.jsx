@@ -223,6 +223,10 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     }));
   };
 
+  // Mỗi thửa có hồ sơ quét (file_chinh/file_phu/file_tbxn) RIÊNG — dù
+  // thông tin chủ sử dụng giống nhau giữa các thửa trong cùng 1 lần nộp,
+  // ảnh/PDF quét thì khác nhau. "+ Thêm thửa đất" gói luôn file đang chọn
+  // ở ô Hồ sơ quét vào thửa đó, rồi xóa ô file để chọn cho thửa kế tiếp.
   const themThuaVaoDanhSach = () => {
     if (!thua.soTo || !thua.soThua || !thua.dienTichThuaDat || !dat1.loaiDat) {
       setError("Vui lòng nhập đủ số tờ, số thửa, diện tích và loại đất 1 trước khi thêm thửa.");
@@ -240,13 +244,25 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setError("Thửa này đã có dữ liệu GCN — không thêm được vào danh sách.");
       return;
     }
+    if (!fileChinh) {
+      setError(
+        `Vui lòng chọn file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"} cho thửa này trước khi thêm.`,
+      );
+      return;
+    }
     setError("");
-    setThuaList((prev) => [...prev, { thua, dat1, dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null }]);
+    setThuaList((prev) => [
+      ...prev,
+      { thua, dat1, dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null, fileChinh, filePhu, fileTbxn },
+    ]);
     setThua(taoThuaRong());
     setDat1(taoDatRong());
     setDat2(taoDatRong());
     setCoDat2(false);
     setTrungThuaStatus("");
+    setFileChinh(null);
+    setFilePhu(null);
+    setFileTbxn(null);
   };
 
   const xoaThua = (index) => setThuaList((prev) => prev.filter((_, i) => i !== index));
@@ -254,7 +270,10 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
   // Đưa 1 thửa trong danh sách trở lại các ô đang nhập để sửa (VD: thửa
   // thêm hàng loạt từ bản đồ còn thiếu loại đất) — bấm "+ Thêm thửa đất"
-  // lại sau khi sửa xong để đưa trở lại danh sách.
+  // lại sau khi sửa xong để đưa trở lại danh sách. File đã chọn khôi phục
+  // lại đúng biến state (submit vẫn dùng được), nhưng bản thân ô
+  // <input type="file"> không hiện lại được tên file cũ (giới hạn trình
+  // duyệt) — chỉ dòng chữ "Đã chọn: ..." bên dưới ô mới hiện đúng.
   const suaThua = (index) => {
     const item = thuaList[index];
     if (!item) return;
@@ -262,6 +281,9 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     setDat1(item.dat1);
     setCoDat2(Boolean(item.dat2));
     setDat2(item.dat2 || taoDatRong());
+    setFileChinh(item.fileChinh || null);
+    setFilePhu(item.filePhu || null);
+    setFileTbxn(item.fileTbxn || null);
     setThuaList((prev) => prev.filter((_, i) => i !== index));
     setTrungThuaStatus("");
     setError("");
@@ -281,7 +303,16 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       thuaList.length > 0
         ? thuaList
         : thua.soTo && thua.soThua
-          ? [{ thua, dat1, dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null }]
+          ? [
+              {
+                thua,
+                dat1,
+                dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null,
+                fileChinh,
+                filePhu,
+                fileTbxn,
+              },
+            ]
           : [];
 
     if (!maXa) return setError("Vui lòng chọn xã/phường.");
@@ -294,9 +325,14 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
           " — bấm Sửa để chọn loại đất trước khi nộp.",
       );
     }
-    if (!fileChinh) {
+    // Mỗi thửa có hồ sơ quét riêng (xem themThuaVaoDanhSach) — thửa nào
+    // cũng phải có file chính, không còn dùng chung 1 file cho cả lô.
+    const thieuFile = parcels.filter((p) => !p.fileChinh);
+    if (thieuFile.length) {
       return setError(
-        `Vui lòng chọn file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"}.`,
+        `Thiếu file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"} cho ${thieuFile.length} thửa: ` +
+          thieuFile.map((p) => `${p.thua.soTo}/${p.thua.soThua}`).join(", ") +
+          " — bấm Sửa để chọn file trước khi nộp.",
       );
     }
     if (nguoiHienTai.hoTen && !nguoiHienTai.cccd) {
@@ -378,7 +414,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     submittingRef.current = true;
     setStatus("submitting");
     try {
-      const body = await submitHoSo(payload, fileChinh, filePhu, fileTbxn);
+      const filesByParcel = parcels.map((p) => ({
+        chinh: p.fileChinh,
+        phu: p.filePhu,
+        tbxn: p.fileTbxn,
+      }));
+      const body = await submitHoSo(payload, filesByParcel);
       setResult(body);
       setStatus("done");
       setThuaList([]);
@@ -856,6 +897,31 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
             onChange={(e) => setThua({ ...thua, ghiChu: e.target.value })}
           />
 
+          {/* Hồ sơ quét của THỬA ĐANG NHẬP ở trên — mỗi thửa 1 bộ riêng, dù
+              thông tin chủ sử dụng giống nhau giữa các thửa. Bấm "+ Thêm
+              thửa đất" bên dưới sẽ gói file đang chọn ở đây vào thửa đó,
+              rồi xóa ô để chọn file cho thửa kế tiếp (xem
+              themThuaVaoDanhSach). Nộp trực tiếp không qua danh sách (chỉ
+              1 thửa) thì dùng thẳng file đang chọn ở đây. */}
+          <h2 className="nhom4SectionTitle">Hồ sơ quét (của thửa đang nhập ở trên)</h2>
+          <label>{cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"}</label>
+          <input type="file" accept="application/pdf" onChange={(e) => setFileChinh(e.target.files?.[0] || null)} />
+          {fileChinh && <p className="importHint">Đã chọn: {fileChinh.name}</p>}
+          <label>File PDF Giấy tờ (tùy chọn)</label>
+          <input type="file" accept="application/pdf" onChange={(e) => setFilePhu(e.target.files?.[0] || null)} />
+          {filePhu && <p className="importHint">Đã chọn: {filePhu.name}</p>}
+          {cheDo !== "Đã có GCN" && (
+            <>
+              <label>File PDF Thông báo xác nhận (tùy chọn)</label>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setFileTbxn(e.target.files?.[0] || null)}
+              />
+              {fileTbxn && <p className="importHint">Đã chọn: {fileTbxn.name}</p>}
+            </>
+          )}
+
           <div className="nhom4Subcard">
             <div className="nhom4OwnerHead">
               <strong>Danh sách thửa đất nhập kèm ({thuaList.length})</strong>
@@ -871,7 +937,10 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               </div>
             </div>
             {thuaList.length === 0 ? (
-              <p className="importHint">Chưa có thửa nào trong danh sách. Nếu chỉ nhập 1 thửa, có thể lưu trực tiếp.</p>
+              <p className="importHint">
+                Chưa có thửa nào trong danh sách. Nếu chỉ nhập 1 thửa, có thể lưu trực tiếp bằng file đang chọn ở
+                mục "Hồ sơ quét" phía trên.
+              </p>
             ) : (
               <ul className="nhom4ParcelList">
                 {thuaList.map((p, index) => (
@@ -879,6 +948,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
                     <span>
                       Tờ {p.thua.soTo} / Thửa {p.thua.soThua} — {p.thua.dienTichThuaDat} m²
                       {p.dat1.loaiDat ? ` — ${p.dat1.loaiDat}` : " — ⚠ chưa chọn loại đất"}
+                      {p.fileChinh ? ` — 📎 ${p.fileChinh.name}` : " — ⚠ chưa có file quét"}
                     </span>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button type="button" className="nhom4MiniBtn" onClick={() => suaThua(index)}>
@@ -893,22 +963,6 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               </ul>
             )}
           </div>
-
-          <h2 className="nhom4SectionTitle">Hồ sơ quét</h2>
-          <label>{cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"}</label>
-          <input type="file" accept="application/pdf" onChange={(e) => setFileChinh(e.target.files?.[0] || null)} />
-          <label>File PDF Giấy tờ (tùy chọn)</label>
-          <input type="file" accept="application/pdf" onChange={(e) => setFilePhu(e.target.files?.[0] || null)} />
-          {cheDo !== "Đã có GCN" && (
-            <>
-              <label>File PDF Thông báo xác nhận (tùy chọn)</label>
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => setFileTbxn(e.target.files?.[0] || null)}
-              />
-            </>
-          )}
 
           <button type="submit" className="importButton" disabled={status === "submitting"}>
             {status === "submitting" ? "Đang lưu…" : "Lưu hồ sơ"}

@@ -16,12 +16,19 @@ export function getDiaChiThuaDat({ maXa, soTo, soThua }, { signal } = {}) {
   });
 }
 
-export function submitHoSo(payload, fileChinh, filePhu, fileTbxn) {
+// filesByParcel: 1 phần tử cho MỖI thửa trong payload.thua_list, CÙNG THỨ
+// TỰ — mỗi thửa có hồ sơ quét riêng (xem Nhom4FormPage.jsx), không còn
+// dùng chung 1 bộ file cho cả lô. Field name đánh số khớp backend
+// (app/routes/nhom4_routes.py): file_chinh_0, file_phu_0, file_tbxn_0 cho
+// thửa đầu, file_chinh_1/... cho thửa kế tiếp, v.v.
+export function submitHoSo(payload, filesByParcel) {
   const formData = new FormData();
   formData.append("payload", JSON.stringify(payload));
-  formData.append("file_chinh", fileChinh);
-  if (filePhu) formData.append("file_phu", filePhu);
-  if (fileTbxn) formData.append("file_tbxn", fileTbxn);
+  filesByParcel.forEach(({ chinh, phu, tbxn }, index) => {
+    formData.append(`file_chinh_${index}`, chinh);
+    if (phu) formData.append(`file_phu_${index}`, phu);
+    if (tbxn) formData.append(`file_tbxn_${index}`, tbxn);
+  });
 
   return request("/api/nhom4/ho-so", {
     method: "POST",
