@@ -179,7 +179,14 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
 .locateButton {
   position: absolute;
   right: 10px;
-  bottom: 92px;          /* chừa chỗ cho ZoomControl bên dưới */
+  /* Chừa chỗ cho ZoomControl + dòng attribution ("Leaflet | © Google")
+     bên dưới nó — cả 2 cùng xếp ở góc dưới-phải bản đồ. Đã đo trực tiếp
+     bằng getBoundingClientRect() trên site thật: attribution ~17px +
+     margin 10px + 2 nút zoom 40px/nút (đã scale bằng .locateButton) +
+     margin 10px = mép trên ZoomControl cách đáy ~107px. Để 120px cho
+     chắc chắn không đè nhau (từng để 92px lúc nút zoom còn 26px mặc
+     định — tăng theo khi scale nút zoom lên). */
+  bottom: 120px;
   z-index: 1000;         /* phải ≥ 1000 để nằm trên các lớp bản đồ */
 
   display: flex;
