@@ -635,6 +635,10 @@ label[for="mplisCookie"] {
      phải bản đồ) nếu thật sự cần. */
   .banDoNenFilterSection { display: none; }
   .banDoNenOpacitySlider { display: none; }
+  /* Chọn thửa bằng cách bấm thẳng trên bản đồ trên điện thoại — danh sách
+     dạng chữ (ô lọc nhanh + Danh sách thửa) chiếm chỗ mà không cần thiết
+     khi màn hình nhỏ. */
+  .resultsListSection { display: none; }
 
   /* Tra cứu xong (bộ lọc thu gọn về dòng tóm tắt) -> nhường phần lớn màn
      hình cho bản đồ thay vì giữ nguyên 42% cho sidebar dù nội dung đã

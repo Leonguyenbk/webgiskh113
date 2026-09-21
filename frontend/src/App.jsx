@@ -110,6 +110,15 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [submittedFilters, setSubmittedFilters] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
 
+  // Đóng/mở bộ lọc cũng đổi chiều cao vùng bản đồ trên điện thoại
+  // (.shell.filtersCollapsed, xem styles.css) — cùng lý do phải tự gọi
+  // invalidateSize() như trên, nếu không nửa bản đồ mới lộ ra sẽ trống.
+  useEffect(() => {
+    if (!mapInstance) return;
+    const frame = window.requestAnimationFrame(() => mapInstance.invalidateSize());
+    return () => window.cancelAnimationFrame(frame);
+  }, [filtersOpen, mapInstance]);
+
   // Ranh giới thôn: CHỈ tải khi thật sự cần — lúc chọn 1 xã ở bộ lọc (cần
   // cho dropdown "Thôn" bên dưới) hoặc lúc bật lớp "Ranh giới thôn" trên
   // bản đồ (RanhThonOverlayLoader báo qua onNeed) — KHÔNG còn tải ngay lúc
@@ -918,8 +927,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             </div>
           )}
 
+          {/* Trên điện thoại ẩn hẳn (xem @media max-width:760px trong
+              styles.css) — chọn thửa bằng cách bấm thẳng trên bản đồ, danh
+              sách text chiếm chỗ mà không cần thiết khi màn hình nhỏ. */}
           {data && (
-            <>
+            <div className="resultsListSection">
               <label htmlFor="search">Lọc nhanh trong kết quả</label>
 
               <div className="searchBox">
@@ -980,7 +992,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   })
                 )}
               </div>
-            </>
+            </div>
           )}
         </aside>
 
