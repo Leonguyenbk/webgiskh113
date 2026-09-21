@@ -640,7 +640,15 @@ label[for="mplisCookie"] {
      hình cho bản đồ thay vì giữ nguyên 42% cho sidebar dù nội dung đã
      ngắn lại. Mở lại bộ lọc ("Đổi bộ lọc") thì trả về đúng tỉ lệ cũ. */
   .shell.filtersCollapsed .workspace { grid-template-rows: auto 1fr; }
-  .shell.filtersCollapsed .sidebar { max-height: 40vh; overflow-y: auto; }
+  /* min-height: 0 BẮT BUỘC — item trong grid mặc định min-height: auto
+     (co theo nội dung con), nên dù max-height giới hạn 40vh, hàng "auto"
+     vẫn tự tính theo chiều cao thật của danh sách thửa bên trong và đẩy
+     hàng bản đồ (1fr) về gần như 0. Đây là lỗi "grid blowout" kinh điển. */
+  .shell.filtersCollapsed .sidebar {
+    max-height: 40vh;
+    min-height: 0;
+    overflow-y: auto;
+  }
   /* Leaflet tự cộng thêm margin-top 10px cho control bên trong
      .leaflet-top, nên trừ sẵn 10px ở đây để nút chọn lớp nền ngang
      hàng với nút ẩn/hiện (top: 20px). */
