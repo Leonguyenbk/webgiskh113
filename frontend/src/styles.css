@@ -173,6 +173,9 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   border-radius: 14px; padding: 4px 12px; font-size: 12px; cursor: pointer;
 }
 .selectionBar button:hover { background: #ffffff33; }
+/* Style kiểu nút "Vị trí của tôi"/zoom của Google Maps (nền đen, chữ
+   trắng, bóng đổ 2 lớp đặc trưng) — copy từ CSS thật của Google Maps,
+   áp dụng cho cả .locateButton và .leaflet-bar (nút zoom) bên dưới. */
 .locateButton {
   position: absolute;
   right: 10px;
@@ -184,18 +187,20 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   gap: 6px;
 
   padding: 8px 12px;
-  border: 1px solid rgba(15, 23, 42, 0.15);
+  border: 0;
   border-radius: 8px;
-  background: #ffffff;
-  color: #0f172a;
+  background-color: #000;
+  color: #fff;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  transition: background-color 0.16s ease-out;
 }
 
 .locateButton:hover {
-  background: #f1f5f9;
+  background-color: #3c4043;
 }
 
 .locateButton:disabled {
@@ -307,9 +312,30 @@ dd { margin: 0; line-height: 1.45; font-size: 12px; font-weight: 600; overflow-w
   accent-color: #0f766e;
 }
 
-.leaflet-control-layers, .leaflet-bar { border: 0 !important; box-shadow: 0 5px 18px #153d3730 !important; }
-.leaflet-control-layers { border-radius: 10px !important; font-family: inherit; font-size: 12px; }
-.leaflet-bar a { color: #0f5f59 !important; }
+.leaflet-control-layers { border: 0 !important; box-shadow: 0 5px 18px #153d3730 !important; border-radius: 10px !important; font-family: inherit; font-size: 12px; }
+
+/* Nút zoom kiểu Google Maps (nền đen, bóng đổ 2 lớp) — cùng style với
+   .locateButton ở trên. */
+.leaflet-bar {
+  border: 0 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15) !important;
+}
+.leaflet-bar a {
+  background-color: #000 !important;
+  color: #fff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+  transition: background-color 0.16s ease-out;
+}
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+  background-color: #3c4043 !important;
+}
+.leaflet-bar a.leaflet-disabled {
+  background-color: #000 !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
 .leaflet-tooltip { border: 0; border-radius: 7px; font-family: inherit; font-size: 11px; box-shadow: 0 4px 14px #173f3c44; }
 .mapSheetLabel {
   background: #0f172acc; color: #fff; font-weight: 600;
