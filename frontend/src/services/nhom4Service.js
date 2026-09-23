@@ -16,6 +16,16 @@ export function getDiaChiThuaDat({ maXa, soTo, soThua }, { signal } = {}) {
   });
 }
 
+// Toàn bộ mã loại đất thực tế trong thua_dat (backend cache 1 giờ, xem
+// nhom4_service.get_loai_dat_options) — cho ô "Loại đất" autocomplete đủ
+// mã đang dùng thay vì chỉ 1 danh sách cố định soạn tay.
+export function getLoaiDatOptions({ signal } = {}) {
+  return request("/api/nhom4/loai-dat-options", {
+    signal,
+    errorFallback: "Không lấy được danh sách loại đất",
+  });
+}
+
 // filesByParcel: 1 phần tử cho MỖI thửa trong payload.thua_list, CÙNG THỨ
 // TỰ — mỗi thửa có hồ sơ quét riêng (xem Nhom4FormPage.jsx), không còn
 // dùng chung 1 bộ file cho cả lô. Field name đánh số khớp backend

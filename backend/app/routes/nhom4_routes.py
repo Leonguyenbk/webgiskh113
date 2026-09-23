@@ -44,6 +44,14 @@ def dia_chi_thua_dat():
     return jsonify(data)
 
 
+@nhom4_bp.get("/api/nhom4/loai-dat-options")
+def loai_dat_options():
+    data, error_response = nhom4_service.get_loai_dat_options()
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @nhom4_bp.post("/api/nhom4/ho-so")
 def submit_ho_so():
     raw_payload = request.form.get("payload", "")

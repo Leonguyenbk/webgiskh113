@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getXaList, searchParcels } from "./services/parcelService";
-import { checkTrungThua, getDiaChiThuaDat, submitHoSo } from "./services/nhom4Service";
+import { checkTrungThua, getDiaChiThuaDat, getLoaiDatOptions, submitHoSo } from "./services/nhom4Service";
 import {
   HINH_THUC_SU_DUNG_OPTIONS,
   LOAI_CHU_OPTIONS,
@@ -32,6 +32,65 @@ function parseSoVN(value) {
   const normalized = s.includes(",") && s.includes(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(",", ".");
   const n = Number(normalized);
   return Number.isNaN(n) ? null : n;
+}
+
+// Ô "Loại đất" dạng combobox autocomplete — gõ để lọc trong toàn bộ mã có
+// thật trong thua_dat (options, xem getLoaiDatOptions), vẫn cho gõ tay mã
+// lạ (không ép chọn đúng 1 trong list) vì danh sách suy từ dữ liệu quét
+// GML nên có thể chưa hoàn toàn đủ. Dùng chung style .comboBox/.comboBoxList
+// đã có sẵn cho ô "Xã / phường" ở App.jsx.
+function LoaiDatCombo({ id, value, options, onChange }) {
+  const [query, setQuery] = useState(value || "");
+  const [open, setOpen] = useState(false);
+
+  // Đồng bộ khi value đổi từ ngoài vào (VD bấm "Sửa" 1 thửa trong danh sách).
+  useEffect(() => setQuery(value || ""), [value]);
+
+  const loc = query.trim().toUpperCase();
+  const filtered = loc ? options.filter((ma) => ma.includes(loc)) : options;
+
+  return (
+    <div className="comboBox">
+      <input
+        id={id}
+        className="filterInput"
+        autoComplete="off"
+        value={query}
+        onChange={(e) => {
+          const v = e.target.value.toUpperCase();
+          setQuery(v);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          setOpen(false);
+          onChange(query.trim().toUpperCase());
+        }}
+      />
+      {open && (
+        <div className="comboBoxList">
+          {filtered.length === 0 ? (
+            <div className="comboBoxEmpty">Không có mã khớp — vẫn dùng được mã đang gõ</div>
+          ) : (
+            filtered.map((ma) => (
+              <div
+                key={ma}
+                className={`comboBoxItem${ma === value ? " active" : ""}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setQuery(ma);
+                  onChange(ma);
+                  setOpen(false);
+                }}
+              >
+                {ma}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Nhom4FormPage({ onNavigateHome, prefill }) {
@@ -83,6 +142,18 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     getXaList()
       .then((body) => setXaList(body?.items || []))
       .catch(() => setXaList([]));
+  }, []);
+
+  // Mặc định dùng danh sách cố định soạn tay (LOAI_DAT_OPTIONS) — nâng cấp
+  // lên đủ mã thực tế trong thua_dat ngay khi tải xong (backend cache 1
+  // giờ). Lỗi mạng/API thì giữ nguyên danh sách mặc định, không chặn nhập.
+  const [loaiDatOptions, setLoaiDatOptions] = useState(LOAI_DAT_OPTIONS);
+  useEffect(() => {
+    getLoaiDatOptions()
+      .then((body) => {
+        if (Array.isArray(body?.items) && body.items.length) setLoaiDatOptions(body.items);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -771,13 +842,8 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
             <strong>Loại đất 1</strong>
             <div className="nhom4Grid2">
               <div>
-                <label>Loại đất *</label>
-                <select value={dat1.loaiDat} onChange={(e) => chonLoaiDat1(e.target.value)}>
-                  <option value="">-- Chọn --</option>
-                  {LOAI_DAT_OPTIONS.map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
+                <label htmlFor="loaiDat1">Loại đất *</label>
+                <LoaiDatCombo id="loaiDat1" value={dat1.loaiDat} options={loaiDatOptions} onChange={chonLoaiDat1} />
               </div>
               <div>
                 <label>Diện tích loại đất 1 *</label>
@@ -837,13 +903,8 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               <strong>Loại đất 2</strong>
               <div className="nhom4Grid2">
                 <div>
-                  <label>Loại đất 2 *</label>
-                  <select value={dat2.loaiDat} onChange={(e) => chonLoaiDat2(e.target.value)}>
-                    <option value="">-- Chọn --</option>
-                    {LOAI_DAT_OPTIONS.map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
+                  <label htmlFor="loaiDat2">Loại đất 2 *</label>
+                  <LoaiDatCombo id="loaiDat2" value={dat2.loaiDat} options={loaiDatOptions} onChange={chonLoaiDat2} />
                 </div>
                 <div>
                   <label>Diện tích loại đất 2</label>

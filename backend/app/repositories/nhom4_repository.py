@@ -197,6 +197,19 @@ def get_dia_chi_thua_dat(ma_xa: str, so_to: int, so_thua: int):
     return data, None
 
 
+def list_loai_dat_options():
+    """Toàn bộ mã loại đất THẬT SỰ có trong public.thua_dat — RPC
+    list_loai_dat_options (xem supabase/schema.sql). Quét ~4 triệu dòng nên
+    chậm (~7s) — caller (nhom4_service) PHẢI cache, không gọi trực tiếp mỗi
+    request."""
+    data, error_response = supabase_client.call_rpc(
+        "list_loai_dat_options", {}, timeout=30
+    )
+    if error_response:
+        return None, error_response
+    return data, None
+
+
 def insert_rows(rows: list[dict]):
     response, error_response = supabase_client.rest_request(
         "POST",

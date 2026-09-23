@@ -681,6 +681,31 @@ $$;
 revoke all on function public.list_ma_xa() from public;
 grant execute on function public.list_ma_xa() to service_role;
 
+-- Toàn bộ mã loại đất (VD "ONT", "CLN"...) THẬT SỰ có trong thua_dat, để ô
+-- "Loại đất" ở biểu Nhóm 4 autocomplete đủ mã đang dùng thay vì chỉ 1 danh
+-- sách cố định soạn tay (LOAI_DAT_OPTIONS phía frontend). muc_dich_su_dung
+-- là dữ liệu thô từ GML, có thể là 1 mã ("ONT") hoặc ghép nhiều mã + diện
+-- tích từng phần ("ONT(200)+CLN(1027.3)") — tách theo "+", bỏ phần "(...)"
+-- và ký tự không phải chữ cái, rồi lấy DISTINCT. Quét toàn bộ thua_dat
+-- (~4 triệu dòng) nên chậm (~7s) — bắt buộc cache ở tầng Python
+-- (nhom4_service.get_loai_dat_options), KHÔNG gọi thẳng mỗi lần tải trang.
+create or replace function public.list_loai_dat_options()
+returns table (ma_loai_dat text)
+language sql
+stable
+as $$
+  select distinct ma from (
+    select upper(regexp_replace(regexp_replace(code, '\(.*\)', '', 'g'), '[^A-Za-z]', '', 'g')) as ma
+    from public.thua_dat, unnest(string_to_array(muc_dich_su_dung, '+')) as code
+    where muc_dich_su_dung is not null and muc_dich_su_dung <> ''
+  ) t
+  where ma <> ''
+  order by 1;
+$$;
+
+revoke all on function public.list_loai_dat_options() from public;
+grant execute on function public.list_loai_dat_options() to service_role;
+
 -- Danh sách mã xã kèm tên xã (bảng public.danhsachxaphuong) để combobox
 -- hiển thị tên cho dễ nhận biết, còn tra cứu vẫn dùng mã xã.
 create or replace function public.list_xa_phuong()

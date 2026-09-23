@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 import uuid
 
 from flask import current_app, jsonify
@@ -10,6 +11,12 @@ from ..repositories.nhom4_repository import NHOM4_MA_NGUON, NHOM4_TEN_NGUON
 from ..utils.nhom4_validation import normalize_thoi_han_su_dung, validate_payload
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
+
+# list_loai_dat_options() quét ~4 triệu dòng thua_dat (~7s) — cache 1 giờ
+# trong bộ nhớ tiến trình, danh sách mã loại đất thực tế gần như không đổi
+# theo giờ. Restart service (deploy code mới) thì cache tự làm mới.
+_LOAI_DAT_CACHE: dict = {"items": None, "ts": 0.0}
+_LOAI_DAT_CACHE_TTL_GIAY = 3600
 
 # Thửa đã thuộc Nhóm 1/Nhóm 2 (KH 2959) coi như đã có dữ liệu từ trước —
 # không cần nhập biểu Nhóm 4 nữa, giống quy ước đã dùng ở
@@ -75,6 +82,27 @@ def get_dia_chi_thua_dat(ma_xa: str, so_to: str, so_thua: str):
     if error_response:
         return None, error_response
     return {"dia_chi": dia_chi or ""}, None
+
+
+def get_loai_dat_options():
+    """Toàn bộ mã loại đất thực tế trong thua_dat, cho ô "Loại đất" ở biểu
+    Nhóm 4 autocomplete — cache 1 giờ vì RPC quét ~4 triệu dòng (~7s)."""
+    now = time.time()
+    if _LOAI_DAT_CACHE["items"] is not None and now - _LOAI_DAT_CACHE["ts"] < _LOAI_DAT_CACHE_TTL_GIAY:
+        return {"items": _LOAI_DAT_CACHE["items"]}, None
+
+    rows, error_response = nhom4_repository.list_loai_dat_options()
+    if error_response:
+        # Còn cache cũ (dù hết hạn) thì trả tạm thay vì báo lỗi hẳn — danh
+        # sách này đổi rất chậm, thà hơi cũ còn hơn ô "Loại đất" trống trơn.
+        if _LOAI_DAT_CACHE["items"] is not None:
+            return {"items": _LOAI_DAT_CACHE["items"]}, None
+        return None, error_response
+
+    items = sorted({r["ma_loai_dat"] for r in rows if r.get("ma_loai_dat")})
+    _LOAI_DAT_CACHE["items"] = items
+    _LOAI_DAT_CACHE["ts"] = now
+    return {"items": items}, None
 
 
 def _sanitize_filename(name: str) -> str:
