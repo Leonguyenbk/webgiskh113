@@ -50,7 +50,7 @@ function LoaiDatCombo({ id, value, options, onChange }) {
   const filtered = loc ? options.filter((ma) => ma.includes(loc)) : options;
 
   return (
-    <div className="comboBox">
+    <div className="comboBox loaiDatCombo">
       <input
         id={id}
         className="filterInput"
