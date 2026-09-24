@@ -129,6 +129,19 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
   const [fileChinh, setFileChinh] = useState(null);
   const [filePhu, setFilePhu] = useState(null);
   const [fileTbxn, setFileTbxn] = useState(null);
+  // <input type="file"> không có cách nào xóa tên file đang hiện bằng
+  // JS/React (trình duyệt chặn set value vì lý do bảo mật) — dù state
+  // fileChinh/filePhu/fileTbxn đã null, ô vẫn hiện tên file cũ, khiến
+  // người dùng tưởng vẫn còn file mà "+ Thêm thửa đất"/nộp lại báo thiếu
+  // file. Đổi key ép React dựng lại 3 ô <input type="file"> từ đầu (hết
+  // sạch) mỗi lần xóa state file — xem clearFileInputs().
+  const [fileInputKey, setFileInputKey] = useState(0);
+  const clearFileInputs = () => {
+    setFileChinh(null);
+    setFilePhu(null);
+    setFileTbxn(null);
+    setFileInputKey((k) => k + 1);
+  };
   const [status, setStatus] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -331,9 +344,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     setDat2(taoDatRong());
     setCoDat2(false);
     setTrungThuaStatus("");
-    setFileChinh(null);
-    setFilePhu(null);
-    setFileTbxn(null);
+    clearFileInputs();
   };
 
   const xoaThua = (index) => setThuaList((prev) => prev.filter((_, i) => i !== index));
@@ -498,9 +509,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setDat1(taoDatRong());
       setDat2(taoDatRong());
       setCoDat2(false);
-      setFileChinh(null);
-      setFilePhu(null);
-      setFileTbxn(null);
+      clearFileInputs();
       setNguoiHienTai({ hoTen: "", cccd: "", diaChiThuongTru: "", lyDoThayDoi: "" });
     } catch (err) {
       setError(err.message);
@@ -966,15 +975,26 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               1 thửa) thì dùng thẳng file đang chọn ở đây. */}
           <h2 className="nhom4SectionTitle">Hồ sơ quét (của thửa đang nhập ở trên)</h2>
           <label>{cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"}</label>
-          <input type="file" accept="application/pdf" onChange={(e) => setFileChinh(e.target.files?.[0] || null)} />
+          <input
+            key={`chinh-${fileInputKey}`}
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setFileChinh(e.target.files?.[0] || null)}
+          />
           {fileChinh && <p className="importHint">Đã chọn: {fileChinh.name}</p>}
           <label>File PDF Giấy tờ (tùy chọn)</label>
-          <input type="file" accept="application/pdf" onChange={(e) => setFilePhu(e.target.files?.[0] || null)} />
+          <input
+            key={`phu-${fileInputKey}`}
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setFilePhu(e.target.files?.[0] || null)}
+          />
           {filePhu && <p className="importHint">Đã chọn: {filePhu.name}</p>}
           {cheDo !== "Đã có GCN" && (
             <>
               <label>File PDF Thông báo xác nhận (tùy chọn)</label>
               <input
+                key={`tbxn-${fileInputKey}`}
                 type="file"
                 accept="application/pdf"
                 onChange={(e) => setFileTbxn(e.target.files?.[0] || null)}
