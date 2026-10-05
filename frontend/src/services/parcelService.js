@@ -39,3 +39,25 @@ export function getGcnDanhSach(params, { signal, errorFallback } = {}) {
     errorFallback: errorFallback || "Không tải được danh sách dữ liệu GCN",
   });
 }
+
+export function getThongKeNguonNhap({ signal } = {}) {
+  return request("/api/thong-ke-nguon-nhap", {
+    signal,
+    errorFallback: "Không tải được thống kê nguồn nhập",
+  });
+}
+
+export function getNhom3TongHop({ signal } = {}) {
+  return request("/api/nhom3-con-thieu/tong-hop", {
+    signal,
+    errorFallback: "Không tải được tổng hợp Nhóm 3",
+  });
+}
+
+export function getNhom3DanhSachConThieu(params, { signal, errorFallback } = {}) {
+  return request("/api/nhom3-con-thieu/danh-sach", {
+    params,
+    signal,
+    errorFallback: errorFallback || "Không tải được danh sách Nhóm 3 còn thiếu",
+  });
+}

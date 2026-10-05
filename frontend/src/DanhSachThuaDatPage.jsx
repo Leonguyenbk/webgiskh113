@@ -35,6 +35,8 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
 
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
+  const [totalForm, setTotalForm] = useState(0);
+  const [totalKhac, setTotalKhac] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,6 +53,8 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
     if (!maXa) {
       setItems([]);
       setTotal(0);
+      setTotalForm(0);
+      setTotalKhac(0);
       return undefined;
     }
 
@@ -72,6 +76,8 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
       .then((result) => {
         setItems(result?.items || []);
         setTotal(Number(result?.total) || 0);
+        setTotalForm(Number(result?.total_form) || 0);
+        setTotalKhac(Number(result?.total_khac) || 0);
       })
       .catch((err) => {
         if (err.name !== "AbortError") setError(err.message);
@@ -234,30 +240,37 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
             </div>
 
             {maXa && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <label style={{ margin: 0 }}>
-                  {loading
-                    ? "Đang tải…"
-                    : `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} thửa`}
-                </label>
-                <button
-                  type="button"
-                  className="downloadButton"
-                  disabled={!canPrev || loading}
-                  style={{ opacity: !canPrev || loading ? 0.5 : 1 }}
-                  onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
-                >
-                  ← Trang trước
-                </button>
-                <button
-                  type="button"
-                  className="downloadButton"
-                  disabled={!canNext || loading}
-                  style={{ opacity: !canNext || loading ? 0.5 : 1 }}
-                  onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
-                >
-                  Trang sau →
-                </button>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <label style={{ margin: 0 }}>
+                    {loading
+                      ? "Đang tải…"
+                      : `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} thửa`}
+                  </label>
+                  <button
+                    type="button"
+                    className="downloadButton"
+                    disabled={!canPrev || loading}
+                    style={{ opacity: !canPrev || loading ? 0.5 : 1 }}
+                    onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
+                  >
+                    ← Trang trước
+                  </button>
+                  <button
+                    type="button"
+                    className="downloadButton"
+                    disabled={!canNext || loading}
+                    style={{ opacity: !canNext || loading ? 0.5 : 1 }}
+                    onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
+                  >
+                    Trang sau →
+                  </button>
+                </div>
+                {!loading && (
+                  <span style={{ fontSize: 13, color: "#666" }}>
+                    Nguồn: biểu Nhóm 4 {formatSo(totalForm)} thửa · nguồn khác (đồng bộ Sheet) {formatSo(totalKhac)} thửa
+                  </span>
+                )}
               </div>
             )}
           </div>

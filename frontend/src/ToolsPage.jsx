@@ -28,6 +28,8 @@ export default function ToolsPage({
   onNavigateRanhThon,
   onNavigateBanDoNen,
   onNavigateDanhSachThuaDat,
+  onNavigateThongKeNguonNhap,
+  onNavigateNhom3ConThieu,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -75,6 +77,16 @@ export default function ToolsPage({
       name: "📋 Danh sách thửa đã nhập",
       description: "Tra cứu từng dòng dữ liệu GCN (du_lieu_gcn) theo xã/phường — tên xã, số tờ, số thửa, mã định danh, ngày nhập.",
       onNavigate: onNavigateDanhSachThuaDat,
+    },
+    {
+      name: "📈 Thống kê nguồn nhập",
+      description: "Tổng số thửa đã nhập toàn dự án, tách số thửa nhập từ biểu Nhóm 4 (form) và số thửa nhập từ nguồn khác (đồng bộ Google Sheet).",
+      onNavigate: onNavigateThongKeNguonNhap,
+    },
+    {
+      name: "📉 Nhóm 3 — thửa còn thiếu dữ liệu",
+      description: "Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với Nhóm 1/2 và dữ liệu đã thu thập — lọc theo xã, tách thửa có/không có bản đồ.",
+      onNavigate: onNavigateNhom3ConThieu,
     },
   ];
 

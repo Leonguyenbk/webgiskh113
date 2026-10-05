@@ -13,6 +13,8 @@ import Nhom4FormPage from "./Nhom4FormPage.jsx";
 import ImportRanhThonPage from "./ImportRanhThonPage.jsx";
 import ManageBanDoNenPage from "./ManageBanDoNenPage.jsx";
 import DanhSachThuaDatPage from "./DanhSachThuaDatPage.jsx";
+import ThongKeNguonNhapPage from "./ThongKeNguonNhapPage.jsx";
+import Nhom3ConThieuPage from "./Nhom3ConThieuPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -61,6 +63,8 @@ function Root() {
         onNavigateRanhThon={() => navigate("/import-ranh-thon")}
         onNavigateBanDoNen={() => navigate("/ban-do-nen")}
         onNavigateDanhSachThuaDat={() => navigate("/danh-sach-thua-dat")}
+        onNavigateThongKeNguonNhap={() => navigate("/thong-ke-nguon-nhap")}
+        onNavigateNhom3ConThieu={() => navigate("/nhom-3-con-thieu")}
       />
     );
   }
@@ -90,6 +94,12 @@ function Root() {
   }
   if (path.startsWith("/danh-sach-thua-dat")) {
     return <DanhSachThuaDatPage onNavigateHome={() => navigate("/")} />;
+  }
+  if (path.startsWith("/thong-ke-nguon-nhap")) {
+    return <ThongKeNguonNhapPage onNavigateHome={() => navigate("/")} />;
+  }
+  if (path.startsWith("/nhom-3-con-thieu")) {
+    return <Nhom3ConThieuPage onNavigateHome={() => navigate("/")} />;
   }
   return <App onNavigateTools={() => navigate("/tools")} onNavigateNhom4={navigateToNhom4} />;
 }
