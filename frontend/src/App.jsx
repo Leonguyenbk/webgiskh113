@@ -40,8 +40,13 @@ import {
   GROUP_LABELS,
   NEAR_ME_TARGET,
   SELECTED_COLOR,
+  TO_CHUC_STRIPE_CSS,
+  TO_CHUC_STRIPE_LABEL,
   VIEWPORT_SEARCH_TARGET,
+  getGroupKey,
   getParcelFillColor,
+  getToChucStripePattern,
+  isToChucChuaPhanLoai,
 } from "./utils/constants";
 import { featureKey } from "./utils/geometry";
 
@@ -105,6 +110,12 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [xaQuery, setXaQuery] = useState("");
   const [xaDropdownOpen, setXaDropdownOpen] = useState(false);
   const [nhom, setNhom] = useState([]);
+  // Lọc riêng trong nhóm "Chưa phân loại": ẩn thửa thuộc nhóm đất tổ chức
+  // (TMD, SKC...) — chỉ còn Nhóm 3 thật sự (hộ gia đình/cá nhân) cần nhập
+  // biểu. Lọc client-side sau khi tải (xem `filtered` bên dưới), vì server
+  // chỉ biết lọc theo phan_loai_ke_hoach_2959 (Nhóm 1/2/DEFAULT), không
+  // biết khái niệm "đất tổ chức" — khi bật, vẫn phải tải nhóm DEFAULT về.
+  const [excludeToChucTrongNhom3, setExcludeToChucTrongNhom3] = useState(false);
   const [soTo, setSoTo] = useState("");
   const [soThua, setSoThua] = useState("");
   const [submittedFilters, setSubmittedFilters] = useState(null);
@@ -333,6 +344,16 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     );
   }, []);
 
+  // Nhóm thật sự gửi lên server: backend chỉ biết NHÓM 1/NHÓM 2/DEFAULT,
+  // không biết khái niệm "đất tổ chức" — bật excludeToChucTrongNhom3 vẫn
+  // phải tải cả nhóm DEFAULT về rồi lọc bớt ở "filtered" bên dưới.
+  const requestNhom = useMemo(() => {
+    if (excludeToChucTrongNhom3 && !nhom.includes("DEFAULT")) {
+      return [...nhom, "DEFAULT"];
+    }
+    return nhom;
+  }, [nhom, excludeToChucTrongNhom3]);
+
   const handleData = useCallback((result) => setData(result), []);
   const handleLoading = useCallback((value) => setLoading(value), []);
   const handleError = useCallback((message) => setError(message), []);
@@ -349,13 +370,14 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     setViewportSearchActive(false);
     setSubmittedFilters({
       maXa,
-      nhom,
+      nhom: requestNhom,
+      excludeToChuc: excludeToChucTrongNhom3,
       soTo: soTo.trim(),
       soThua: soThua.trim(),
       tenThon: tenThon || "",
     });
     setFiltersOpen(false);
-  }, [maXa, nhom, soTo, soThua, tenThon]);
+  }, [maXa, requestNhom, excludeToChucTrongNhom3, soTo, soThua, tenThon]);
 
   const handleNearMe = useCallback(() => {
     if (!myPosition) return;
@@ -367,8 +389,13 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     setSubmittedFilters(null);
     setViewportSearchActive(false);
     setFiltersOpen(false);
-    setNearMeRequest({ ...myPosition, nhom, tick: Date.now() });
-  }, [myPosition, nhom]);
+    setNearMeRequest({
+      ...myPosition,
+      nhom: requestNhom,
+      excludeToChuc: excludeToChucTrongNhom3,
+      tick: Date.now(),
+    });
+  }, [myPosition, requestNhom, excludeToChucTrongNhom3]);
 
   // Gọi trước khi FindHereButton bắt đầu tải, để dọn các trạng thái tra cứu
   // khác (mã xã / định vị GPS) và đánh dấu chế độ hiện tại là "quanh đây".
@@ -443,6 +470,18 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
 
     let features = data.features;
 
+    // "Nhóm 3 (không thuộc tổ chức)": server không biết khái niệm "đất tổ
+    // chức" nên đã tải cả nhóm DEFAULT về (xem requestNhom) — lọc bớt ở
+    // đây. Chỉ lọc khi KHÔNG đồng thời chọn "Chưa phân loại" thô (người
+    // dùng muốn xem đủ cả tổ chức thì không loại gì cả).
+    if (excludeToChucTrongNhom3 && !nhom.includes("DEFAULT")) {
+      features = features.filter(
+        (f) =>
+          getGroupKey(f.properties?.dong_bo?.phan_loai_ke_hoach_2959) !== "DEFAULT" ||
+          !isToChucChuaPhanLoai(f.properties),
+      );
+    }
+
     // "Chỉ hiện thửa đã chọn": tắt hẳn các thửa ngoài tập đã chọn.
     if (onlySelected && selectedIds.size > 0) {
       features = features.filter((f) => selectedIds.has(f.id));
@@ -467,7 +506,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     }
 
     return features === data.features ? data : { ...data, features };
-  }, [data, query, xaNameByCode, onlySelected, selectedIds]);
+  }, [data, query, xaNameByCode, onlySelected, selectedIds, excludeToChucTrongNhom3, nhom]);
 
   const selectedFeature = selected?.feature || null;
 
@@ -476,6 +515,15 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
       const inSet = selectedIds.has(feature.id);
       const isPrimary = feature.id === selected?.id;
 
+      // Thửa đất tổ chức (TMD, SKC...) chưa thuộc Nhóm 1/2 — tô xám sọc đỏ
+      // thay vì xám trơn để dễ rà soát riêng. CanvasPattern (không phải
+      // string) vẫn gán được vào fillColor vì Leaflet canvas renderer gán
+      // thẳng options.fillColor vào ctx.fillStyle.
+      const stripePattern =
+        !inSet && isToChucChuaPhanLoai(feature.properties)
+          ? getToChucStripePattern()
+          : null;
+
       return {
         color: inSet ? "#ffffff" : "#334155",
         // Thửa vừa bấm (mở panel) viền dày nhất; các thửa cùng tập đã
@@ -483,7 +531,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
         weight: isPrimary ? 4 : inSet ? 3 : 1.5,
         fillColor: inSet
           ? SELECTED_COLOR
-          : getParcelFillColor(feature.properties),
+          : stripePattern || getParcelFillColor(feature.properties),
         // Slider "Độ mờ thửa đất" điều khiển lớp chưa chọn; thửa đã
         // chọn luôn đậm hơn một chút (+0.2) để vẫn nổi bật, tối đa 1.
         fillOpacity: inSet
@@ -584,7 +632,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
 
         <FindHereButton
           map={mapInstance}
-          nhom={nhom}
+          nhom={requestNhom}
           onBeforeSearch={handleFindHereStart}
           onData={handleData}
           onLoading={handleLoading}
@@ -630,7 +678,9 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               </span>
               {submittedFilters.nhom?.map((code) => (
                 <span key={code} className="tag">
-                  {GROUP_LABELS[code] || code}
+                  {code === "DEFAULT" && submittedFilters.excludeToChuc
+                    ? "Nhóm 3 (không thuộc tổ chức)"
+                    : GROUP_LABELS[code] || code}
                 </span>
               ))}
               {submittedFilters.soTo && (
@@ -647,7 +697,9 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               <span className="tag">📍 Quanh vị trí của bạn</span>
               {nearMeRequest.nhom?.map((code) => (
                 <span key={code} className="tag">
-                  {GROUP_LABELS[code] || code}
+                  {code === "DEFAULT" && nearMeRequest.excludeToChuc
+                    ? "Nhóm 3 (không thuộc tổ chức)"
+                    : GROUP_LABELS[code] || code}
                 </span>
               ))}
             </div>
@@ -656,9 +708,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
           {!filtersOpen && viewportSearchActive && (
             <div className="filterSummary">
               <span className="tag">🔍 Quanh khu vực bản đồ</span>
-              {nhom.map((code) => (
+              {requestNhom.map((code) => (
                 <span key={code} className="tag">
-                  {GROUP_LABELS[code] || code}
+                  {code === "DEFAULT" && excludeToChucTrongNhom3
+                    ? "Nhóm 3 (không thuộc tổ chức)"
+                    : GROUP_LABELS[code] || code}
                 </span>
               ))}
             </div>
@@ -678,6 +732,15 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                     {GROUP_LABELS[code]}
                   </label>
                 ))}
+
+                <label className="nhomCheckbox" title="Nhóm 3 (chưa phân loại) nhưng loại trừ đất tổ chức (TMD, SKC...) — chỉ còn thửa hộ gia đình/cá nhân thật sự cần nhập biểu">
+                  <input
+                    type="checkbox"
+                    checked={excludeToChucTrongNhom3}
+                    onChange={() => setExcludeToChucTrongNhom3((v) => !v)}
+                  />
+                  Nhóm 3 (không thuộc tổ chức)
+                </label>
               </div>
 
               <button
@@ -979,7 +1042,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                       >
                         <span
                           className="parcelListDot"
-                          style={{ backgroundColor: getParcelFillColor(p) }}
+                          style={
+                            isToChucChuaPhanLoai(p)
+                              ? { background: TO_CHUC_STRIPE_CSS }
+                              : { backgroundColor: getParcelFillColor(p) }
+                          }
                         />
                         <span className="parcelListLabel">
                           Tờ {p.so_to} · Thửa {p.so_thua}
@@ -1208,6 +1275,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             <div>
               <span style={{ backgroundColor: GROUP_COLORS.DEFAULT }} />
               <label>{GROUP_LABELS.DEFAULT}</label>
+            </div>
+
+            <div>
+              <span style={{ background: TO_CHUC_STRIPE_CSS }} />
+              <label>{TO_CHUC_STRIPE_LABEL}</label>
             </div>
 
             <div className="opacitySlider">

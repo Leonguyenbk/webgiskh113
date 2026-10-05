@@ -73,6 +73,74 @@ export function getParcelFillColor(properties = {}) {
   return GROUP_COLORS[groupKey];
 }
 
+// Nhóm "đất tổ chức" theo mục đích sử dụng đất (TMD, SKC...) — không gồm
+// NTS (nuôi trồng thủy sản, vẫn có thể là đất hộ gia đình/cá nhân). Thửa
+// thuộc nhóm này mà CHƯA thuộc Nhóm 1/2 cần đánh dấu riêng (xám sọc đỏ)
+// để dễ rà soát, tách khỏi màu xám "chưa phân loại" thông thường.
+export const TO_CHUC_LAND_CODES = new Set([
+  "TMD", "SKC", "SKS", "TSC", "DTS", "DGD", "DYT", "DVH", "DTT", "DHT",
+  "DNL", "DCT", "TON", "TIN", "CQP", "CAN", "RPH", "RSD", "RST",
+  "NTD", "SON", "MNC",
+]);
+
+export const TO_CHUC_STRIPE_LABEL = "Đất tổ chức chưa phân loại";
+
+// Dải màu CSS cho các ô vuông chú giải/danh sách (background CSS thường,
+// KHÔNG phải canvas của Leaflet — canvas cần CanvasPattern riêng, xem
+// getToChucStripePattern bên dưới). Chu kỳ 5px (nhỏ hơn hình vẽ trên bản
+// đồ) để chấm tròn 10px trong danh sách kết quả vẫn thấy rõ cả 2 màu.
+export const TO_CHUC_STRIPE_CSS =
+  "repeating-linear-gradient(45deg, #94a3b8 0px, #94a3b8 3px, #ef4444 3px, #ef4444 5px)";
+
+// Thửa thuộc nhóm đất tổ chức (muc_dich_su_dung có thể ghi dạng
+// "TMD+CLN", tách theo dấu "+") nhưng CHƯA thuộc Nhóm 1/2 — ưu tiên màu
+// xanh dương (GCN_COLOR, đã có dữ liệu GCN) cao hơn cờ này, nên bỏ qua
+// nếu properties.co_gcn đã true.
+export function isToChucChuaPhanLoai(properties = {}) {
+  const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
+  if (groupKey !== "DEFAULT" || properties.co_gcn) return false;
+  const raw = String(properties.muc_dich_su_dung || "");
+  return raw
+    .split("+")
+    .map((code) => code.trim().toUpperCase())
+    .some((code) => TO_CHUC_LAND_CODES.has(code));
+}
+
+// CanvasPattern xám-sọc-đỏ dùng làm fillColor cho layer Leaflet. Renderer
+// bản đồ chính dùng canvas (preferCanvas trong App.jsx) — Canvas 2D
+// fillStyle chấp nhận cả CanvasPattern lẫn chuỗi màu, Leaflet chỉ gán
+// thẳng options.fillColor vào ctx.fillStyle nên truyền CanvasPattern qua
+// đây vẫn chạy đúng dù type khai báo là string. Tạo 1 lần rồi cache lại —
+// style() của GeoJSON chạy lại cho MỌI thửa mỗi khi parcelOpacity/
+// selectedIds đổi, không được tạo canvas mới mỗi lần.
+let _toChucStripePattern = null;
+export function getToChucStripePattern() {
+  if (_toChucStripePattern) return _toChucStripePattern;
+  if (typeof document === "undefined") return null;
+
+  const size = 12;
+  const tile = document.createElement("canvas");
+  tile.width = size;
+  tile.height = size;
+  const ctx = tile.getContext("2d");
+
+  ctx.fillStyle = GROUP_COLORS.DEFAULT;
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.strokeStyle = "#ef4444";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  // 3 đường chéo để sọc nối liền mạch giữa các tile cạnh nhau.
+  for (const offset of [-size, 0, size]) {
+    ctx.moveTo(offset, size);
+    ctx.lineTo(offset + size, 0);
+  }
+  ctx.stroke();
+
+  _toChucStripePattern = ctx.createPattern(tile, "repeat");
+  return _toChucStripePattern;
+}
+
 export const MISSING_INFO_RULES = [
   {
     field: "chua_xuat_so_dia_chinh_dien_tu",
