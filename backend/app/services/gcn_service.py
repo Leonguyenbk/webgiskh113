@@ -200,6 +200,64 @@ def get_danh_sach_da_nhap(
     if not isinstance(result, dict):
         result = {}
     result.setdefault("total", 0)
+    result.setdefault("total_form", 0)
+    result.setdefault("total_khac", 0)
+    result.setdefault("items", [])
+    return result, None
+
+
+def get_thong_ke_nguon_nhap():
+    """Trang '/thong-ke-nguon-nhap' — tổng số thửa đã nhập toàn dự án, tách
+    Form (biểu Nhóm 4) / nguồn khác (đồng bộ Google Sheet)."""
+    result, error_response = gcn_repository.thong_ke_nguon_nhap()
+    if error_response:
+        return None, error_response
+    if not isinstance(result, dict):
+        result = {}
+    result.setdefault("total", 0)
+    result.setdefault("total_form", 0)
+    result.setdefault("total_khac", 0)
+    result.setdefault("theo_xa", [])
+    return result, None
+
+
+def get_nhom3_tong_hop():
+    """Trang '/nhom-3-con-thieu' — tổng hợp danh sách thửa cần thu thập
+    Nhóm 3 (bảng nhom3_can_thu_thap) so với Nhóm 1/2 và đã thu thập."""
+    result, error_response = gcn_repository.nhom3_tong_hop()
+    if error_response:
+        return None, error_response
+    if not isinstance(result, dict):
+        result = {}
+    result.setdefault("tong", 0)
+    result.setdefault("da_nhom_1_2", 0)
+    result.setdefault("da_thu_thap", 0)
+    result.setdefault("con_thieu", 0)
+    result.setdefault("theo_xa", [])
+    return result, None
+
+
+_NHOM3_DEFAULT_LIMIT = 100
+_NHOM3_MAX_LIMIT = 500
+
+
+def get_nhom3_danh_sach_con_thieu(ma_xa_raw: str | None, limit_raw: str | None, offset_raw: str | None):
+    """Danh sách phân trang thửa còn thiếu dữ liệu (Nhóm 3, chỉ thửa có
+    bản đồ), lọc theo xã (tuỳ chọn)."""
+    ma_xa = (ma_xa_raw or "").strip() or None
+
+    try:
+        limit = min(max(int(limit_raw or _NHOM3_DEFAULT_LIMIT), 1), _NHOM3_MAX_LIMIT)
+        offset = max(int(offset_raw or 0), 0)
+    except (TypeError, ValueError):
+        return None, (jsonify({"error": "limit hoặc offset không hợp lệ"}), 400)
+
+    result, error_response = gcn_repository.nhom3_list_con_thieu(ma_xa, limit, offset)
+    if error_response:
+        return None, error_response
+    if not isinstance(result, dict):
+        result = {}
+    result.setdefault("total", 0)
     result.setdefault("items", [])
     return result, None
 

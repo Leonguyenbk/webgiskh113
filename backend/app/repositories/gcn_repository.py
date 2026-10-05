@@ -73,6 +73,26 @@ def list_da_nhap(
     )
 
 
+def thong_ke_nguon_nhap():
+    # Tổng số thửa đã nhập toàn dự án, tách Form (NHOM4_FORM) / nguồn khác
+    # — xem public.thong_ke_nguon_nhap trong supabase/schema.sql.
+    return supabase_client.call_rpc("thong_ke_nguon_nhap", {}, timeout=25)
+
+
+def nhom3_tong_hop():
+    # Tổng hợp danh sách thửa cần thu thập Nhóm 3 (nhom3_can_thu_thap) so
+    # với Nhóm 1/2 + đã thu thập — xem public.nhom3_tong_hop.
+    return supabase_client.call_rpc("nhom3_tong_hop", {}, timeout=25)
+
+
+def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int):
+    return supabase_client.call_rpc(
+        "nhom3_list_con_thieu",
+        {"p_ma_xa": ma_xa, "p_limit": limit, "p_offset": offset},
+        timeout=25,
+    )
+
+
 def list_nguon():
     response, error_response = supabase_client.rest_request(
         "GET", NGUON_GCN_TABLE, params={"select": "*", "order": "ma_nguon.asc"}

@@ -36,6 +36,37 @@ def gcn_danh_sach():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/thong-ke-nguon-nhap")
+def thong_ke_nguon_nhap():
+    # Tổng số thửa đã nhập toàn dự án, tách Form (biểu Nhóm 4) / nguồn khác
+    # (đồng bộ Google Sheet) — trang "/thong-ke-nguon-nhap".
+    data, error_response = gcn_service.get_thong_ke_nguon_nhap()
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
+@gcn_bp.get("/api/nhom3-con-thieu/tong-hop")
+def nhom3_con_thieu_tong_hop():
+    data, error_response = gcn_service.get_nhom3_tong_hop()
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
+@gcn_bp.get("/api/nhom3-con-thieu/danh-sach")
+def nhom3_con_thieu_danh_sach():
+    # ?ma_xa=&limit=&offset=
+    data, error_response = gcn_service.get_nhom3_danh_sach_con_thieu(
+        request.args.get("ma_xa"),
+        request.args.get("limit"),
+        request.args.get("offset"),
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/gcn-export-theo-nhom")
 def gcn_export_theo_nhom():
     # Xuất .xlsx danh sách du_lieu_gcn của 1 xã đã thu thập + thuộc nhóm

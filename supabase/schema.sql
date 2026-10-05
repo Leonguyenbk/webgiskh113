@@ -1528,13 +1528,28 @@ set statement_timeout = '15s'
 as $$
 declare
     v_total integer;
+    v_total_form integer;
+    v_total_khac integer;
     v_items jsonb;
 begin
-    select count(distinct g.madvhc_soto_sothua) into v_total
-    from public.du_lieu_gcn g
-    where g.madvhc = p_ma_xa
-      and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
-      and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua));
+    -- total/total_form/total_khac: đếm theo THỬA (đã GROUP BY
+    -- madvhc_soto_sothua) chứ không phải theo dòng du_lieu_gcn — 1 thửa có
+    -- cả dòng NHOM4_FORM lẫn dòng nguồn khác thì tính là "form" (is_form,
+    -- cùng quy ước ưu tiên nguồn dùng để sắp xếp bên dưới).
+    with grouped_count as (
+        select bool_or(g.ma_nguon = 'NHOM4_FORM') as is_form
+        from public.du_lieu_gcn g
+        where g.madvhc = p_ma_xa
+          and (p_so_to is null or public.normalize_so_text(g.soto) = public.normalize_so_text(p_so_to))
+          and (p_so_thua is null or public.normalize_so_text(g.sothua) = public.normalize_so_text(p_so_thua))
+        group by g.madvhc_soto_sothua
+    )
+    select
+        count(*),
+        count(*) filter (where is_form),
+        count(*) filter (where not is_form)
+    into v_total, v_total_form, v_total_khac
+    from grouped_count;
 
     with grouped as (
         select
@@ -1555,7 +1570,7 @@ begin
     )
     select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
     from (
-        select x.ma_xa, xp.ten_xa, x.so_to, x.so_thua, x.ma_dinh_danh, x.ngay_nhap
+        select x.ma_xa, xp.ten_xa, x.so_to, x.so_thua, x.ma_dinh_danh, x.ngay_nhap, x.is_form
         from grouped x
         left join public.danhsachxaphuong xp on xp.ma_xa = x.ma_xa
         order by
@@ -1565,11 +1580,515 @@ begin
         limit p_limit offset p_offset
     ) y;
 
-    return jsonb_build_object('total', v_total, 'items', v_items);
+    return jsonb_build_object(
+        'total', v_total,
+        'total_form', v_total_form,
+        'total_khac', v_total_khac,
+        'items', v_items
+    );
 end;
 $$;
 
 revoke all on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer, text, text) from public;
 grant execute on function public.list_du_lieu_gcn_da_nhap(text, boolean, integer, integer, text, text) to service_role;
+
+-- =========================================================
+-- TỔNG SỐ THỬA ĐÃ NHẬP, TÁCH NGUỒN (toàn dự án, không lọc theo xã) — trang
+-- riêng "/thong-ke-nguon-nhap", khác list_du_lieu_gcn_da_nhap ở trên vốn
+-- BẮT BUỘC chọn 1 xã. Quét toàn bộ du_lieu_gcn (đã đo thực tế: ~550.000
+-- dòng, group theo madvhc_soto_sothua mất ~1.5s trên Postgres local) —
+-- không cần bảng cache như gcn_thu_thap_theo_xa_cache vì đủ nhanh trong
+-- statement_timeout bên dưới.
+-- =========================================================
+
+create or replace function public.thong_ke_nguon_nhap()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '20s'
+as $$
+declare
+    v_total integer;
+    v_total_form integer;
+    v_total_khac integer;
+    v_theo_xa jsonb;
+begin
+    -- 1 pass group theo (madvhc, madvhc_soto_sothua) dùng chung cho cả
+    -- tổng toàn dự án lẫn breakdown từng xã — tránh quét bảng 2 lần.
+    with grouped as (
+        select g.madvhc, bool_or(g.ma_nguon = 'NHOM4_FORM') as is_form
+        from public.du_lieu_gcn g
+        group by g.madvhc, g.madvhc_soto_sothua
+    ),
+    theo_xa as (
+        select
+            x.madvhc as ma_xa,
+            xp.ten_xa,
+            count(*) as tong,
+            count(*) filter (where x.is_form) as tong_form,
+            count(*) filter (where not x.is_form) as tong_khac
+        from grouped x
+        left join public.danhsachxaphuong xp on xp.ma_xa = x.madvhc
+        group by x.madvhc, xp.ten_xa
+    )
+    select
+        coalesce(sum(tong), 0),
+        coalesce(sum(tong_form), 0),
+        coalesce(sum(tong_khac), 0),
+        coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
+    into v_total, v_total_form, v_total_khac, v_theo_xa
+    from theo_xa;
+
+    return jsonb_build_object(
+        'total', v_total,
+        'total_form', v_total_form,
+        'total_khac', v_total_khac,
+        'theo_xa', v_theo_xa
+    );
+end;
+$$;
+
+revoke all on function public.thong_ke_nguon_nhap() from public;
+grant execute on function public.thong_ke_nguon_nhap() to service_role;
+
+-- =========================================================
+-- DANH SÁCH THỬA CẦN THU THẬP NHÓM 3 (đối chiếu KH gốc, ví dụ
+-- DANHSACHNHOM3BMT.xlsx) — nạp 1 lần bằng script rời (backend/scratch_nap_nhom3.py,
+-- chạy lại nếu có danh sách mới hơn — TRUNCATE rồi nạp lại toàn bộ), rồi so
+-- LIVE với dong_bo_du_lieu (Nhóm 1/2) và du_lieu_gcn (đã thu thập)
+-- mỗi lần trang "/nhom-3-con-thieu" tải — luôn phản ánh đúng tiến độ hiện
+-- tại, không phải ảnh chụp tĩnh lúc nạp danh sách.
+--
+-- Thửa ĐÃ THUỘC NHÓM 1/2 coi như đã có dữ liệu từ trước, không cần nhập
+-- biểu Nhóm 4 nữa (đúng quy ước NHOM_1_2 đã dùng ở nhom4_service.py) — bị
+-- loại khỏi danh sách "còn thiếu" bên dưới, không phải lỗi.
+--
+-- Thửa trong danh sách gốc nhưng KHÔNG có thật trong thua_dat (chưa nhập
+-- GML) có thể do thửa đã biến động (tách/nhập/đổi số tờ-thửa) sau khi lập
+-- danh sách gốc — LOẠI HẲN khỏi mọi số liệu bên dưới (kể cả "tổng"), vì
+-- không phải thửa thật sự đang chờ nhập biểu.
+--
+-- "Đã thu thập" KHÔNG chỉ đếm theo EXISTS 1 dòng bất kỳ trong du_lieu_gcn
+-- (khác exists_key ở nhom4_repository.py, dùng để chặn nộp trùng) — mà
+-- phải có ít nhất 1 dòng khớp đủ các trường BẮT BUỘC giống form Nhóm 4
+-- (validate_payload/validate_parcel trong nhom4_validation.py): diện tích
+-- thửa, loại đất 1 + diện tích + nguồn gốc + hình thức + thời hạn sử dụng,
+-- và đủ thông tin chủ (cá nhân) hoặc tên tổ chức — BẤT KỂ NGUỒN (form Nhóm
+-- 4 hay đồng bộ Google Sheet), vì dữ liệu Sheet có thể chỉ có vài cột (số
+-- tờ/thửa) mà thiếu hẳn phần thuộc tính, không thể coi là "đã thu thập".
+-- =========================================================
+
+create table if not exists public.nhom3_can_thu_thap (
+    id bigint generated by default as identity primary key,
+    ma_xa text not null,
+    so_to integer not null,
+    so_thua integer not null,
+    ma_dinh_danh text,
+    created_at timestamptz not null default now(),
+    constraint nhom3_can_thu_thap_key unique (ma_xa, so_to, so_thua)
+);
+
+alter table public.nhom3_can_thu_thap enable row level security;
+
+create index if not exists idx_nhom3_can_thu_thap_ma_xa on public.nhom3_can_thu_thap (ma_xa);
+
+-- 9 giá trị nguồn gốc sử dụng hợp lệ của form Nhóm 4 — khớp nguyên văn
+-- NGUON_GOC_OPTIONS trong frontend/src/utils/nhom4Constants.js. Tách hàm
+-- riêng để dùng lại được cho cả nguongoc1 lẫn nguongoc2.
+create or replace function public._nhom3_nguon_goc_hop_le(gia_tri text)
+returns boolean
+language sql
+immutable
+as $$
+    select trim(coalesce(gia_tri, '')) in (
+        'Nhà nước giao đất có thu tiền sử dụng đất',
+        'Nhà nước giao đất không thu tiền sử dụng đất',
+        'Nhà nước cho thuê đất trả tiền hàng năm',
+        'Nhà nước cho thuê đất trả tiền một lần',
+        'Nhà nước công nhận quyền sử dụng đất như Nhà nước giao đất có thu tiền sử dụng đất',
+        'Nhà nước công nhận quyền sử dụng đất như Nhà nước giao đất không thu tiền sử dụng đất',
+        'Nhận chuyển nhượng quyền sử dụng đất',
+        'Thừa kế quyền sử dụng đất',
+        'Tặng cho quyền sử dụng đất'
+    )
+$$;
+
+revoke all on function public._nhom3_nguon_goc_hop_le(text) from public;
+grant execute on function public._nhom3_nguon_goc_hop_le(text) to service_role;
+
+-- pháp_nhan/vai_trò_phap_nhan hợp lệ — suy trực tiếp từ tinhPhapNhanVaiTro()
+-- trong frontend/src/utils/nhom4Constants.js (form không cho gõ tay, chỉ
+-- suy từ tab "loại chủ" đang chọn), CỘNG "Tổ chức" (owner đại diện tổ chức,
+-- xem nhom4_service._build_rows: phap_nhan="Tổ chức" khi doi_tuong=Tổ chức).
+create or replace function public._nhom3_phap_nhan_hop_le(gia_tri text)
+returns boolean
+language sql
+immutable
+as $$
+    select trim(coalesce(gia_tri, '')) in (
+        'Cá nhân', 'Đồng sử dụng', 'Vợ chồng', 'Hộ gia đình', 'Tổ chức'
+    )
+$$;
+
+revoke all on function public._nhom3_phap_nhan_hop_le(text) from public;
+grant execute on function public._nhom3_phap_nhan_hop_le(text) to service_role;
+
+create or replace function public._nhom3_vai_tro_phap_nhan_hop_le(gia_tri text)
+returns boolean
+language sql
+immutable
+as $$
+    select trim(coalesce(gia_tri, '')) in (
+        'Cá nhân', 'Chồng', 'Vợ', 'Chủ hộ', 'Vợ/chồng chủ hộ', 'Thành viên hộ gia đình'
+    )
+$$;
+
+revoke all on function public._nhom3_vai_tro_phap_nhan_hop_le(text) from public;
+grant execute on function public._nhom3_vai_tro_phap_nhan_hop_le(text) to service_role;
+
+-- Số phát hành GCN hợp lệ — port nguyên văn validate_so_phat_hanh_gcn()
+-- trong backend/app/utils/nhom4_validation.py: đúng 10 chữ số, hoặc 1-2
+-- chữ cái + dấu cách + số (tổng độ dài 8/9 nếu 1 chữ, 9/11 nếu 2 chữ).
+create or replace function public._nhom3_so_phat_hanh_hop_le(gia_tri text)
+returns boolean
+language plpgsql
+immutable
+as $$
+declare
+    s text := upper(trim(coalesce(gia_tri, '')));
+    chu text;
+begin
+    if s = '' then
+        return false;
+    end if;
+    if s ~ '^[0-9]{10}$' then
+        return true;
+    end if;
+    if s ~ '^[A-ZĐ]{1,2} [0-9]+$' then
+        chu := split_part(s, ' ', 1);
+        if length(chu) = 1 then
+            return length(s) in (8, 9);
+        elsif length(chu) = 2 then
+            return length(s) in (9, 11);
+        end if;
+    end if;
+    return false;
+end;
+$$;
+
+revoke all on function public._nhom3_so_phat_hanh_hop_le(text) from public;
+grant execute on function public._nhom3_so_phat_hanh_hop_le(text) to service_role;
+
+-- Điều kiện "đủ dữ liệu bắt buộc giống form Nhóm 4" trên 1 dòng du_lieu_gcn
+-- — lặp lại giống nhau ở cả nhom3_tong_hop lẫn nhom3_list_con_thieu nên
+-- tách thành hàm SQL nhỏ, IMMUTABLE, INLINE được (chỉ so chuỗi, không đụng
+-- bảng khác). Siết theo yêu cầu thực tế (dữ liệu đồng bộ Sheet từng lọt
+-- qua dù thiếu/sai):
+--   - Loại đất 2: nếu có điền BẤT KỲ ô dat2 nào (nhập nhiều loại đất/thửa)
+--     thì phải đủ CẢ 5 ô, giống đúng quy tắc co_dat2 của validate_parcel —
+--     không chấp nhận dat2 điền dở dang.
+--   - nguongoc1 (và nguongoc2 nếu có dat2) phải khớp ĐÚNG 1 trong 9 giá trị
+--     hợp lệ của form (_nhom3_nguon_goc_hop_le) — không chỉ cần khác rỗng,
+--     tránh lọt dữ liệu nhập sai/gõ tự do.
+--   - Bắt buộc có tên file quét (tenfilequet) — khớp yêu cầu file_chinh bắt
+--     buộc của form Nhóm 4 (không có nghĩa là chưa đính hồ sơ).
+--   - phapnhantrengcn/vaitrophapnhan phải khớp đúng danh sách hữu hạn suy từ
+--     tinhPhapNhanVaiTro() (_nhom3_phap_nhan_hop_le/_nhom3_vai_tro_phap_nhan_hop_le)
+--     — form không cho gõ tay 2 ô này, gõ tự do coi như dữ liệu sai/nguồn khác.
+--   - GCN: sophathanhgcn mang tiền tố CHUACOGIAY_ (quy ước
+--     _default_so_phat_hanh trong nhom4_service.py) -> "Chưa được cấp GCN",
+--     không cần gì thêm; NGƯỢC LẠI ("Đã có GCN") bắt buộc sophathanhgcn
+--     đúng định dạng (_nhom3_so_phat_hanh_hop_le) và ngaycapgcn khác rỗng.
+create or replace function public._nhom3_gcn_du_du_lieu(g public.du_lieu_gcn)
+returns boolean
+language sql
+immutable
+as $$
+    select
+        trim(coalesce(g.dientichthuadat, '')) <> ''
+        and trim(coalesce(g.loaidat1, '')) <> ''
+        and trim(coalesce(g.dientich1, '')) <> ''
+        and public._nhom3_nguon_goc_hop_le(g.nguongoc1)
+        and trim(coalesce(g.hinhthucsudung1, '')) <> ''
+        and trim(coalesce(g.thoihansudung1, '')) <> ''
+        and trim(coalesce(g.tenfilequet, '')) <> ''
+        and (
+            starts_with(trim(coalesce(g.sophathanhgcn, '')), 'CHUACOGIAY_')
+            or (
+                public._nhom3_so_phat_hanh_hop_le(g.sophathanhgcn)
+                and trim(coalesce(g.ngaycapgcn, '')) <> ''
+            )
+        )
+        and (
+            trim(coalesce(g.tentochuc, '')) <> ''
+            or (
+                trim(coalesce(g.hovatenchusudung, '')) <> ''
+                and trim(coalesce(g.sodinhdanhcanhan, '')) <> ''
+                and trim(coalesce(g.ngaythangnamsinh, '')) <> ''
+                and trim(coalesce(g.gioitinh, '')) <> ''
+                and trim(coalesce(g.diachithuongtru, '')) <> ''
+                and public._nhom3_phap_nhan_hop_le(g.phapnhantrengcn)
+                and public._nhom3_vai_tro_phap_nhan_hop_le(g.vaitrophapnhan)
+            )
+        )
+        and (
+            -- Chưa điền ô dat2 nào -> chỉ 1 loại đất, không cần xét thêm.
+            (
+                trim(coalesce(g.loaidat2, '')) = ''
+                and trim(coalesce(g.dientich2, '')) = ''
+                and trim(coalesce(g.nguongoc2, '')) = ''
+                and trim(coalesce(g.hinhthucsudung2, '')) = ''
+                and trim(coalesce(g.thoihansudung2, '')) = ''
+            )
+            or (
+                -- Đã điền dat2 -> bắt buộc đủ cả 5 ô + nguồn gốc 2 hợp lệ.
+                trim(coalesce(g.loaidat2, '')) <> ''
+                and trim(coalesce(g.dientich2, '')) <> ''
+                and public._nhom3_nguon_goc_hop_le(g.nguongoc2)
+                and trim(coalesce(g.hinhthucsudung2, '')) <> ''
+                and trim(coalesce(g.thoihansudung2, '')) <> ''
+            )
+        )
+$$;
+
+revoke all on function public._nhom3_gcn_du_du_lieu(public.du_lieu_gcn) from public;
+grant execute on function public._nhom3_gcn_du_du_lieu(public.du_lieu_gcn) to service_role;
+
+-- Tổng hợp toàn dự án — trang tổng quan. CHỈ tính thửa CÓ THẬT trên bản đồ
+-- (thua_dat) — thửa không có bản đồ (có thể đã biến động) bị loại hẳn,
+-- không còn xuất hiện trong "tổng" hay bất kỳ số liệu nào ở đây.
+create or replace function public.nhom3_tong_hop()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '20s'
+as $$
+declare
+    v_tong integer;
+    v_da_nhom_1_2 integer;
+    v_da_thu_thap integer;
+    v_con_thieu integer;
+    v_theo_xa jsonb;
+begin
+    with phan_loai as (
+        select
+            t.ma_xa,
+            exists (
+                select 1 from public.dong_bo_du_lieu d
+                where d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+                  and upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
+            ) as la_nhom_1_2,
+            exists (
+                select 1 from public.du_lieu_gcn g
+                where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+                  and public._nhom3_gcn_du_du_lieu(g)
+            ) as da_thu_thap
+        from public.nhom3_can_thu_thap t
+        where exists (
+            select 1 from public.thua_dat p
+            where p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
+        )
+    ),
+    theo_xa as (
+        select
+            x.ma_xa,
+            xp.ten_xa,
+            count(*) as tong,
+            count(*) filter (where x.la_nhom_1_2) as da_nhom_1_2,
+            count(*) filter (where not x.la_nhom_1_2 and x.da_thu_thap) as da_thu_thap,
+            count(*) filter (where not x.la_nhom_1_2 and not x.da_thu_thap) as con_thieu
+        from phan_loai x
+        left join public.danhsachxaphuong xp on xp.ma_xa = x.ma_xa
+        group by x.ma_xa, xp.ten_xa
+    )
+    select
+        coalesce(sum(tong), 0),
+        coalesce(sum(da_nhom_1_2), 0),
+        coalesce(sum(da_thu_thap), 0),
+        coalesce(sum(con_thieu), 0),
+        coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
+    into v_tong, v_da_nhom_1_2, v_da_thu_thap, v_con_thieu, v_theo_xa
+    from theo_xa;
+
+    return jsonb_build_object(
+        'tong', v_tong,
+        'da_nhom_1_2', v_da_nhom_1_2,
+        'da_thu_thap', v_da_thu_thap,
+        'con_thieu', v_con_thieu,
+        'theo_xa', v_theo_xa
+    );
+end;
+$$;
+
+revoke all on function public.nhom3_tong_hop() from public;
+grant execute on function public.nhom3_tong_hop() to service_role;
+
+-- Danh sách phân trang thửa CÒN THIẾU dữ liệu (chỉ thửa có bản đồ, chưa
+-- Nhóm 1/2, chưa đủ dữ liệu bắt buộc). p_ma_xa lọc thêm theo xã (tuỳ chọn).
+create or replace function public.nhom3_list_con_thieu(
+    p_ma_xa text default null,
+    p_limit integer default 100,
+    p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '20s'
+as $$
+declare
+    v_total integer;
+    v_items jsonb;
+begin
+    with con_thieu as (
+        select t.ma_xa, xp.ten_xa, t.so_to, t.so_thua, t.ma_dinh_danh
+        from public.nhom3_can_thu_thap t
+        join public.thua_dat p on p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
+        left join public.danhsachxaphuong xp on xp.ma_xa = t.ma_xa
+        where (p_ma_xa is null or t.ma_xa = p_ma_xa)
+          and not exists (
+              select 1 from public.dong_bo_du_lieu d
+              where d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+                and upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
+          )
+          and not exists (
+              select 1 from public.du_lieu_gcn g
+              where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+                and public._nhom3_gcn_du_du_lieu(g)
+          )
+    )
+    select count(*) into v_total from con_thieu;
+
+    with con_thieu as (
+        select t.ma_xa, xp.ten_xa, t.so_to, t.so_thua, t.ma_dinh_danh
+        from public.nhom3_can_thu_thap t
+        join public.thua_dat p on p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
+        left join public.danhsachxaphuong xp on xp.ma_xa = t.ma_xa
+        where (p_ma_xa is null or t.ma_xa = p_ma_xa)
+          and not exists (
+              select 1 from public.dong_bo_du_lieu d
+              where d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
+                and upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
+          )
+          and not exists (
+              select 1 from public.du_lieu_gcn g
+              where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+                and public._nhom3_gcn_du_du_lieu(g)
+          )
+    )
+    select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
+    from (
+        select * from con_thieu
+        order by ma_xa, so_to, so_thua
+        limit p_limit offset p_offset
+    ) y;
+
+    return jsonb_build_object('total', v_total, 'items', v_items);
+end;
+$$;
+
+revoke all on function public.nhom3_list_con_thieu(text, integer, integer) from public;
+grant execute on function public.nhom3_list_con_thieu(text, integer, integer) to service_role;
+
+-- =========================================================
+-- NHÓM 3 THEO RANH DỰ ÁN (tool desktop thuadatgml, tab "Nhóm 3 theo ranh dự
+-- án") — người dùng upload Shapefile ranh dự án, desktop gửi GeoJSON lên
+-- đây, hàm chồng xếp với public.thua_dat (GIST index có sẵn,
+-- thua_dat_geom_gix) rồi áp ĐÚNG logic Nhóm 3 đã dùng ở nhom3_tong_hop/
+-- nhom3_list_con_thieu bên trên (loại Nhóm 1/2 theo dong_bo_du_lieu, loại
+-- thửa đã đủ dữ liệu theo _nhom3_gcn_du_du_lieu) — không định nghĩa lại.
+--
+-- p_tieu_chi: hiện chỉ có 'giao' (giao > 0 thì nhận) — tham số giữ sẵn chỗ
+-- để sau này thêm 'tam_thua' (tâm thửa nằm trong ranh), 'ty_le' (>= X%),
+-- 'toan_bo' (nằm trọn trong ranh) mà không phải đổi chữ ký hàm.
+--
+-- Trả 2 phần: tong_giao_ranh (đếm MỌI thửa giao ranh, kể cả Nhóm 1/2/đã có
+-- dữ liệu — để GUI hiện "Tổng thửa giao ranh: xxx" đúng spec) và items
+-- (CHỈ thửa Nhóm 3 — danh sách nhẹ hơn nhiều so với gửi hết MỌI thửa giao
+-- ranh về client, đúng nguyên tắc không tải thừa).
+create or replace function public.thua_dat_nhom3_trong_ranh(
+    p_geom_geojson text,
+    p_tieu_chi text default 'giao'
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '90s'
+as $$
+declare
+    v_ranh geometry;
+    v_tong_giao_ranh integer;
+    v_items jsonb;
+begin
+    if p_geom_geojson is null or trim(p_geom_geojson) = '' then
+        raise exception 'Thiếu geometry ranh dự án';
+    end if;
+
+    begin
+        v_ranh := ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(p_geom_geojson), 4326));
+    exception when others then
+        raise exception 'Ranh dự án không đọc được (GeoJSON lỗi): %', sqlerrm;
+    end;
+
+    if v_ranh is null or ST_IsEmpty(v_ranh) then
+        raise exception 'Ranh dự án rỗng sau khi parse';
+    end if;
+
+    -- 1 pass: giao (ST_Intersects + ST_Intersection) tính 1 lần, dùng
+    -- chung cho cả đếm "tổng thửa giao ranh" lẫn lọc Nhóm 3 bên dưới —
+    -- tránh tính ST_Intersection 2 lần cho cùng 1 tập thửa.
+    with giao as (
+        -- ST_MakeValid từng thửa trước khi giao — 1 polygon lỗi (hiếm, dữ
+        -- liệu GML cũ) không làm cả câu lỗi, chỉ lệch diện tích thửa đó
+        -- (chấp nhận được, còn hơn chặn đứng cả truy vấn).
+        select
+            t.ma_xa, t.so_to, t.so_thua, t.ma_thua_dat, t.muc_dich_su_dung,
+            ST_Area(t.geom::geography) as dien_tich_thua_m2,
+            ST_Area(ST_Intersection(ST_MakeValid(t.geom), v_ranh)::geography) as dien_tich_giao_m2
+        from public.thua_dat t
+        where ST_Intersects(t.geom, v_ranh)
+    ),
+    giao_duong as (
+        select * from giao where dien_tich_giao_m2 > 0
+    ),
+    nhom3 as (
+        select
+            g.ma_xa, g.so_to, g.so_thua, g.ma_thua_dat, g.muc_dich_su_dung,
+            round(g.dien_tich_thua_m2::numeric, 2) as dien_tich_thua,
+            round(g.dien_tich_giao_m2::numeric, 2) as dien_tich_giao,
+            case when g.dien_tich_thua_m2 > 0
+                 then round((g.dien_tich_giao_m2 / g.dien_tich_thua_m2 * 100)::numeric, 2)
+                 else 0 end as ty_le_phan_tram
+        from giao_duong g
+        where not exists (
+            select 1 from public.dong_bo_du_lieu d
+            where d.ma_xa = g.ma_xa and d.so_to = g.so_to and d.so_thua = g.so_thua
+              and upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
+        )
+        and not exists (
+            select 1 from public.du_lieu_gcn dg
+            where dg.madvhc_soto_sothua = g.ma_xa || '_' || g.so_to::text || '_' || g.so_thua::text
+              and public._nhom3_gcn_du_du_lieu(dg)
+        )
+    )
+    select
+        (select count(*) from giao_duong),
+        coalesce(jsonb_agg(row_to_json(n) order by n.ma_xa, n.so_to, n.so_thua), '[]'::jsonb)
+    into v_tong_giao_ranh, v_items
+    from nhom3 n;
+
+    return jsonb_build_object('tong_giao_ranh', v_tong_giao_ranh, 'items', v_items);
+end;
+$$;
+
+revoke all on function public.thua_dat_nhom3_trong_ranh(text, text) from public;
+grant execute on function public.thua_dat_nhom3_trong_ranh(text, text) to service_role;
 
 
