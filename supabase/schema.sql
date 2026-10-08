@@ -2092,3 +2092,116 @@ revoke all on function public.thua_dat_nhom3_trong_ranh(text, text) from public;
 grant execute on function public.thua_dat_nhom3_trong_ranh(text, text) to service_role;
 
 
+-- Công tác "ứng thửa": đối chiếu MỘT LÔ polygon thửa cũ (mỗi polygon kèm
+-- số thửa cũ/số tờ cũ) với bản đồ hiện tại — mỗi thửa cũ có thể ứng NHIỀU
+-- thửa mới và ngược lại (không giả định 1-1), trả % diện tích giao theo
+-- CẢ 2 chiều (so với thửa cũ và so với thửa mới) + phân loại KH 2959 của
+-- thửa mới để biết đã Nhóm 1/Nhóm 2 hay chưa.
+create or replace function public.thua_dat_ung_thua_cu(
+    p_features_geojson text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '120s'
+as $$
+declare
+    v_fc jsonb;
+    v_so_luong integer;
+    v_so_thua_cu_dau_vao integer;
+    v_so_thua_cu_khong_khop integer;
+    v_items jsonb;
+begin
+    if p_features_geojson is null or trim(p_features_geojson) = '' then
+        raise exception 'Thiếu dữ liệu thửa cũ';
+    end if;
+
+    begin
+        v_fc := p_features_geojson::jsonb;
+    exception when others then
+        raise exception 'Dữ liệu thửa cũ không đọc được (JSON lỗi): %', sqlerrm;
+    end;
+
+    if jsonb_typeof(v_fc -> 'features') is distinct from 'array' then
+        raise exception 'Dữ liệu thửa cũ phải là FeatureCollection (có mảng "features")';
+    end if;
+
+    v_so_luong := jsonb_array_length(v_fc -> 'features');
+    if v_so_luong = 0 then
+        raise exception 'Không có polygon nào trong dữ liệu thửa cũ';
+    end if;
+    if v_so_luong > 20000 then
+        raise exception 'Quá nhiều polygon (%), tối đa 20000 mỗi lần', v_so_luong;
+    end if;
+
+    with ranh_tho as (
+        select
+            row_number() over () as idx,
+            (feat -> 'properties' ->> 'so_thua_cu') as so_thua_cu,
+            (feat -> 'properties' ->> 'so_to_cu') as so_to_cu,
+            (feat -> 'geometry')::text as geom_text
+        from jsonb_array_elements(v_fc -> 'features') as feat
+    ),
+    ranh_ok as (
+        select
+            idx, so_thua_cu, so_to_cu,
+            ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(geom_text), 4326)) as geom
+        from ranh_tho
+    ),
+    ranh_valid as (
+        select * from ranh_ok where geom is not null and not ST_IsEmpty(geom)
+    ),
+    giao_raw as (
+        -- ST_MakeValid từng thửa mới trước khi giao — 1 polygon lỗi (hiếm)
+        -- không làm cả câu lỗi, chỉ lệch diện tích thửa đó.
+        select
+            r.idx, r.so_thua_cu, r.so_to_cu,
+            ST_Area(r.geom::geography) as dien_tich_thua_cu_m2,
+            t.ma_xa, t.so_to, t.so_thua, t.ma_thua_dat,
+            ST_Area(t.geom::geography) as dien_tich_thua_moi_m2,
+            ST_Area(ST_Intersection(ST_MakeValid(t.geom), r.geom)::geography) as dien_tich_giao_m2
+        from ranh_valid r
+        join public.thua_dat t on ST_Intersects(t.geom, r.geom)
+    ),
+    giao as (
+        select g.*, d.phan_loai_ke_hoach_2959 as phan_loai
+        from giao_raw g
+        left join public.dong_bo_du_lieu d
+          on d.ma_xa = g.ma_xa and d.so_to = g.so_to and d.so_thua = g.so_thua
+        where g.dien_tich_giao_m2 > 0
+    )
+    select
+        (select count(*) from ranh_valid),
+        (select count(*) from ranh_valid r where not exists (select 1 from giao g where g.idx = r.idx)),
+        coalesce(jsonb_agg(row_to_json(x) order by x.idx, x.ma_xa, x.so_to, x.so_thua), '[]'::jsonb)
+    into v_so_thua_cu_dau_vao, v_so_thua_cu_khong_khop, v_items
+    from (
+        select
+            idx, so_thua_cu, so_to_cu, ma_xa, so_to, so_thua, ma_thua_dat,
+            round(dien_tich_thua_cu_m2::numeric, 2) as dien_tich_thua_cu,
+            round(dien_tich_thua_moi_m2::numeric, 2) as dien_tich_thua_moi,
+            round(dien_tich_giao_m2::numeric, 2) as dien_tich_giao,
+            case when dien_tich_thua_cu_m2 > 0
+                 then round((dien_tich_giao_m2 / dien_tich_thua_cu_m2 * 100)::numeric, 2)
+                 else 0 end as ty_le_theo_thua_cu,
+            case when dien_tich_thua_moi_m2 > 0
+                 then round((dien_tich_giao_m2 / dien_tich_thua_moi_m2 * 100)::numeric, 2)
+                 else 0 end as ty_le_theo_thua_moi,
+            phan_loai
+        from giao
+    ) x;
+
+    return jsonb_build_object(
+        'so_thua_cu_dau_vao', v_so_thua_cu_dau_vao,
+        'so_thua_cu_khong_khop', v_so_thua_cu_khong_khop,
+        'items', v_items
+    );
+end;
+$$;
+
+revoke all on function public.thua_dat_ung_thua_cu(text) from public;
+grant execute on function public.thua_dat_ung_thua_cu(text) to service_role;
+
+
