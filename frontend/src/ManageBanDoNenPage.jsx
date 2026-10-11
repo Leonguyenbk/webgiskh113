@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   deleteBanDoNen,
@@ -6,6 +6,7 @@ import {
   toggleBanDoNen,
   updateBanDoNen,
 } from "./services/mapSheetService";
+import { getXaList } from "./services/parcelService";
 
 const TRANG_THAI_LABELS = {
   ready: "Sẵn sàng",
@@ -24,9 +25,35 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
   const [filterSoTo, setFilterSoTo] = useState("");
   const [filterTrangThai, setFilterTrangThai] = useState("");
 
+  const [xaList, setXaList] = useState([]);
+  const [xaQuery, setXaQuery] = useState("");
+  const [xaDropdownOpen, setXaDropdownOpen] = useState(false);
+
   const [busyId, setBusyId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [description, setDescription] = useState("");
+
+  // Danh sách xã/phường để gõ-tìm (combobox) — nhẹ (chỉ mã + tên), khác
+  // danh sách tờ bản đồ (9973 dòng) nên tải 1 lần khi mở trang vẫn ổn.
+  useEffect(() => {
+    getXaList()
+      .then((result) => setXaList(result?.items || []))
+      .catch(() => {});
+  }, []);
+
+  const filteredXaOptions = useMemo(() => {
+    const keyword = xaQuery.trim().toLocaleLowerCase("vi");
+    if (!keyword) return xaList;
+    return xaList.filter(({ ma_xa, ten_xa }) =>
+      `${ten_xa} ${ma_xa}`.toLocaleLowerCase("vi").includes(keyword),
+    );
+  }, [xaList, xaQuery]);
+
+  const handleSelectXa = (maXa, tenXa) => {
+    setFilterMaXa(maXa);
+    setXaQuery(tenXa || maXa);
+    setXaDropdownOpen(false);
+  };
 
   // Trang này có thể có RẤT NHIỀU tờ bản đồ — KHÔNG tải cả danh sách khi
   // mở trang. Chỉ truy vấn khi người dùng bấm "Tìm", và phải có ít nhất
@@ -36,7 +63,7 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
     const maXa = filterMaXa.trim();
     const soTo = filterSoTo.trim();
     if (!maXa && !soTo) {
-      setListError("Nhập mã xã hoặc số tờ để tìm trước khi truy vấn.");
+      setListError("Chọn xã/phường hoặc nhập số tờ để tìm trước khi truy vấn.");
       setItems([]);
       setHasSearched(false);
       return undefined;
@@ -156,19 +183,48 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
           <label>Danh sách tờ bản đồ</label>
 
           <p className="importHint">
-            Danh sách tờ bản đồ có thể rất nhiều — nhập mã xã và/hoặc số tờ rồi bấm{" "}
+            Danh sách tờ bản đồ có thể rất nhiều — chọn xã/phường và/hoặc nhập số tờ rồi bấm{" "}
             <strong>Tìm</strong> (Enter cũng được), trang sẽ không tự tải toàn bộ.
           </p>
 
           <div className="filterRow">
-            <div>
+            <div className="comboBox">
               <input
+                type="text"
                 className="filterInput"
-                value={filterMaXa}
-                onChange={(event) => setFilterMaXa(event.target.value)}
+                autoComplete="off"
+                value={xaQuery}
+                placeholder="Gõ tên hoặc mã xã/phường để tìm…"
+                onChange={(event) => {
+                  setXaQuery(event.target.value);
+                  setFilterMaXa("");
+                  setXaDropdownOpen(true);
+                }}
+                onFocus={() => setXaDropdownOpen(true)}
+                onBlur={() => setXaDropdownOpen(false)}
                 onKeyDown={handleFilterKeyDown}
-                placeholder="Mã xã (chứa chuỗi)"
               />
+
+              {xaDropdownOpen && (
+                <div className="comboBoxList">
+                  {filteredXaOptions.length === 0 ? (
+                    <div className="comboBoxEmpty">Không tìm thấy xã/phường</div>
+                  ) : (
+                    filteredXaOptions.map(({ ma_xa, ten_xa }) => (
+                      <div
+                        key={ma_xa}
+                        className={`comboBoxItem${ma_xa === filterMaXa ? " active" : ""}`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          handleSelectXa(ma_xa, ten_xa);
+                        }}
+                      >
+                        {ten_xa || ma_xa}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <input
@@ -202,7 +258,7 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
           </button>
 
           {!hasSearched && !listError && (
-            <div className="notice">Nhập mã xã hoặc số tờ bên trên rồi bấm Tìm để xem danh sách.</div>
+            <div className="notice">Chọn xã/phường hoặc nhập số tờ bên trên rồi bấm Tìm để xem danh sách.</div>
           )}
 
           {listError && (
