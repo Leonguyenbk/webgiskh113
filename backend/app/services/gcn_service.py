@@ -241,6 +241,15 @@ _NHOM3_DEFAULT_LIMIT = 100
 _NHOM3_MAX_LIMIT = 500
 
 
+def refresh_nhom3_cache():
+    result, error_response = gcn_repository.refresh_nhom3_trang_thai_cache()
+    if error_response:
+        return None, error_response
+    # Hàm SQL trả về số dòng đã ghi vào cache (PostgREST bọc trong scalar).
+    rows = result if isinstance(result, int) else None
+    return {"ok": True, "rows": rows}, None
+
+
 def get_nhom3_danh_sach_con_thieu(ma_xa_raw: str | None, limit_raw: str | None, offset_raw: str | None):
     """Danh sách phân trang thửa còn thiếu dữ liệu (Nhóm 3, chỉ thửa có
     bản đồ), lọc theo xã (tuỳ chọn)."""

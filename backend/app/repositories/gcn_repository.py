@@ -93,6 +93,16 @@ def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int):
     )
 
 
+def refresh_nhom3_trang_thai_cache():
+    # Nhánh chậm: quét toàn bộ nhom3_can_thu_thap để tính lại cache
+    # nhom3_trang_thai_cache. Gọi TAY (POST /api/nhom3-con-thieu/refresh)
+    # sau mỗi lần nạp thêm danh sách Nhóm 3 mới — không có cron. Hàm SQL
+    # nới statement_timeout 300s nên timeout HTTP ở đây phải lớn hơn.
+    return supabase_client.call_rpc(
+        "refresh_nhom3_trang_thai_cache", {}, timeout=320
+    )
+
+
 def list_nguon():
     response, error_response = supabase_client.rest_request(
         "GET", NGUON_GCN_TABLE, params={"select": "*", "order": "ma_nguon.asc"}

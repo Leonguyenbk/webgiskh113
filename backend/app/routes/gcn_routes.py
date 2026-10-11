@@ -67,6 +67,20 @@ def nhom3_con_thieu_danh_sach():
     return jsonify(data)
 
 
+@gcn_bp.post("/api/nhom3-con-thieu/refresh")
+def nhom3_con_thieu_refresh():
+    # Tính lại bảng cache nhom3_trang_thai_cache (nhánh quét nặng). Gọi
+    # TAY sau mỗi lần nạp thêm danh sách Nhóm 3 mới — không phải request
+    # người dùng thường — nên chắn bằng IMPORT_TOKEN, giống /api/gcn-stats/refresh.
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    data, error_response = gcn_service.refresh_nhom3_cache()
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/gcn-export-theo-nhom")
 def gcn_export_theo_nhom():
     # Xuất .xlsx danh sách du_lieu_gcn của 1 xã đã thu thập + thuộc nhóm

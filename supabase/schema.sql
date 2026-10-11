@@ -1856,79 +1856,152 @@ $$;
 revoke all on function public._nhom3_gcn_du_du_lieu(public.du_lieu_gcn) from public;
 grant execute on function public._nhom3_gcn_du_du_lieu(public.du_lieu_gcn) to service_role;
 
--- Tổng hợp toàn dự án — trang tổng quan. CHỈ tính thửa CÓ THẬT trên bản đồ
--- (thua_dat) — thửa không có bản đồ (có thể đã biến động) bị loại hẳn,
--- không còn xuất hiện trong "tổng" hay bất kỳ số liệu nào ở đây.
+-- =========================================================
+-- CACHE TRẠNG THÁI NHÓM 3 (theo từng thửa) — nhom3_can_thu_thap đã lên
+-- hàng trăm nghìn dòng (sắp nạp thêm cả triệu dòng nữa). Đo thực tế lúc
+-- 146k dòng: nhom3_tong_hop() quét trực tiếp (3 EXISTS tương quan/dòng
+-- vào thua_dat/dong_bo_du_lieu/du_lieu_gcn) mất 5.7s -> ước tính theo tỉ
+-- lệ dòng sẽ ~80s ở quy mô ~2 triệu dòng, VƯỢT statement_timeout 20s của
+-- hàm -> lỗi hẳn, không chỉ chậm. Tách phần quét nặng ra cache theo TỪNG
+-- THỬA (không chỉ theo xã, để nhom3_list_con_thieu cũng đọc cache được
+-- luôn) — nhom3_tong_hop/nhom3_list_con_thieu dưới đây chỉ còn GROUP BY/
+-- filter trên cache, không JOIN bảng lớn nữa.
+--
+-- Refresh CHẠY TAY (gọi public.refresh_nhom3_trang_thai_cache() hoặc POST
+-- /api/nhom3-con-thieu/refresh) sau mỗi lần nạp thêm danh sách Nhóm 3 mới
+-- — không đặt pg_cron, số liệu không cần tươi theo giờ, chỉ cần tươi theo
+-- mỗi lần nạp.
+-- =========================================================
+
+create table if not exists public.nhom3_trang_thai_cache (
+    ma_xa text not null,
+    so_to integer not null,
+    so_thua integer not null,
+    ma_dinh_danh text,
+    la_nhom_1_2 boolean not null,
+    da_thu_thap boolean not null,
+    computed_at timestamptz not null default now(),
+    constraint nhom3_trang_thai_cache_key primary key (ma_xa, so_to, so_thua)
+);
+alter table public.nhom3_trang_thai_cache enable row level security;
+-- Không tạo policy: chỉ Service Role Key (qua các hàm security definer
+-- bên dưới) mới đọc/ghi được.
+
+create index if not exists idx_nhom3_trang_thai_cache_con_thieu
+    on public.nhom3_trang_thai_cache (ma_xa, so_to, so_thua)
+    where not la_nhom_1_2 and not da_thu_thap;
+
+create or replace function public.refresh_nhom3_trang_thai_cache()
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+-- Đo thực tế ~10.7s ở 139.6k dòng; sắp nạp thêm ~1,9 triệu dòng (lên ~2
+-- triệu, gấp ~14 lần) -> ước tính theo tỉ lệ ~150s, khá sát 180s nếu chỉ
+-- để mức đó -> nới rộng thêm biên an toàn.
+set statement_timeout = '300s'
+set work_mem = '512MB'
+as $$
+declare
+    v_now timestamptz := now();
+    v_rows integer;
+begin
+    -- Khoá theo phạm vi transaction: lần refresh thứ 2 chạy song song sẽ
+    -- chờ ở đây, rồi rơi vào nhánh "vừa mới tính" bên dưới và thoát nhanh.
+    perform pg_advisory_xact_lock(hashtext('refresh_nhom3_trang_thai_cache'));
+
+    if exists (
+        select 1 from public.nhom3_trang_thai_cache
+        where computed_at > v_now - interval '1 minute'
+    ) then
+        select count(*) into v_rows from public.nhom3_trang_thai_cache;
+        return v_rows;
+    end if;
+
+    -- UPSERT thay cho "delete + insert": không có DELETE trần (Supabase
+    -- bật pg-safeupdate -> "DELETE requires a WHERE clause"), và người đọc
+    -- luôn thấy 1 bộ đầy đủ (cũ hoặc mới), không có khoảng trống rỗng.
+    insert into public.nhom3_trang_thai_cache
+        (ma_xa, so_to, so_thua, ma_dinh_danh, la_nhom_1_2, da_thu_thap, computed_at)
+    with gcn_du_keys as (
+        select distinct g.madvhc_soto_sothua
+        from public.du_lieu_gcn g
+        where public._nhom3_gcn_du_du_lieu(g)
+    ),
+    nhom12_keys as (
+        select d.ma_xa, d.so_to, d.so_thua
+        from public.dong_bo_du_lieu d
+        where upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
+    )
+    select
+        t.ma_xa, t.so_to, t.so_thua, t.ma_dinh_danh,
+        (n12.ma_xa is not null) as la_nhom_1_2,
+        (k.madvhc_soto_sothua is not null) as da_thu_thap,
+        v_now
+    from public.nhom3_can_thu_thap t
+    join public.thua_dat p
+        on p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
+    left join nhom12_keys n12
+        on n12.ma_xa = t.ma_xa and n12.so_to = t.so_to and n12.so_thua = t.so_thua
+    left join gcn_du_keys k
+        on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+    on conflict (ma_xa, so_to, so_thua) do update set
+        ma_dinh_danh = excluded.ma_dinh_danh,
+        la_nhom_1_2  = excluded.la_nhom_1_2,
+        da_thu_thap  = excluded.da_thu_thap,
+        computed_at  = excluded.computed_at;
+
+    get diagnostics v_rows = row_count;
+
+    -- Dọn thửa không còn khớp (xoá khỏi nhom3_can_thu_thap hoặc không còn
+    -- khớp thua_dat) — DELETE này CÓ mệnh đề WHERE.
+    delete from public.nhom3_trang_thai_cache where computed_at < v_now;
+
+    return v_rows;
+end;
+$$;
+
+revoke all on function public.refresh_nhom3_trang_thai_cache() from public;
+grant execute on function public.refresh_nhom3_trang_thai_cache() to service_role;
+
+-- Tổng hợp toàn dự án — trang tổng quan. CHỈ đọc cache (vài chục mili
+-- giây bất kể bảng gốc bao nhiêu triệu dòng) — xem refresh_nhom3_trang_thai_cache
+-- ở trên để biết cache được tính thế nào và khi nào cần gọi lại.
 create or replace function public.nhom3_tong_hop()
 returns jsonb
-language plpgsql
+language sql
 stable
 security definer
 set search_path = public, extensions
-set statement_timeout = '20s'
 as $$
-declare
-    v_tong integer;
-    v_da_nhom_1_2 integer;
-    v_da_thu_thap integer;
-    v_con_thieu integer;
-    v_theo_xa jsonb;
-begin
-    with phan_loai as (
+    with theo_xa as (
         select
-            t.ma_xa,
-            exists (
-                select 1 from public.dong_bo_du_lieu d
-                where d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
-                  and upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
-            ) as la_nhom_1_2,
-            exists (
-                select 1 from public.du_lieu_gcn g
-                where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-                  and public._nhom3_gcn_du_du_lieu(g)
-            ) as da_thu_thap
-        from public.nhom3_can_thu_thap t
-        where exists (
-            select 1 from public.thua_dat p
-            where p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
-        )
-    ),
-    theo_xa as (
-        select
-            x.ma_xa,
+            c.ma_xa,
             xp.ten_xa,
             count(*) as tong,
-            count(*) filter (where x.la_nhom_1_2) as da_nhom_1_2,
-            count(*) filter (where not x.la_nhom_1_2 and x.da_thu_thap) as da_thu_thap,
-            count(*) filter (where not x.la_nhom_1_2 and not x.da_thu_thap) as con_thieu
-        from phan_loai x
-        left join public.danhsachxaphuong xp on xp.ma_xa = x.ma_xa
-        group by x.ma_xa, xp.ten_xa
+            count(*) filter (where c.la_nhom_1_2) as da_nhom_1_2,
+            count(*) filter (where not c.la_nhom_1_2 and c.da_thu_thap) as da_thu_thap,
+            count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu
+        from public.nhom3_trang_thai_cache c
+        left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
+        group by c.ma_xa, xp.ten_xa
     )
-    select
-        coalesce(sum(tong), 0),
-        coalesce(sum(da_nhom_1_2), 0),
-        coalesce(sum(da_thu_thap), 0),
-        coalesce(sum(con_thieu), 0),
-        coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
-    into v_tong, v_da_nhom_1_2, v_da_thu_thap, v_con_thieu, v_theo_xa
+    select jsonb_build_object(
+        'tong', coalesce(sum(tong), 0),
+        'da_nhom_1_2', coalesce(sum(da_nhom_1_2), 0),
+        'da_thu_thap', coalesce(sum(da_thu_thap), 0),
+        'con_thieu', coalesce(sum(con_thieu), 0),
+        'theo_xa', coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
+    )
     from theo_xa;
-
-    return jsonb_build_object(
-        'tong', v_tong,
-        'da_nhom_1_2', v_da_nhom_1_2,
-        'da_thu_thap', v_da_thu_thap,
-        'con_thieu', v_con_thieu,
-        'theo_xa', v_theo_xa
-    );
-end;
 $$;
 
 revoke all on function public.nhom3_tong_hop() from public;
 grant execute on function public.nhom3_tong_hop() to service_role;
 
--- Danh sách phân trang thửa CÒN THIẾU dữ liệu (chỉ thửa có bản đồ, chưa
--- Nhóm 1/2, chưa đủ dữ liệu bắt buộc). p_ma_xa lọc thêm theo xã (tuỳ chọn).
+-- Danh sách phân trang thửa CÒN THIẾU dữ liệu — CHỈ đọc cache (có index
+-- riêng cho đúng điều kiện "not la_nhom_1_2 and not da_thu_thap" ở trên).
+-- p_ma_xa lọc thêm theo xã (tuỳ chọn).
 create or replace function public.nhom3_list_con_thieu(
     p_ma_xa text default null,
     p_limit integer default 100,
@@ -1939,52 +2012,24 @@ language plpgsql
 stable
 security definer
 set search_path = public, extensions
-set statement_timeout = '20s'
 as $$
 declare
     v_total integer;
     v_items jsonb;
 begin
-    with con_thieu as (
-        select t.ma_xa, xp.ten_xa, t.so_to, t.so_thua, t.ma_dinh_danh
-        from public.nhom3_can_thu_thap t
-        join public.thua_dat p on p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
-        left join public.danhsachxaphuong xp on xp.ma_xa = t.ma_xa
-        where (p_ma_xa is null or t.ma_xa = p_ma_xa)
-          and not exists (
-              select 1 from public.dong_bo_du_lieu d
-              where d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
-                and upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
-          )
-          and not exists (
-              select 1 from public.du_lieu_gcn g
-              where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-                and public._nhom3_gcn_du_du_lieu(g)
-          )
-    )
-    select count(*) into v_total from con_thieu;
+    select count(*) into v_total
+    from public.nhom3_trang_thai_cache c
+    where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+      and not c.la_nhom_1_2 and not c.da_thu_thap;
 
-    with con_thieu as (
-        select t.ma_xa, xp.ten_xa, t.so_to, t.so_thua, t.ma_dinh_danh
-        from public.nhom3_can_thu_thap t
-        join public.thua_dat p on p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
-        left join public.danhsachxaphuong xp on xp.ma_xa = t.ma_xa
-        where (p_ma_xa is null or t.ma_xa = p_ma_xa)
-          and not exists (
-              select 1 from public.dong_bo_du_lieu d
-              where d.ma_xa = t.ma_xa and d.so_to = t.so_to and d.so_thua = t.so_thua
-                and upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
-          )
-          and not exists (
-              select 1 from public.du_lieu_gcn g
-              where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
-                and public._nhom3_gcn_du_du_lieu(g)
-          )
-    )
     select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
     from (
-        select * from con_thieu
-        order by ma_xa, so_to, so_thua
+        select c.ma_xa, xp.ten_xa, c.so_to, c.so_thua, c.ma_dinh_danh
+        from public.nhom3_trang_thai_cache c
+        left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
+        where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+          and not c.la_nhom_1_2 and not c.da_thu_thap
+        order by c.ma_xa, c.so_to, c.so_thua
         limit p_limit offset p_offset
     ) y;
 
