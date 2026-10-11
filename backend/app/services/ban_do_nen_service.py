@@ -23,12 +23,29 @@ TILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "ban_do_nen
 _TILE_ENTRY_RE = re.compile(r"^(\d{1,2})/(\d{1,10})/(\d{1,10})\.png$")
 
 
+MAX_LIST_RESULTS = 500
+
+
 def list_sheets():
-    params = {}
-    for field_name in LIST_FILTER_FIELDS:
-        value = request.args.get(field_name, "").strip()
-        if value:
-            params[field_name] = f"eq.{value}"
+    """Trang quản lý bản đồ nền — KHÔNG tải toàn bộ danh sách: bắt buộc có
+    ít nhất mã xã hoặc số tờ để lọc trước (trước đây thiếu điều kiện này,
+    lại còn lỗi gửi "eq." 2 lần khiến bộ lọc không bao giờ khớp — chỉ có
+    lúc KHÔNG lọc gì mới ra kết quả, tức luôn tải hết danh sách). Khớp
+    theo CHỨA CHUỖI (ILIKE), không yêu cầu đúng tuyệt đối."""
+    ma_xa = request.args.get("ma_xa", "").strip()
+    so_to = request.args.get("so_to", "").strip()
+    trang_thai = request.args.get("trang_thai", "").strip()
+
+    if not ma_xa and not so_to:
+        return {"items": []}, None
+
+    params: dict = {"limit": MAX_LIST_RESULTS}
+    if ma_xa:
+        params["ma_xa"] = f"substr.{ma_xa}"
+    if so_to:
+        params["so_to"] = f"substr.{so_to}"
+    if trang_thai:
+        params["trang_thai"] = f"eq.{trang_thai}"
 
     result, error_response = ban_do_nen_repository.list_all(params)
     if error_response:

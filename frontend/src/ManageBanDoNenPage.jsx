@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   deleteBanDoNen,
@@ -15,7 +15,8 @@ const TRANG_THAI_LABELS = {
 export default function ManageBanDoNenPage({ onNavigateHome }) {
   const [items, setItems] = useState([]);
   const [listError, setListError] = useState("");
-  const [loadingList, setLoadingList] = useState(true);
+  const [loadingList, setLoadingList] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const [token, setToken] = useState("");
 
@@ -27,14 +28,28 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
   const [editingId, setEditingId] = useState(null);
   const [description, setDescription] = useState("");
 
+  // Trang này có thể có RẤT NHIỀU tờ bản đồ — KHÔNG tải cả danh sách khi
+  // mở trang. Chỉ truy vấn khi người dùng bấm "Tìm", và phải có ít nhất
+  // mã xã hoặc số tờ (khớp theo CHỨA CHUỖI, không cần đúng tuyệt đối) —
+  // khớp đúng yêu cầu backend ở ban_do_nen_service.list_sheets().
   const loadList = useCallback(() => {
+    const maXa = filterMaXa.trim();
+    const soTo = filterSoTo.trim();
+    if (!maXa && !soTo) {
+      setListError("Nhập mã xã hoặc số tờ để tìm trước khi truy vấn.");
+      setItems([]);
+      setHasSearched(false);
+      return undefined;
+    }
+
     setLoadingList(true);
     setListError("");
+    setHasSearched(true);
 
     const params = {};
-    if (filterMaXa.trim()) params.ma_xa = `eq.${filterMaXa.trim()}`;
-    if (filterSoTo.trim()) params.so_to = `eq.${filterSoTo.trim()}`;
-    if (filterTrangThai) params.trang_thai = `eq.${filterTrangThai}`;
+    if (maXa) params.ma_xa = maXa;
+    if (soTo) params.so_to = soTo;
+    if (filterTrangThai) params.trang_thai = filterTrangThai;
 
     return listBanDoNen(params)
       .then((result) => setItems(result?.items || []))
@@ -42,9 +57,9 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
       .finally(() => setLoadingList(false));
   }, [filterMaXa, filterSoTo, filterTrangThai]);
 
-  useEffect(() => {
-    loadList();
-  }, [loadList]);
+  const handleFilterKeyDown = (event) => {
+    if (event.key === "Enter") loadList();
+  };
 
   const handleToggle = async (item) => {
     setBusyId(item.id);
@@ -140,13 +155,19 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
         <div className="importCard gcnLinksListCard">
           <label>Danh sách tờ bản đồ</label>
 
+          <p className="importHint">
+            Danh sách tờ bản đồ có thể rất nhiều — nhập mã xã và/hoặc số tờ rồi bấm{" "}
+            <strong>Tìm</strong> (Enter cũng được), trang sẽ không tự tải toàn bộ.
+          </p>
+
           <div className="filterRow">
             <div>
               <input
                 className="filterInput"
                 value={filterMaXa}
                 onChange={(event) => setFilterMaXa(event.target.value)}
-                placeholder="Lọc theo mã xã"
+                onKeyDown={handleFilterKeyDown}
+                placeholder="Mã xã (chứa chuỗi)"
               />
             </div>
             <div>
@@ -154,7 +175,8 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
                 className="filterInput"
                 value={filterSoTo}
                 onChange={(event) => setFilterSoTo(event.target.value)}
-                placeholder="Lọc theo số tờ"
+                onKeyDown={handleFilterKeyDown}
+                placeholder="Số tờ / tên tờ (chứa chuỗi)"
               />
             </div>
           </div>
@@ -170,18 +192,28 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="searchButton"
+            disabled={loadingList}
+            onClick={() => loadList()}
+          >
+            {loadingList ? "Đang tìm…" : "🔍 Tìm"}
+          </button>
 
-          {loadingList && <div className="notice">Đang tải danh sách…</div>}
+          {!hasSearched && !listError && (
+            <div className="notice">Nhập mã xã hoặc số tờ bên trên rồi bấm Tìm để xem danh sách.</div>
+          )}
 
           {listError && (
             <div className="notice error">
-              <strong>Không tải được danh sách</strong>
+              <strong>Không tìm được</strong>
               <span>{listError}</span>
             </div>
           )}
 
-          {!loadingList && !listError && items.length === 0 && (
-            <div className="notice">Chưa có tờ bản đồ nào — dùng Tool Windows để thêm.</div>
+          {hasSearched && !loadingList && !listError && items.length === 0 && (
+            <div className="notice">Không tìm thấy tờ bản đồ nào khớp bộ lọc.</div>
           )}
 
           {items.length > 0 && (

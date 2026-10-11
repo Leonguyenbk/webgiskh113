@@ -265,6 +265,12 @@ def rest_request(
                     elif isinstance(value, str) and value.startswith("eq."):
                         where_values[param_name] = _coerce_value(value[3:], col_type)
                         where_parts.append(f"{key} = %({param_name})s")
+                    elif isinstance(value, str) and value.startswith("substr."):
+                        # Lọc "chứa chuỗi" (ILIKE %...%) — quy ước riêng của
+                        # shim này (không phải cú pháp PostgREST gốc), dùng
+                        # cho các ô lọc dạng tìm kiếm thay vì khớp tuyệt đối.
+                        where_values[param_name] = f"%{value[7:]}%"
+                        where_parts.append(f"{key} ilike %({param_name})s")
                     else:
                         raise ValueError(f"Toán tử lọc chưa hỗ trợ cho {key}: {value}")
 
