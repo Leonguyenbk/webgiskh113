@@ -62,6 +62,8 @@ export function getNhom3DanhSachConThieu(params, { signal, errorFallback } = {})
   });
 }
 
+// params có thể gồm { ma_xa, tu, den } — tu/den là chuỗi ISO datetime
+// (ranh giới khoảng hiển thị trend, xem backend get_nhom3_tien_do_trend).
 export function getNhom3Trend(params, { signal } = {}) {
   return request("/api/nhom3-con-thieu/trend", {
     params,

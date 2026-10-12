@@ -2082,9 +2082,15 @@ grant execute on function public.nhom3_list_con_thieu(text, integer, integer) to
 -- cách thực giữa 2 lần ghi nhận có thể lệch khỏi đúng 3 giờ nếu service
 -- dừng/khởi động lại, nên chia theo giây thực tế, không giả định cố định).
 -- Lát cắt đầu tiên của mỗi xã không có lát trước -> toc_do_thua_ngay NULL.
+-- p_tu/p_den lọc KHOẢNG HIỂN THỊ — tính lag() trên TOÀN BỘ lịch sử trước,
+-- rồi mới cắt theo khoảng, để điểm đầu tiên trong khoảng vẫn tính đúng
+-- tốc độ (dựa vào lát cắt ngay trước đó, có thể nằm ngoài khoảng p_tu).
+drop function if exists public.nhom3_tien_do_trend(text, timestamptz);
+
 create or replace function public.nhom3_tien_do_trend(
     p_ma_xa text default null,
-    p_tu timestamptz default null
+    p_tu timestamptz default null,
+    p_den timestamptz default null
 )
 returns jsonb
 language sql
@@ -2100,7 +2106,6 @@ as $$
         from public.nhom3_tien_do_lich_su h
         left join public.danhsachxaphuong xp on xp.ma_xa = h.ma_xa
         where (p_ma_xa is null or h.ma_xa = p_ma_xa)
-          and (p_tu is null or h.ghi_nhan_luc >= p_tu)
     ),
     voi_lat_truoc as (
         select
@@ -2120,11 +2125,13 @@ as $$
                 , 2)
             end as toc_do_thua_ngay
         from voi_lat_truoc
+        where (p_tu is null or ghi_nhan_luc >= p_tu)
+          and (p_den is null or ghi_nhan_luc <= p_den)
     ) x;
 $$;
 
-revoke all on function public.nhom3_tien_do_trend(text, timestamptz) from public;
-grant execute on function public.nhom3_tien_do_trend(text, timestamptz) to service_role;
+revoke all on function public.nhom3_tien_do_trend(text, timestamptz, timestamptz) from public;
+grant execute on function public.nhom3_tien_do_trend(text, timestamptz, timestamptz) to service_role;
 
 -- =========================================================
 -- NHÓM 3 THEO RANH DỰ ÁN (tool desktop thuadatgml, tab "Nhóm 3 theo ranh dự

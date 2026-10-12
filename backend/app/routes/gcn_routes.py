@@ -70,10 +70,12 @@ def nhom3_con_thieu_danh_sach():
 @gcn_bp.get("/api/nhom3-con-thieu/trend")
 def nhom3_con_thieu_trend():
     # Dashboard trend tốc độ xử lý theo xã (thửa/ngày). ?ma_xa=&tu=<ISO
-    # datetime, lọc từ thời điểm này trở đi>
+    # datetime, lọc từ thời điểm này trở đi>&den=<ISO datetime, tới thời
+    # điểm này>
     data, error_response = gcn_service.get_nhom3_tien_do_trend(
         request.args.get("ma_xa"),
         request.args.get("tu"),
+        request.args.get("den"),
     )
     if error_response:
         return error_response

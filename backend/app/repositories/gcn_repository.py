@@ -93,10 +93,10 @@ def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int):
     )
 
 
-def nhom3_tien_do_trend(ma_xa: str | None, tu: str | None):
+def nhom3_tien_do_trend(ma_xa: str | None, tu: str | None, den: str | None):
     # Trend tiến độ theo xã (thửa/ngày) — xem public.nhom3_tien_do_trend.
     return supabase_client.call_rpc(
-        "nhom3_tien_do_trend", {"p_ma_xa": ma_xa, "p_tu": tu}, timeout=20
+        "nhom3_tien_do_trend", {"p_ma_xa": ma_xa, "p_tu": tu, "p_den": den}, timeout=20
     )
 
 
