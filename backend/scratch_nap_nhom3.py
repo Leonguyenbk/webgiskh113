@@ -12,7 +12,7 @@ import psycopg2.extras
 
 from app.config import Config
 
-SRC = r"D:\QUANGTUAN\webgiskh113\TamGiang_Nhom3.xlsx"
+SRC = r"D:\QUANGTUAN\webgiskh113\22240_Phường Phú Yên.xlsx"
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
 # toàn tỉnh/toàn danh mục). False = chỉ thêm/cập nhật các dòng trong SRC,
@@ -21,13 +21,28 @@ SRC = r"D:\QUANGTUAN\webgiskh113\TamGiang_Nhom3.xlsx"
 TRUNCATE_TRUOC = False
 
 
+def chon_sheet_du_lieu(wb):
+    # File VPĐK xuất thẳng có thêm sheet "NHAT_KY" (log) trước sheet dữ
+    # liệu thật — chọn sheet nào có header bắt đầu bằng MAXA/SOTO/SOTHUA,
+    # thay vì giả định luôn là "Sheet1".
+    if "Sheet1" in wb.sheetnames:
+        return wb["Sheet1"]
+    for name in wb.sheetnames:
+        ws = wb[name]
+        header = next(ws.iter_rows(values_only=True), None)
+        if header and str(header[0]).strip().upper() == "MAXA":
+            return ws
+    raise ValueError("Không tìm thấy sheet dữ liệu (header MAXA/SOTO/SOTHUA) trong file")
+
+
 def doc_danh_sach():
     wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
-    ws = wb["Sheet1"]
+    ws = chon_sheet_du_lieu(wb)
     rows = ws.iter_rows(values_only=True)
     next(rows)
     seen = {}
-    for ma_xa, so_to, so_thua, ma_dinh_danh in rows:
+    for row in rows:
+        ma_xa, so_to, so_thua, ma_dinh_danh = row[0], row[1], row[2], row[3]
         if ma_xa is None or so_to is None or so_thua is None:
             continue
         key = (str(int(ma_xa)), int(so_to), int(so_thua))
