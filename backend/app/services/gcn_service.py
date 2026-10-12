@@ -241,6 +241,21 @@ _NHOM3_DEFAULT_LIMIT = 100
 _NHOM3_MAX_LIMIT = 500
 
 
+def get_nhom3_tien_do_trend(ma_xa_raw: str | None, tu_raw: str | None):
+    """Dashboard trend tốc độ xử lý Nhóm 3 (thửa/ngày) theo xã — đọc lịch sử
+    nhom3_tien_do_lich_su, mỗi lát cắt ghi lúc refresh cache chạy (lịch 3
+    giờ/lần, xem register_refresh_nhom3_stats_task.ps1)."""
+    ma_xa = (ma_xa_raw or "").strip() or None
+    tu = (tu_raw or "").strip() or None
+
+    result, error_response = gcn_repository.nhom3_tien_do_trend(ma_xa, tu)
+    if error_response:
+        return None, error_response
+    if not isinstance(result, list):
+        result = []
+    return {"items": result}, None
+
+
 def refresh_nhom3_cache():
     result, error_response = gcn_repository.refresh_nhom3_trang_thai_cache()
     if error_response:

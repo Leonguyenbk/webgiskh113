@@ -67,6 +67,19 @@ def nhom3_con_thieu_danh_sach():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/nhom3-con-thieu/trend")
+def nhom3_con_thieu_trend():
+    # Dashboard trend tốc độ xử lý theo xã (thửa/ngày). ?ma_xa=&tu=<ISO
+    # datetime, lọc từ thời điểm này trở đi>
+    data, error_response = gcn_service.get_nhom3_tien_do_trend(
+        request.args.get("ma_xa"),
+        request.args.get("tu"),
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.post("/api/nhom3-con-thieu/refresh")
 def nhom3_con_thieu_refresh():
     # Tính lại bảng cache nhom3_trang_thai_cache (nhánh quét nặng). Gọi

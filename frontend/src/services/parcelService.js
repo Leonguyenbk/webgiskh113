@@ -61,3 +61,11 @@ export function getNhom3DanhSachConThieu(params, { signal, errorFallback } = {})
     errorFallback: errorFallback || "Không tải được danh sách Nhóm 3 còn thiếu",
   });
 }
+
+export function getNhom3Trend(params, { signal } = {}) {
+  return request("/api/nhom3-con-thieu/trend", {
+    params,
+    signal,
+    errorFallback: "Không tải được trend tiến độ Nhóm 3",
+  });
+}

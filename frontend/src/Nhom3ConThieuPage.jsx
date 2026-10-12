@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { getNhom3TongHop } from "./services/parcelService";
+import Nhom3TrendChart from "./Nhom3TrendChart";
+import { getNhom3TongHop, getNhom3Trend } from "./services/parcelService";
 
 function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
@@ -15,6 +16,8 @@ export default function Nhom3ConThieuPage({ onNavigateHome }) {
   const [tongHop, setTongHop] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [trendItems, setTrendItems] = useState([]);
+  const [trendError, setTrendError] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -23,6 +26,10 @@ export default function Nhom3ConThieuPage({ onNavigateHome }) {
       .then((result) => setTongHop(result))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
+    getNhom3Trend()
+      .then((result) => setTrendItems(result?.items || []))
+      .catch((err) => setTrendError(err.message));
   }, []);
 
   const theoXa = tongHop?.theo_xa || [];
@@ -129,6 +136,16 @@ export default function Nhom3ConThieuPage({ onNavigateHome }) {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <div style={{ width: "80%", maxWidth: "80%", margin: "16px auto 0" }}>
+              {trendError && (
+                <div className="notice error">
+                  <strong>Không tải được trend tốc độ</strong>
+                  <span>{trendError}</span>
+                </div>
+              )}
+              {!trendError && <Nhom3TrendChart items={trendItems} />}
             </div>
           </>
         )}

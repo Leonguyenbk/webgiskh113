@@ -647,6 +647,75 @@ label[for="mplisCookie"] {
   color: #173f3c;
 }
 
+.trendChartWrap {
+  background: white;
+  border: 1px solid #d4e1de;
+  border-radius: 14px;
+  box-shadow: 0 8px 22px #234e4818;
+  padding: 18px 20px;
+}
+.trendChartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.trendChartHeader label { font-size: 13px; font-weight: 700; color: #102a2b; }
+.trendTableToggle {
+  border: 1px solid #d4e1de;
+  background: #f1f7f5;
+  color: #173f3c;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.trendTableToggle:hover { background: #dbefeb; }
+
+.trendChartBody { position: relative; }
+.trendChartBody svg { display: block; cursor: crosshair; }
+
+.trendLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2ece9;
+}
+.trendLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+.trendSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.trendTooltip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #ffffffee;
+  border: 1px solid #d4e1de;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  box-shadow: 0 6px 16px #234e4822;
+  pointer-events: none;
+  min-width: 160px;
+}
+.trendTooltipTime { font-weight: 700; color: #102a2b; margin-bottom: 4px; }
+.trendTooltipRow { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
+.trendTooltipLabel { flex: 1; color: #334155; }
+.trendTooltipRow strong { color: #102a2b; }
+
 @media (max-width: 900px) {
   .dashboardGrid { grid-template-columns: 1fr; }
 }
