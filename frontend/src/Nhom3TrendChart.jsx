@@ -1,19 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
-// 8 màu phân loại đã kiểm chứng an toàn cho người mù màu (CVD Delta E >= 8,
-// normal-vision Delta E >= 15 giữa các cặp liền kề) — xem skill dataviz,
-// references/palette.md. Gán màu theo THỨ TỰ mã xã tăng dần, cố định —
-// không đổi theo bộ lọc, để màu luôn gắn với đúng 1 xã.
-const PALETTE = [
-  "#2a78d6", // blue
-  "#eb6834", // orange
-  "#1baf7a", // aqua
-  "#eda100", // yellow
-  "#e87ba4", // magenta
-  "#008300", // green
-  "#6250d6", // violet
-  "#e34948", // red
-];
+import { colorForMaXa } from "./utils/nhom3ChartColors";
 
 const WIDTH = 760;
 const HEIGHT = 300;
@@ -42,7 +29,7 @@ function groupByXa(items) {
   const series = Array.from(map.values());
   series.forEach((s) => s.points.sort((a, b) => a.t - b.t));
   series.sort((a, b) => a.ma_xa.localeCompare(b.ma_xa));
-  series.forEach((s, i) => (s.color = PALETTE[i % PALETTE.length]));
+  series.forEach((s) => (s.color = colorForMaXa(s.ma_xa)));
   return series;
 }
 

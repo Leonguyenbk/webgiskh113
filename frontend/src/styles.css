@@ -716,6 +716,51 @@ label[for="mplisCookie"] {
 .trendTooltipLabel { flex: 1; color: #334155; }
 .trendTooltipRow strong { color: #102a2b; }
 
+.barChart { display: flex; flex-direction: column; gap: 10px; }
+.barRow { display: flex; align-items: center; gap: 10px; }
+.barLabel {
+  flex: 0 0 180px;
+  font-size: 12px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.barTrack {
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: #eef2f1;
+  overflow: hidden;
+}
+.barFill { height: 100%; border-radius: 8px; }
+.barValue {
+  flex: 0 0 76px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: #102a2b;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboardCard {
+  background: white;
+  border: 1px solid #d4e1de;
+  border-radius: 14px;
+  box-shadow: 0 8px 22px #234e4818;
+  padding: 18px 20px;
+}
+.dashboardCard label { font-size: 13px; font-weight: 700; color: #102a2b; display: block; margin-bottom: 12px; }
+.dashboardCharts2Col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .dashboardCharts2Col { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
   .dashboardGrid { grid-template-columns: 1fr; }
 }

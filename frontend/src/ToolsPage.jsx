@@ -30,6 +30,7 @@ export default function ToolsPage({
   onNavigateDanhSachThuaDat,
   onNavigateThongKeNguonNhap,
   onNavigateNhom3ConThieu,
+  onNavigateNhom3Dashboard,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -87,6 +88,11 @@ export default function ToolsPage({
       name: "📉 Nhóm 3 — thửa còn thiếu dữ liệu",
       description: "Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với Nhóm 1/2 và dữ liệu đã thu thập — lọc theo xã, tách thửa có/không có bản đồ.",
       onNavigate: onNavigateNhom3ConThieu,
+    },
+    {
+      name: "📊 Nhóm 3 — Dashboard tỉ lệ & tốc độ",
+      description: "So sánh tỉ lệ hoàn thành và tốc độ xử lý (thửa/ngày) giữa các xã/phường, kèm trend theo thời gian.",
+      onNavigate: onNavigateNhom3Dashboard,
     },
   ];
 

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
-import Nhom3TrendChart from "./Nhom3TrendChart";
-import { getNhom3TongHop, getNhom3Trend } from "./services/parcelService";
+import { getNhom3TongHop } from "./services/parcelService";
 
 function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
@@ -12,12 +11,10 @@ function formatPercent(phan, tong) {
   return Math.round((phan / tong) * 1000) / 10;
 }
 
-export default function Nhom3ConThieuPage({ onNavigateHome }) {
+export default function Nhom3ConThieuPage({ onNavigateHome, onNavigateNhom3Dashboard }) {
   const [tongHop, setTongHop] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [trendItems, setTrendItems] = useState([]);
-  const [trendError, setTrendError] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -26,10 +23,6 @@ export default function Nhom3ConThieuPage({ onNavigateHome }) {
       .then((result) => setTongHop(result))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-
-    getNhom3Trend()
-      .then((result) => setTrendItems(result?.items || []))
-      .catch((err) => setTrendError(err.message));
   }, []);
 
   const theoXa = tongHop?.theo_xa || [];
@@ -46,6 +39,16 @@ export default function Nhom3ConThieuPage({ onNavigateHome }) {
             Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với thửa đã thuộc Nhóm 1/2 và thửa đã thu thập — chỉ còn lại là thửa thật sự cần nhập biểu.
           </p>
         </div>
+        <a
+          className="backLink"
+          href="/nhom-3-dashboard"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigateNhom3Dashboard?.();
+          }}
+        >
+          📊 Dashboard tỉ lệ &amp; tốc độ →
+        </a>
         <a
           className="backLink"
           href="/"
@@ -136,16 +139,6 @@ export default function Nhom3ConThieuPage({ onNavigateHome }) {
                   </tbody>
                 </table>
               </div>
-            </div>
-
-            <div style={{ width: "80%", maxWidth: "80%", margin: "16px auto 0" }}>
-              {trendError && (
-                <div className="notice error">
-                  <strong>Không tải được trend tốc độ</strong>
-                  <span>{trendError}</span>
-                </div>
-              )}
-              {!trendError && <Nhom3TrendChart items={trendItems} />}
             </div>
           </>
         )}
