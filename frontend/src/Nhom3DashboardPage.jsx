@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import Nhom3BarChart from "./Nhom3BarChart";
+import Nhom3StatusPie from "./Nhom3StatusPie";
 import Nhom3TrendChart from "./Nhom3TrendChart";
 import { getNhom3TongHop, getNhom3Trend } from "./services/parcelService";
 import { colorForMaXa } from "./utils/nhom3ChartColors";
@@ -33,6 +34,7 @@ export default function Nhom3DashboardPage({ onNavigateHome, onNavigateNhom3ConT
   const [trendItems, setTrendItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filterMaXa, setFilterMaXa] = useState(""); // "" = tất cả
 
   useEffect(() => {
     setLoading(true);
@@ -46,8 +48,9 @@ export default function Nhom3DashboardPage({ onNavigateHome, onNavigateNhom3ConT
       .finally(() => setLoading(false));
   }, []);
 
+  const theoXa = tongHop?.theo_xa || [];
+
   const ratioRows = useMemo(() => {
-    const theoXa = tongHop?.theo_xa || [];
     return theoXa
       .map((row) => {
         const daLam = (row.da_nhom_1_2 || 0) + (row.da_thu_thap || 0);
@@ -55,13 +58,34 @@ export default function Nhom3DashboardPage({ onNavigateHome, onNavigateNhom3ConT
         return { ma_xa: row.ma_xa, ten_xa: row.ten_xa || row.ma_xa, value, color: colorForMaXa(row.ma_xa) };
       })
       .sort((a, b) => b.value - a.value);
-  }, [tongHop]);
+  }, [theoXa]);
 
   const speedRows = useMemo(() => {
     return latestRatePerXa(trendItems)
       .map((r) => ({ ...r, color: colorForMaXa(r.ma_xa) }))
       .sort((a, b) => b.value - a.value);
   }, [trendItems]);
+
+  // Dữ liệu biểu đồ tròn: "Tất cả" -> tổng toàn bộ (từ tongHop, đã tổng
+  // hợp sẵn ở backend); chọn 1 xã -> lấy đúng dòng của xã đó.
+  const pieSource = useMemo(() => {
+    if (!filterMaXa) {
+      return { daNhom12: tongHop?.da_nhom_1_2 || 0, daThuThap: tongHop?.da_thu_thap || 0, conThieu: tongHop?.con_thieu || 0 };
+    }
+    const row = theoXa.find((r) => r.ma_xa === filterMaXa);
+    return { daNhom12: row?.da_nhom_1_2 || 0, daThuThap: row?.da_thu_thap || 0, conThieu: row?.con_thieu || 0 };
+  }, [filterMaXa, tongHop, theoXa]);
+
+  const pieTitle = filterMaXa
+    ? theoXa.find((r) => r.ma_xa === filterMaXa)?.ten_xa || filterMaXa
+    : "Toàn bộ dự án";
+
+  // Trend chart: lọc theo xã đang chọn (bớt rối khi nhiều xã); "Tất cả"
+  // giữ nguyên toàn bộ.
+  const filteredTrendItems = useMemo(() => {
+    if (!filterMaXa) return trendItems;
+    return trendItems.filter((it) => it.ma_xa === filterMaXa);
+  }, [trendItems, filterMaXa]);
 
   return (
     <main className="toolsShell">
@@ -104,7 +128,33 @@ export default function Nhom3DashboardPage({ onNavigateHome, onNavigateNhom3ConT
 
         {!loading && !error && (
           <>
-            <div className="dashboardCharts2Col">
+            <div className="dashboardFilterRow">
+              <label htmlFor="nhom3DashboardXaFilter">Lọc theo xã/phường:</label>
+              <select
+                id="nhom3DashboardXaFilter"
+                value={filterMaXa}
+                onChange={(event) => setFilterMaXa(event.target.value)}
+              >
+                <option value="">— Tất cả —</option>
+                {theoXa.map((row) => (
+                  <option key={row.ma_xa} value={row.ma_xa}>
+                    {row.ten_xa || row.ma_xa}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="dashboardCharts3Col">
+              <div className="dashboardCard">
+                <label>Phân bổ trạng thái — {pieTitle}</label>
+                <Nhom3StatusPie
+                  daNhom12={pieSource.daNhom12}
+                  daThuThap={pieSource.daThuThap}
+                  conThieu={pieSource.conThieu}
+                  title={pieTitle}
+                />
+              </div>
+
               <div className="dashboardCard">
                 <label>Tỉ lệ hoàn thành theo xã (%)</label>
                 <Nhom3BarChart
@@ -126,8 +176,8 @@ export default function Nhom3DashboardPage({ onNavigateHome, onNavigateNhom3ConT
               </div>
             </div>
 
-            <div style={{ marginTop: 20 }}>
-              <Nhom3TrendChart items={trendItems} />
+            <div style={{ marginTop: 16 }}>
+              <Nhom3TrendChart items={filteredTrendItems} />
             </div>
           </>
         )}

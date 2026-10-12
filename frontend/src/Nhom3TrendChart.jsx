@@ -3,8 +3,8 @@ import { useMemo, useRef, useState } from "react";
 import { colorForMaXa } from "./utils/nhom3ChartColors";
 
 const WIDTH = 760;
-const HEIGHT = 300;
-const PAD = { top: 16, right: 16, bottom: 36, left: 52 };
+const HEIGHT = 220;
+const PAD = { top: 14, right: 16, bottom: 32, left: 50 };
 
 function formatThoiDiem(d) {
   return d.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
