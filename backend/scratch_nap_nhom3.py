@@ -12,7 +12,7 @@ import psycopg2.extras
 
 from app.config import Config
 
-SRC = r"D:\QUANGTUAN\webgiskh113\22240_Phường Phú Yên.xlsx"
+SRC = r"D:\QUANGTUAN\webgiskh113\22015_Phường Tuy Hòa.xlsx"
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
 # toàn tỉnh/toàn danh mục). False = chỉ thêm/cập nhật các dòng trong SRC,
