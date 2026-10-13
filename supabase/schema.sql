@@ -2317,13 +2317,18 @@ begin
     end if;
 
     begin
-        v_ranh := ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(p_geom_geojson), 4326));
+        -- ST_MakeValid trên polygon tự giao (self-intersecting, hay gặp ở
+        -- ranh vẽ tay/GML cũ) có thể trả về GeometryCollection lẫn cả điểm/
+        -- đường rác -> ST_CollectionExtract(…, 3) chỉ giữ phần polygon
+        -- (diện tích), bỏ phần rác, mới ép được vào cột geometry(MultiPolygon).
+        -- An toàn với geometry không phải collection (trả lại nguyên vẹn).
+        v_ranh := ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(p_geom_geojson), 4326)), 3);
     exception when others then
         raise exception 'Ranh dự án không đọc được (GeoJSON lỗi): %', sqlerrm;
     end;
 
     if v_ranh is null or ST_IsEmpty(v_ranh) then
-        raise exception 'Ranh dự án rỗng sau khi parse';
+        raise exception 'Ranh dự án rỗng hoặc không có phần diện tích (polygon) sau khi xử lý';
     end if;
 
     v_so_polygon := ST_NumGeometries(ST_Multi(v_ranh));
