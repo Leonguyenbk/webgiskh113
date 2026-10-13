@@ -12,7 +12,11 @@ import psycopg2.extras
 
 from app.config import Config
 
-SRC = r"D:\QUANGTUAN\webgiskh113\22015_Phường Tuy Hòa.xlsx"
+SRC_LIST = [
+    r"D:\QUANGTUAN\webgiskh113\BUON DON\24235_Xã Buôn Đôn.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\BUON DON\24241_Xã Ea Wer.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\BUON DON\24250_Xã Ea Nuôl.xlsx",
+]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
 # toàn tỉnh/toàn danh mục). False = chỉ thêm/cập nhật các dòng trong SRC,
@@ -35,8 +39,8 @@ def chon_sheet_du_lieu(wb):
     raise ValueError("Không tìm thấy sheet dữ liệu (header MAXA/SOTO/SOTHUA) trong file")
 
 
-def doc_danh_sach():
-    wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
+def doc_danh_sach(src):
+    wb = openpyxl.load_workbook(src, read_only=True, data_only=True)
     ws = chon_sheet_du_lieu(wb)
     rows = ws.iter_rows(values_only=True)
     next(rows)
@@ -52,32 +56,34 @@ def doc_danh_sach():
 
 
 def main():
-    danh_sach = doc_danh_sach()
-    print(f"{len(danh_sach)} thửa duy nhất để nạp")
-    ma_xa_trong_file = sorted({row[0] for row in danh_sach})
-    print("mã xã trong file:", ma_xa_trong_file)
-
     conn = psycopg2.connect(Config.DATABASE_URL)
     cur = conn.cursor()
 
     if TRUNCATE_TRUOC:
         cur.execute("truncate table nhom3_can_thu_thap restart identity")
-        psycopg2.extras.execute_values(
-            cur,
-            "insert into nhom3_can_thu_thap (ma_xa, so_to, so_thua, ma_dinh_danh) values %s",
-            danh_sach,
-            page_size=5000,
-        )
-    else:
-        psycopg2.extras.execute_values(
-            cur,
-            """insert into nhom3_can_thu_thap (ma_xa, so_to, so_thua, ma_dinh_danh) values %s
-            on conflict (ma_xa, so_to, so_thua) do update set ma_dinh_danh = excluded.ma_dinh_danh""",
-            danh_sach,
-            page_size=5000,
-        )
 
-    conn.commit()
+    for src in SRC_LIST:
+        danh_sach = doc_danh_sach(src)
+        ma_xa_trong_file = sorted({row[0] for row in danh_sach})
+        print(f"{src}: {len(danh_sach)} thửa duy nhất, mã xã: {ma_xa_trong_file}")
+
+        if TRUNCATE_TRUOC:
+            psycopg2.extras.execute_values(
+                cur,
+                "insert into nhom3_can_thu_thap (ma_xa, so_to, so_thua, ma_dinh_danh) values %s",
+                danh_sach,
+                page_size=5000,
+            )
+        else:
+            psycopg2.extras.execute_values(
+                cur,
+                """insert into nhom3_can_thu_thap (ma_xa, so_to, so_thua, ma_dinh_danh) values %s
+                on conflict (ma_xa, so_to, so_thua) do update set ma_dinh_danh = excluded.ma_dinh_danh""",
+                danh_sach,
+                page_size=5000,
+            )
+        conn.commit()
+
     cur.execute("select count(*) from nhom3_can_thu_thap")
     print("Đã nạp, tổng dòng trong bảng:", cur.fetchone()[0])
     cur.close()
