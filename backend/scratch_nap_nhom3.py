@@ -13,11 +13,16 @@ import psycopg2.extras
 from app.config import Config
 
 SRC_LIST = [
-    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS giao khu vuc krong nang.xlsx", "krong nang"),
-    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS giao khu vuc krong nang.xlsx", "phu xuan"),
-    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS giao khu vuc krong nang.xlsx", "Dlie Ya"),
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24265_Xã Ea Kiết.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24277_Xã Ea Tul.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24280_Xã Cư M’gar.xlsx",
+    # Header sheet này ghi sai tên cột (STT/Số hiệu tờ bản đồ/Số thứ tự
+    # thửa/maDinhdanh) nhưng dữ liệu bên dưới vẫn đúng thứ tự
+    # ma_xa/so_to/so_thua/ma_dinh_danh (cột đầu toàn giá trị 24286) ->
+    # chỉ định đích danh sheet để bỏ qua bước dò header theo tên "MAXA".
+    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24286_Xã Ea M’Droh.xlsx", "DSCanThuThap,DangKy (Do VPĐK gi"),
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24301_Xã Cuôr Đăng.xlsx",
 ]
-# BỎ QUA sheet "Tam giang" (mã xã 24352) trong cùng file — đã nạp trước đó rồi.
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
 # toàn tỉnh/toàn danh mục). False = chỉ thêm/cập nhật các dòng trong SRC,
