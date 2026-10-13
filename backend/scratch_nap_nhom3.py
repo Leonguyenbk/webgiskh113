@@ -16,18 +16,8 @@ import psycopg2.extras
 from app.config import Config
 
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV EHLEO\24181_Xã Ea Drăng.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV EHLEO\24184_Xã Ea H’leo.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV EHLEO\24187_Xã Ea Hiao.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV EHLEO\24193_Xã Ea Wy.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV EHLEO\24208_Xã Ea Khăl.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV SON HOA\22165_Xã Sơn Hòa.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV SON HOA\22171_Xã Tây Sơn.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV SON HOA\22177_Xã Vân Hòa.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV SON HOA\22192_Xã Suối Trai.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV BUON HO\24305_Phường Buôn Hồ.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV BUON HO\24328_Xã Ea Drông.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KV BUON HO\24340_Phường Cư Bao.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\22171_Xã Tây Sơn.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24193_Xã Ea Wy.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
