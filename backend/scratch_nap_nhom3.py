@@ -1,7 +1,10 @@
 """Nạp danh sách Nhóm 3 vào bảng public.nhom3_can_thu_thap — chạy tay khi có
 danh sách mới. SRC có thể là danh sách TOÀN BỘ (TRUNCATE rồi nạp lại) hoặc
 danh sách BỔ SUNG cho 1 vài xã chưa có (UPSERT theo khoá ma_xa+so_to+so_thua,
-không đụng tới các xã khác đã nạp trước đó) — chọn bằng tham số TRUNCATE_TRUOC."""
+không đụng tới các xã khác đã nạp trước đó) — chọn bằng tham số TRUNCATE_TRUOC.
+CHI_THEM_MOI = True: file có thể chứa cả thửa đã nạp trước (trùng) lẫn thửa
+mới bổ sung — CHỈ insert thửa chưa có trong bảng, giữ nguyên dòng trùng
+(không update ma_dinh_danh của dòng đã có)."""
 from __future__ import annotations
 
 import sys
@@ -13,15 +16,9 @@ import psycopg2.extras
 from app.config import Config
 
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24265_Xã Ea Kiết.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24277_Xã Ea Tul.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24280_Xã Cư M’gar.xlsx",
-    # Header sheet này ghi sai tên cột (STT/Số hiệu tờ bản đồ/Số thứ tự
-    # thửa/maDinhdanh) nhưng dữ liệu bên dưới vẫn đúng thứ tự
-    # ma_xa/so_to/so_thua/ma_dinh_danh (cột đầu toàn giá trị 24286) ->
-    # chỉ định đích danh sheet để bỏ qua bước dò header theo tên "MAXA".
-    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24286_Xã Ea M’Droh.xlsx", "DSCanThuThap,DangKy (Do VPĐK gi"),
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\n4-6 xa cu mgar\24301_Xã Cuôr Đăng.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\BUON DON\24235_Xã Buôn Đôn.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\BUON DON\24241_Xã Ea Wer.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\BUON DON\24250_Xã Ea Nuôl.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
@@ -29,6 +26,10 @@ SRC_LIST = [
 # giữ nguyên dữ liệu các xã khác đã có trong bảng (dùng khi SRC là danh
 # sách bổ sung cho 1 vài xã mới).
 TRUNCATE_TRUOC = False
+
+# True = file SRC có lẫn cả thửa cũ đã nạp lẫn thửa mới bổ sung — chỉ
+# insert thửa CHƯA có trong bảng, không update/đụng tới thửa đã trùng khoá.
+CHI_THEM_MOI = True
 
 
 def chon_sheet_du_lieu(wb):
@@ -87,6 +88,19 @@ def main():
                 danh_sach,
                 page_size=5000,
             )
+        elif CHI_THEM_MOI:
+            cur.execute("select count(*) from nhom3_can_thu_thap")
+            truoc = cur.fetchone()[0]
+            psycopg2.extras.execute_values(
+                cur,
+                """insert into nhom3_can_thu_thap (ma_xa, so_to, so_thua, ma_dinh_danh) values %s
+                on conflict (ma_xa, so_to, so_thua) do nothing""",
+                danh_sach,
+                page_size=5000,
+            )
+            cur.execute("select count(*) from nhom3_can_thu_thap")
+            sau = cur.fetchone()[0]
+            print(f"  -> thửa mới thêm vào: {sau - truoc}, thửa trùng bỏ qua: {len(danh_sach) - (sau - truoc)}")
         else:
             psycopg2.extras.execute_values(
                 cur,
