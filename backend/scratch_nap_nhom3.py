@@ -16,11 +16,11 @@ import psycopg2.extras
 from app.config import Config
 
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SUP\24211_Xã Ea Súp.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SUP\24214_Xã Ia Lốp.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SUP\24217_Xã Ea Rốk.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SUP\24221_Xã Ia Rvê.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SUP\24229_Xã Ea Bung.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\SONG CAU\22051_Phường Sông Cầu.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\SONG CAU\22057_Xã Xuân Lộc.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\SONG CAU\22060_Xã Xuân Cảnh.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\SONG CAU\22075_Xã Xuân Thọ.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\SONG CAU\22076_Phường Xuân Đài.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
