@@ -13,8 +13,11 @@ import psycopg2.extras
 from app.config import Config
 
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24538_Xã Krông Ana.xlsx",
+    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS giao khu vuc krong nang.xlsx", "krong nang"),
+    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS giao khu vuc krong nang.xlsx", "phu xuan"),
+    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS giao khu vuc krong nang.xlsx", "Dlie Ya"),
 ]
+# BỎ QUA sheet "Tam giang" (mã xã 24352) trong cùng file — đã nạp trước đó rồi.
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
 # toàn tỉnh/toàn danh mục). False = chỉ thêm/cập nhật các dòng trong SRC,
@@ -38,8 +41,11 @@ def chon_sheet_du_lieu(wb):
 
 
 def doc_danh_sach(src):
-    wb = openpyxl.load_workbook(src, read_only=True, data_only=True)
-    ws = chon_sheet_du_lieu(wb)
+    # src có thể là 1 đường dẫn (tự dò sheet dữ liệu) hoặc (đường dẫn, tên
+    # sheet) khi 1 file có nhiều xã, mỗi xã riêng 1 sheet.
+    path, sheet_name = src if isinstance(src, tuple) else (src, None)
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    ws = wb[sheet_name] if sheet_name else chon_sheet_du_lieu(wb)
     rows = ws.iter_rows(values_only=True)
     next(rows)
     seen = {}
@@ -47,7 +53,11 @@ def doc_danh_sach(src):
         ma_xa, so_to, so_thua, ma_dinh_danh = row[0], row[1], row[2], row[3]
         if ma_xa is None or so_to is None or so_thua is None:
             continue
-        key = (str(int(ma_xa)), int(so_to), int(so_thua))
+        try:
+            key = (str(int(ma_xa)), int(so_to), int(so_thua))
+        except (ValueError, TypeError):
+            print(f"  !! bỏ qua dòng lỗi (không phải số): {row[:4]}")
+            continue
         seen[key] = ma_dinh_danh  # dòng trùng: giữ mã định danh của dòng cuối cùng
     wb.close()
     return [(ma_xa, so_to, so_thua, ma_dinh_danh) for (ma_xa, so_to, so_thua), ma_dinh_danh in seen.items()]
