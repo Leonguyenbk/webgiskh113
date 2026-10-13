@@ -44,9 +44,18 @@ export const GROUP_LABELS = {
 export const GCN_COLOR = "#2563eb";
 export const GCN_LABEL = "Thửa đất đã nhập biểu";
 
+// Thửa Nhóm 3 (xám) giao >= 95% diện tích với 1 ranh dự án đã lưu
+// (properties.thuoc_du_an, xem luu_ranh_du_an_va_danh_dau_nhom3 trong
+// supabase/schema.sql) — không còn tính vào khối lượng Nhóm 3 cần gửi xã
+// nữa, tô vàng để dễ rà soát riêng. Chỉ áp dụng khi CHƯA thuộc Nhóm 1/2
+// (màu nhóm quan trọng hơn) — thửa đã có GCN (xanh dương) vẫn giữ màu đó
+// vì phản ánh việc đã thu thập xong, quan trọng hơn việc nằm trong ranh.
+export const DU_AN_COLOR = "#eab308";
+export const DU_AN_LABEL = "Thuộc dự án";
+
 // Màu tô thửa ĐANG CHỌN trên bản đồ (chọn 1 hoặc nhiều). Tím đậm — tách
-// hẳn khỏi xanh lá (Nhóm 1), đỏ (Nhóm 2), xanh dương (đã nhập biểu) và
-// xám (chưa phân loại).
+// hẳn khỏi xanh lá (Nhóm 1), đỏ (Nhóm 2), xanh dương (đã nhập biểu), vàng
+// (thuộc dự án) và xám (chưa phân loại).
 export const SELECTED_COLOR = "#9333ea";
 
 export function getGroupKey(phanLoai = "") {
@@ -69,6 +78,7 @@ export function getParcelFillColor(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
   if (groupKey === "DEFAULT") {
     if (properties.co_gcn) return GCN_COLOR;
+    if (properties.thuoc_du_an) return DU_AN_COLOR;
   }
   return GROUP_COLORS[groupKey];
 }

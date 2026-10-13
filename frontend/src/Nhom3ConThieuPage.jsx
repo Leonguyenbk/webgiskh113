@@ -16,7 +16,7 @@ function formatPercent(phan, tong) {
 // defaultDir: hướng áp dụng khi bấm lần đầu vào 1 cột khác.
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
-  { key: "tong", label: "Tổng Nhóm 3", type: "number", defaultDir: "desc" },
+  { key: "tong", label: "Khối lượng thực tế gửi xã", type: "number", defaultDir: "desc" },
   { key: "da_nhom_1_2", label: "Đã Nhóm 1/2", type: "number", defaultDir: "desc" },
   { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", type: "number", defaultDir: "desc" },
   { key: "da_lam", label: "Đã làm", type: "number", defaultDir: "desc" },
@@ -139,7 +139,7 @@ export default function Nhom3ConThieuPage({ onNavigateHome, onNavigateNhom3Dashb
           <>
             <div className="statTiles">
               <div className="statTile">
-                <span>Tổng thửa Nhóm 3 có trên bản đồ</span>
+                <span>Khối lượng thực tế gửi xã</span>
                 <strong>{formatSo(tongHop.tong)}</strong>
               </div>
               <div className="statTile">

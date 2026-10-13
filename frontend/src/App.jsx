@@ -34,6 +34,8 @@ import { getXaList } from "./services/parcelService";
 import { getRanhGioiThonAllCached } from "./services/ranhThonService";
 import { searchBanDoNen } from "./services/mapSheetService";
 import {
+  DU_AN_COLOR,
+  DU_AN_LABEL,
   GCN_COLOR,
   GCN_LABEL,
   GROUP_COLORS,
@@ -1270,6 +1272,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             <div>
               <span style={{ backgroundColor: GCN_COLOR }} />
               <label>{GCN_LABEL}</label>
+            </div>
+
+            <div>
+              <span style={{ backgroundColor: DU_AN_COLOR }} />
+              <label>{DU_AN_LABEL}</label>
             </div>
 
             <div>

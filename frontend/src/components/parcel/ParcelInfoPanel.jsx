@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { GCN_COLOR, GCN_LABEL, GROUP_LABELS, getGroupColor, getGroupKey, isNhom12 } from "../../utils/constants";
+import { DU_AN_COLOR, DU_AN_LABEL, GCN_COLOR, GCN_LABEL, GROUP_LABELS, getGroupColor, getGroupKey, isNhom12 } from "../../utils/constants";
 import { googleMapsDirectionsUrl } from "../../utils/geometry";
 import ParcelMissingInfo from "./ParcelMissingInfo";
 
@@ -120,6 +120,17 @@ export default function ParcelInfoPanel({
                   }}
                 >
                   {parcel.co_gcn ? GCN_LABEL : "Thửa đất chưa nhập biểu"}
+                </span>
+              </dd>
+            </div>
+          )}
+
+          {!dangNhom12 && parcel.thuoc_du_an && (
+            <div>
+              <dt>Ranh vùng dự án</dt>
+              <dd>
+                <span className="tag" style={{ color: "white", backgroundColor: DU_AN_COLOR }}>
+                  {DU_AN_LABEL}
                 </span>
               </dd>
             </div>
