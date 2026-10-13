@@ -13,15 +13,20 @@ import psycopg2.extras
 from app.config import Config
 
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\22303_Xã Phú Hòa 2.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\22319_Xã Phú Hòa 1.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\24490_Xã Krông Pắc.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\24496_Xã Ea Kly.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\24502_Xã Ea Phê.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\24505_Xã Ea Knuếc.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\24526_Xã Tân Tiến.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\KRONGPAC- PHUHOA\24529_Xã Vụ Bổn.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\22207_Xã Sông Hinh.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\22222_Xã Đức Bình.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\22225_Xã Ea Bá.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\22237_Xã Ea Ly.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24559_Xã Ea Na.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24568_Xã Dur Kmăl.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24580_Xã Liên Sơn Lắk.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24595_Xã Đắk Liêng.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24598_Xã Đắk Phơi.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24604_Xã Krông Nô.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Xa\24607_Xã Nam Ka.xlsx",
 ]
+# BỎ QUA: 24538_Xã Krông Ana.xlsx — cột MAXA trong file này là số thứ tự
+# dòng (1..17040), không phải mã xã 24538. Cần xuất lại file từ VPĐK.
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
 # toàn tỉnh/toàn danh mục). False = chỉ thêm/cập nhật các dòng trong SRC,
