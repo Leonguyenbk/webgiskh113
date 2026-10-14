@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import {
   exportDanhMucHoSo,
@@ -89,34 +89,35 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
 
-  useEffect(() => {
-    const controller = new AbortController();
+  // Danh sách KHÔNG tự tải khi mở trang hoặc khi đổi bộ lọc — chỉ gửi
+  // request khi bấm "Tìm kiếm" (hoặc nút Trước/Sau, dùng lại bộ lọc hiện
+  // tại) để tránh kéo hết dữ liệu mỗi lần gõ.
+  const runSearch = async (nextOffset = 0) => {
+    setOffset(nextOffset);
     setLoading(true);
     setListError("");
-    getDanhMucHoSo(
-      {
+    try {
+      const result = await getDanhMucHoSo({
         limit: PAGE_SIZE,
-        offset,
+        offset: nextOffset,
         keyword: keyword.trim() || undefined,
         nam: namFilter || undefined,
         chi_nhanh: chiNhanhFilter || undefined,
-      },
-      { signal: controller.signal },
-    )
-      .then((result) => {
-        setItems(result?.items || []);
-        setTotal(Number(result?.total) || 0);
-      })
-      .catch((err) => {
-        if (err.name !== "AbortError") setListError(err.message);
-      })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, [offset, keyword, namFilter, chiNhanhFilter]);
+      });
+      setItems(result?.items || []);
+      setTotal(Number(result?.total) || 0);
+      setHasSearched(true);
+    } catch (err) {
+      setListError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChangeField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -178,7 +179,10 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       // tiếp nhiều hồ sơ cùng năm/cùng chi nhánh) — chỉ xóa các ô còn lại.
       setForm((prev) => ({ ...FORM_EMPTY, nam: prev.nam, chi_nhanh: prev.chi_nhanh }));
       setGcnCheck(null);
-      setOffset(0);
+      // Chỉ làm mới danh sách nếu đã từng tìm kiếm — không tự tải danh
+      // sách lần đầu sau khi lưu nếu trang vẫn đang ở trạng thái "chưa
+      // tìm kiếm".
+      if (hasSearched) runSearch(0);
     } catch (err) {
       setFormError(err.message);
     } finally {
@@ -424,13 +428,12 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                 </div>
 
                 <div style={{ gridColumn: "span 2" }}>
-                  <label htmlFor="dmhsGhiChu">Ghi chú *</label>
+                  <label htmlFor="dmhsGhiChu">Ghi chú</label>
                   <input
                     id="dmhsGhiChu"
                     type="text"
                     className="filterInput"
                     style={fieldStyle}
-                    required
                     value={form.ghi_chu}
                     onChange={(event) => handleChangeField("ghi_chu", event.target.value)}
                   />
@@ -482,10 +485,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                       style={fieldStyle}
                       value={namFilter}
                       placeholder="Tất cả"
-                      onChange={(event) => {
-                        setNamFilter(event.target.value);
-                        setOffset(0);
-                      }}
+                      onChange={(event) => setNamFilter(event.target.value)}
                     />
                   </div>
                   <div style={{ width: 260 }}>
@@ -495,10 +495,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                       className="filterInput"
                       style={fieldStyle}
                       value={chiNhanhFilter}
-                      onChange={(event) => {
-                        setChiNhanhFilter(event.target.value);
-                        setOffset(0);
-                      }}
+                      onChange={(event) => setChiNhanhFilter(event.target.value)}
                     >
                       <option value="">Tất cả</option>
                       {CHI_NHANH_OPTIONS.map((ten) => (
@@ -516,17 +513,33 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                       className="filterInput"
                       style={fieldStyle}
                       value={keyword}
-                      onChange={(event) => {
-                        setKeyword(event.target.value);
-                        setOffset(0);
+                      onChange={(event) => setKeyword(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          runSearch(0);
+                        }
                       }}
                     />
                   </div>
+                  <button
+                    type="button"
+                    className="downloadButton"
+                    disabled={loading}
+                    style={{ opacity: loading ? 0.5 : 1 }}
+                    onClick={() => runSearch(0)}
+                  >
+                    {loading ? "Đang tìm…" : "🔍 Tìm kiếm"}
+                  </button>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <label style={{ margin: 0 }}>
-                    {loading ? "Đang tải…" : `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} hồ sơ`}
+                    {loading
+                      ? "Đang tải…"
+                      : hasSearched
+                        ? `${formatSo(rangeFrom)}–${formatSo(rangeTo)} / ${formatSo(total)} hồ sơ`
+                        : "Chưa tìm kiếm"}
                   </label>
                   <button
                     type="button"
@@ -542,7 +555,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                     className="downloadButton"
                     disabled={!canPrev || loading}
                     style={{ opacity: !canPrev || loading ? 0.5 : 1 }}
-                    onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
+                    onClick={() => runSearch(Math.max(0, offset - PAGE_SIZE))}
                   >
                     ← Trước
                   </button>
@@ -551,7 +564,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                     className="downloadButton"
                     disabled={!canNext || loading}
                     style={{ opacity: !canNext || loading ? 0.5 : 1 }}
-                    onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
+                    onClick={() => runSearch(offset + PAGE_SIZE)}
                   >
                     Sau →
                   </button>
@@ -593,7 +606,9 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   <tbody>
                     {!loading && items.length === 0 ? (
                       <tr>
-                        <td colSpan={13}>Chưa có hồ sơ nào</td>
+                        <td colSpan={13}>
+                          {hasSearched ? "Không có hồ sơ phù hợp" : "Nhập điều kiện (hoặc để trống) rồi bấm \"Tìm kiếm\" để xem danh sách"}
+                        </td>
                       </tr>
                     ) : (
                       items.map((row) => (

@@ -17,10 +17,10 @@ _MAX_LIMIT = 500
 _SO_SERI_GCN_RE = re.compile(r"^[A-ZĐ]{1,2}\s?\d{6,8}$")
 
 # Tất cả các trường đều bắt buộc khi nhập 1 hồ sơ (yêu cầu người dùng) —
-# TRỪ cặp "Thửa/Bản đồ (Mới)" và "Thửa/Bản đồ (Cũ)": theo đúng chú thích
-# trên mẫu MAUFILE.xlsx ("Chỉ nhập thông tin cũ nếu như không có thông
-# tin mới") — chỉ cần đủ 1 trong 2 cặp (xem kiểm tra riêng trong
-# them_ho_so), không bắt cả 4 ô cùng lúc.
+# TRỪ "Ghi chú" (không bắt buộc) và cặp "Thửa/Bản đồ (Mới)"/"Thửa/Bản đồ
+# (Cũ)": theo đúng chú thích trên mẫu MAUFILE.xlsx ("Chỉ nhập thông tin
+# cũ nếu như không có thông tin mới") — chỉ cần đủ 1 trong 2 cặp (xem
+# kiểm tra riêng trong them_ho_so), không bắt cả 4 ô cùng lúc.
 _REQUIRED_FIELDS = [
     ("chi_nhanh", "Chi nhánh"),
     ("cap", "Cặp"),
@@ -28,7 +28,6 @@ _REQUIRED_FIELDS = [
     ("ten_nguoi_su_dung_dat", "Tên người sử dụng đất"),
     ("dia_chi_thua_dat", "Địa chỉ thửa đất"),
     ("loai_ho_so", "Loại hồ sơ"),
-    ("ghi_chu", "Ghi chú"),
 ]
 
 _MAU_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "MAUFILE.xlsx")
