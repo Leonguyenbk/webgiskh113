@@ -9,8 +9,39 @@ import {
 
 const PAGE_SIZE = 100;
 
+// 24 Chi nhánh khu vực VPĐK (Đắk Lắk + Phú Yên cũ, theo KH 2959) — danh
+// sách cố định do người dùng cung cấp, không tự suy ra từ tên thư mục
+// DANHSACHGUIXA (tên thư mục không đủ/không khớp tên chính thức).
+const CHI_NHANH_OPTIONS = [
+  "Chi nhánh khu vực Buôn Ma Thuột",
+  "Chi nhánh khu vực Buôn Hồ",
+  "Chi nhánh khu vực Buôn Đôn",
+  "Chi nhánh khu vực Cư Kuin",
+  "Chi nhánh khu vực Cư M’gar",
+  "Chi nhánh khu vực Ea H’leo",
+  "Chi nhánh khu vực Ea Kar",
+  "Chi nhánh khu vực Ea Súp",
+  "Chi nhánh khu vực Krông Ana",
+  "Chi nhánh khu vực Krông Bông",
+  "Chi nhánh khu vực Krông Búk",
+  "Chi nhánh khu vực Krông Năng",
+  "Chi nhánh khu vực Krông Pắc",
+  "Chi nhánh khu vực Lắk",
+  "Chi nhánh khu vực M’Drắk",
+  "Chi nhánh khu vực Tuy Hòa",
+  "Chi nhánh khu vực Sông Cầu",
+  "Chi nhánh khu vực Đông Hòa",
+  "Chi nhánh khu vực Tuy An",
+  "Chi nhánh khu vực Phú Hòa",
+  "Chi nhánh khu vực Tây Hòa",
+  "Chi nhánh khu vực Sơn Hòa",
+  "Chi nhánh khu vực Sông Hinh",
+  "Chi nhánh khu vực Đồng Xuân",
+];
+
 const FORM_EMPTY = {
   nam: new Date().getFullYear(),
+  chi_nhanh: "",
   cap: "",
   so_tt_ho_so: "",
   ten_nguoi_su_dung_dat: "",
@@ -47,6 +78,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
   const [formNotice, setFormNotice] = useState("");
 
   const [namFilter, setNamFilter] = useState("");
+  const [chiNhanhFilter, setChiNhanhFilter] = useState("");
   const [keyword, setKeyword] = useState("");
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState([]);
@@ -62,7 +94,13 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     setLoading(true);
     setListError("");
     getDanhMucHoSo(
-      { limit: PAGE_SIZE, offset, keyword: keyword.trim() || undefined, nam: namFilter || undefined },
+      {
+        limit: PAGE_SIZE,
+        offset,
+        keyword: keyword.trim() || undefined,
+        nam: namFilter || undefined,
+        chi_nhanh: chiNhanhFilter || undefined,
+      },
       { signal: controller.signal },
     )
       .then((result) => {
@@ -74,7 +112,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [offset, keyword, namFilter]);
+  }, [offset, keyword, namFilter, chiNhanhFilter]);
 
   const handleChangeField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -114,7 +152,9 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     try {
       await themDanhMucHoSo(form);
       setFormNotice(`Đã lưu hồ sơ — Số sêri GCN "${form.so_seri_gcn.trim()}".`);
-      setForm((prev) => ({ ...FORM_EMPTY, nam: prev.nam }));
+      // Giữ nguyên Năm + Chi nhánh cho lần nhập kế tiếp (thường nhập liên
+      // tiếp nhiều hồ sơ cùng năm/cùng chi nhánh) — chỉ xóa các ô còn lại.
+      setForm((prev) => ({ ...FORM_EMPTY, nam: prev.nam, chi_nhanh: prev.chi_nhanh }));
       setGcnCheck(null);
       setOffset(0);
     } catch (err) {
@@ -132,6 +172,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       const blob = await exportDanhMucHoSo({
         nam: namFilter || undefined,
         keyword: keyword.trim() || undefined,
+        chi_nhanh: chiNhanhFilter || undefined,
       });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -194,6 +235,23 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                     value={form.nam}
                     onChange={(event) => handleChangeField("nam", event.target.value)}
                   />
+                </div>
+                <div style={{ gridColumn: "span 2" }}>
+                  <label htmlFor="dmhsChiNhanh">Chi nhánh</label>
+                  <select
+                    id="dmhsChiNhanh"
+                    className="filterInput"
+                    style={fieldStyle}
+                    value={form.chi_nhanh}
+                    onChange={(event) => handleChangeField("chi_nhanh", event.target.value)}
+                  >
+                    <option value="">— Chọn chi nhánh —</option>
+                    {CHI_NHANH_OPTIONS.map((ten) => (
+                      <option key={ten} value={ten}>
+                        {ten}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label htmlFor="dmhsCap">Cặp</label>
@@ -395,6 +453,26 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                     />
                   </div>
                   <div style={{ width: 260 }}>
+                    <label htmlFor="dmhsFilterChiNhanh">Chi nhánh</label>
+                    <select
+                      id="dmhsFilterChiNhanh"
+                      className="filterInput"
+                      style={fieldStyle}
+                      value={chiNhanhFilter}
+                      onChange={(event) => {
+                        setChiNhanhFilter(event.target.value);
+                        setOffset(0);
+                      }}
+                    >
+                      <option value="">Tất cả</option>
+                      {CHI_NHANH_OPTIONS.map((ten) => (
+                        <option key={ten} value={ten}>
+                          {ten}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ width: 260 }}>
                     <label htmlFor="dmhsFilterKeyword">Tìm theo tên/GCN/Cặp/Số TT</label>
                     <input
                       id="dmhsFilterKeyword"
@@ -462,6 +540,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   <thead>
                     <tr>
                       <th>Năm</th>
+                      <th>Chi nhánh</th>
                       <th>Cặp</th>
                       <th>Số TT hồ sơ</th>
                       <th>Tên người sử dụng đất</th>
@@ -478,12 +557,13 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   <tbody>
                     {!loading && items.length === 0 ? (
                       <tr>
-                        <td colSpan={12}>Chưa có hồ sơ nào</td>
+                        <td colSpan={13}>Chưa có hồ sơ nào</td>
                       </tr>
                     ) : (
                       items.map((row) => (
                         <tr key={row.id}>
                           <td>{row.nam ?? ""}</td>
+                          <td>{row.chi_nhanh || ""}</td>
                           <td>{row.cap || ""}</td>
                           <td>{row.so_tt_ho_so || ""}</td>
                           <td>{row.ten_nguoi_su_dung_dat || ""}</td>

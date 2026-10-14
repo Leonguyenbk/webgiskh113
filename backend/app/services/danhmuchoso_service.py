@@ -15,6 +15,8 @@ _MAU_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "MAUFILE
 _MAU_SHEET = "Sheet1"
 _MAU_FIRST_DATA_ROW = 4
 # Cột A..K của MAUFILE.xlsx, đúng thứ tự merge header (xem DANHMUCHOSO/MAUFILE.xlsx).
+# Cột L (chi_nhanh) KHÔNG có trong mẫu gốc — thêm sau cùng, tự ghi thêm
+# header ở dòng 2 (xem export_xlsx), không đụng layout 11 cột gốc.
 _MAU_COLUMNS = [
     "cap",
     "so_tt_ho_so",
@@ -27,7 +29,9 @@ _MAU_COLUMNS = [
     "so_seri_gcn",
     "loai_ho_so",
     "ghi_chu",
+    "chi_nhanh",
 ]
+_MAU_CHI_NHANH_COL = len(_MAU_COLUMNS)  # cột L
 
 _NGUON_LABEL = {
     "da_nhap_form_nhom4": "đã nhập form Nhóm 4",
@@ -78,6 +82,7 @@ def them_ho_so(body: dict):
 
     payload = {
         "nam": _int_or_none(body.get("nam")),
+        "chi_nhanh": body.get("chi_nhanh"),
         "cap": body.get("cap"),
         "so_tt_ho_so": body.get("so_tt_ho_so"),
         "ten_nguoi_su_dung_dat": body.get("ten_nguoi_su_dung_dat"),
@@ -96,7 +101,7 @@ def them_ho_so(body: dict):
     return result, None
 
 
-def get_danh_sach(limit_raw, offset_raw, keyword_raw, nam_raw):
+def get_danh_sach(limit_raw, offset_raw, keyword_raw, nam_raw, chi_nhanh_raw=None):
     try:
         limit = min(max(int(limit_raw or _DEFAULT_LIMIT), 1), _MAX_LIMIT)
         offset = max(int(offset_raw or 0), 0)
@@ -105,8 +110,9 @@ def get_danh_sach(limit_raw, offset_raw, keyword_raw, nam_raw):
 
     keyword = (keyword_raw or "").strip() or None
     nam = _int_or_none(nam_raw)
+    chi_nhanh = (chi_nhanh_raw or "").strip() or None
 
-    result, error_response = danhmuchoso_repository.danh_sach(limit, offset, keyword, nam)
+    result, error_response = danhmuchoso_repository.danh_sach(limit, offset, keyword, nam, chi_nhanh)
     if error_response:
         return None, error_response
     if not isinstance(result, dict):
@@ -122,15 +128,18 @@ def _xlsx_cell(value):
     return value
 
 
-def export_xlsx(nam_raw: str | None, keyword_raw: str | None):
+def export_xlsx(nam_raw: str | None, keyword_raw: str | None, chi_nhanh_raw: str | None = None):
     nam = _int_or_none(nam_raw)
     keyword = (keyword_raw or "").strip() or None
+    chi_nhanh = (chi_nhanh_raw or "").strip() or None
 
     rows: list = []
     offset = 0
     page_size = 5000
     while True:
-        page, error_response = danhmuchoso_repository.danh_sach(page_size, offset, keyword, nam)
+        page, error_response = danhmuchoso_repository.danh_sach(
+            page_size, offset, keyword, nam, chi_nhanh
+        )
         if error_response:
             return None, error_response
         page = page if isinstance(page, dict) else {}
@@ -145,6 +154,9 @@ def export_xlsx(nam_raw: str | None, keyword_raw: str | None):
     except FileNotFoundError:
         return None, (jsonify({"error": "Thiếu file mẫu MAUFILE.xlsx trên server"}), 500)
     ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
+
+    # Cột L "Chi nhánh" — thêm sau cùng, ngoài 11 cột mẫu gốc.
+    ws.cell(row=2, column=_MAU_CHI_NHANH_COL, value="Chi nhánh")
 
     if nam:
         # Tiêu đề mẫu: "DANH MỤC HỒ SƠ LƯU TRỮ NĂM ….." — thay phần sau

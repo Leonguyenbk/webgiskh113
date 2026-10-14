@@ -16,6 +16,7 @@ def them(payload: dict):
         "danhmuchoso_them",
         {
             "p_nam": payload.get("nam"),
+            "p_chi_nhanh": payload.get("chi_nhanh"),
             "p_cap": payload.get("cap"),
             "p_so_tt_ho_so": payload.get("so_tt_ho_so"),
             "p_ten_nguoi_su_dung_dat": payload.get("ten_nguoi_su_dung_dat"),
@@ -32,9 +33,15 @@ def them(payload: dict):
     )
 
 
-def danh_sach(limit: int, offset: int, keyword: str | None, nam: int | None):
+def danh_sach(limit: int, offset: int, keyword: str | None, nam: int | None, chi_nhanh: str | None = None):
     return supabase_client.call_rpc(
         "danhmuchoso_list",
-        {"p_limit": limit, "p_offset": offset, "p_keyword": keyword, "p_nam": nam},
+        {
+            "p_limit": limit,
+            "p_offset": offset,
+            "p_keyword": keyword,
+            "p_nam": nam,
+            "p_chi_nhanh": chi_nhanh,
+        },
         timeout=20,
     )

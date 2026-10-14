@@ -16,6 +16,7 @@ def danhmuchoso_list():
         request.args.get("offset"),
         request.args.get("keyword"),
         request.args.get("nam"),
+        request.args.get("chi_nhanh"),
     )
     if error_response:
         return error_response
@@ -42,7 +43,7 @@ def danhmuchoso_them():
 @danhmuchoso_bp.get("/api/danhmuchoso/export")
 def danhmuchoso_export():
     result, error_response = danhmuchoso_service.export_xlsx(
-        request.args.get("nam"), request.args.get("keyword")
+        request.args.get("nam"), request.args.get("keyword"), request.args.get("chi_nhanh")
     )
     if error_response:
         return error_response
