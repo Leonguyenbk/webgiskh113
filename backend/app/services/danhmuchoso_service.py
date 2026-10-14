@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 
 from flask import jsonify
 from openpyxl import load_workbook
@@ -10,6 +11,26 @@ from ..repositories import danhmuchoso_repository
 
 _DEFAULT_LIMIT = 100
 _MAX_LIMIT = 500
+
+# Số sêri GCN: 1-2 chữ cái (kể cả "Đ") + khoảng trắng tuỳ chọn + 6-8 số —
+# ví dụ "AL 642898", "AA 09156461", "G 726997", "BĐ 833644".
+_SO_SERI_GCN_RE = re.compile(r"^[A-ZĐ]{1,2}\s?\d{6,8}$")
+
+# Tất cả các trường đều bắt buộc khi nhập 1 hồ sơ (yêu cầu người dùng) —
+# (tên field trong body, nhãn tiếng Việt để báo lỗi).
+_REQUIRED_FIELDS = [
+    ("chi_nhanh", "Chi nhánh"),
+    ("cap", "Cặp"),
+    ("so_tt_ho_so", "Số TT hồ sơ"),
+    ("ten_nguoi_su_dung_dat", "Tên người sử dụng đất"),
+    ("thua_dat_so_moi", "Thửa đất số (Mới)"),
+    ("ban_do_so_moi", "Bản đồ số (Mới)"),
+    ("thua_dat_so_cu", "Thửa đất số (Cũ)"),
+    ("ban_do_so_cu", "Bản đồ số (Cũ)"),
+    ("dia_chi_thua_dat", "Địa chỉ thửa đất"),
+    ("loai_ho_so", "Loại hồ sơ"),
+    ("ghi_chu", "Ghi chú"),
+]
 
 _MAU_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "MAUFILE.xlsx")
 _MAU_SHEET = "Sheet1"
@@ -50,9 +71,16 @@ def _int_or_none(raw):
 
 
 def kiem_tra_gcn(so_seri_gcn_raw: str | None):
-    so_seri_gcn = (so_seri_gcn_raw or "").strip()
+    so_seri_gcn = (so_seri_gcn_raw or "").strip().upper()
     if not so_seri_gcn:
         return None, (jsonify({"error": "Thiếu số sêri GCN"}), 400)
+    if not _SO_SERI_GCN_RE.match(so_seri_gcn):
+        return None, (
+            jsonify(
+                {"error": f'Số sêri GCN "{so_seri_gcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").'}
+            ),
+            400,
+        )
 
     result, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn)
     if error_response:
@@ -61,9 +89,25 @@ def kiem_tra_gcn(so_seri_gcn_raw: str | None):
 
 
 def them_ho_so(body: dict):
-    so_seri_gcn = str(body.get("so_seri_gcn") or "").strip()
+    so_seri_gcn = str(body.get("so_seri_gcn") or "").strip().upper()
     if not so_seri_gcn:
         return None, (jsonify({"error": "Thiếu số sêri GCN"}), 400)
+    if not _SO_SERI_GCN_RE.match(so_seri_gcn):
+        return None, (
+            jsonify(
+                {"error": f'Số sêri GCN "{so_seri_gcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").'}
+            ),
+            400,
+        )
+
+    if body.get("nam") in (None, ""):
+        return None, (jsonify({"error": "Thiếu Năm"}), 400)
+    if _int_or_none(body.get("nam")) is None:
+        return None, (jsonify({"error": "Năm không hợp lệ"}), 400)
+
+    for field, label in _REQUIRED_FIELDS:
+        if not str(body.get(field) or "").strip():
+            return None, (jsonify({"error": f"Thiếu {label}"}), 400)
 
     kiem_tra, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn)
     if error_response:

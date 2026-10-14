@@ -55,6 +55,10 @@ const FORM_EMPTY = {
   ghi_chu: "",
 };
 
+// Số sêri GCN: 1-2 chữ cái (kể cả "Đ") + khoảng trắng tuỳ chọn + 6-8 số —
+// khớp đúng quy tắc kiểm tra ở backend (danhmuchoso_service.py).
+const SO_SERI_GCN_RE = /^[A-ZĐ]{1,2}\s?\d{6,8}$/;
+
 function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
 }
@@ -120,13 +124,20 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
   };
 
   const handleCheckGcn = async () => {
-    const soSeriGcn = form.so_seri_gcn.trim();
+    const soSeriGcn = form.so_seri_gcn.trim().toUpperCase();
     if (!soSeriGcn) return;
+    setFormError("");
+    if (!SO_SERI_GCN_RE.test(soSeriGcn)) {
+      setGcnCheck(null);
+      setFormError(`Số sêri GCN "${soSeriGcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").`);
+      return;
+    }
     setGcnChecking(true);
     try {
       const result = await kiemTraGcnDanhMuc(soSeriGcn);
       setGcnCheck(result);
     } catch (err) {
+      setGcnCheck(null);
       setFormError(err.message);
     } finally {
       setGcnChecking(false);
@@ -144,14 +155,19 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     if (saving) return;
     setFormError("");
     setFormNotice("");
-    if (!form.so_seri_gcn.trim()) {
+    const soSeriGcn = form.so_seri_gcn.trim().toUpperCase();
+    if (!soSeriGcn) {
       setFormError("Thiếu số sêri GCN");
+      return;
+    }
+    if (!SO_SERI_GCN_RE.test(soSeriGcn)) {
+      setFormError(`Số sêri GCN "${soSeriGcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").`);
       return;
     }
     setSaving(true);
     try {
-      await themDanhMucHoSo(form);
-      setFormNotice(`Đã lưu hồ sơ — Số sêri GCN "${form.so_seri_gcn.trim()}".`);
+      await themDanhMucHoSo({ ...form, so_seri_gcn: soSeriGcn });
+      setFormNotice(`Đã lưu hồ sơ — Số sêri GCN "${soSeriGcn}".`);
       // Giữ nguyên Năm + Chi nhánh cho lần nhập kế tiếp (thường nhập liên
       // tiếp nhiều hồ sơ cùng năm/cùng chi nhánh) — chỉ xóa các ô còn lại.
       setForm((prev) => ({ ...FORM_EMPTY, nam: prev.nam, chi_nhanh: prev.chi_nhanh }));
@@ -225,144 +241,16 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
               <label style={{ fontSize: 16, marginBottom: 10, display: "block" }}>Nhập hồ sơ mới</label>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                <div>
-                  <label htmlFor="dmhsNam">Năm</label>
-                  <input
-                    id="dmhsNam"
-                    type="number"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.nam}
-                    onChange={(event) => handleChangeField("nam", event.target.value)}
-                  />
-                </div>
                 <div style={{ gridColumn: "span 2" }}>
-                  <label htmlFor="dmhsChiNhanh">Chi nhánh</label>
-                  <select
-                    id="dmhsChiNhanh"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.chi_nhanh}
-                    onChange={(event) => handleChangeField("chi_nhanh", event.target.value)}
-                  >
-                    <option value="">— Chọn chi nhánh —</option>
-                    {CHI_NHANH_OPTIONS.map((ten) => (
-                      <option key={ten} value={ten}>
-                        {ten}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="dmhsCap">Cặp</label>
-                  <input
-                    id="dmhsCap"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.cap}
-                    onChange={(event) => handleChangeField("cap", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="dmhsSoTt">Số TT hồ sơ</label>
-                  <input
-                    id="dmhsSoTt"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.so_tt_ho_so}
-                    onChange={(event) => handleChangeField("so_tt_ho_so", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="dmhsLoai">Loại hồ sơ</label>
-                  <input
-                    id="dmhsLoai"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.loai_ho_so}
-                    onChange={(event) => handleChangeField("loai_ho_so", event.target.value)}
-                  />
-                </div>
-
-                <div style={{ gridColumn: "span 2" }}>
-                  <label htmlFor="dmhsTen">Tên người sử dụng đất</label>
-                  <input
-                    id="dmhsTen"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.ten_nguoi_su_dung_dat}
-                    onChange={(event) => handleChangeField("ten_nguoi_su_dung_dat", event.target.value)}
-                  />
-                </div>
-                <div style={{ gridColumn: "span 2" }}>
-                  <label htmlFor="dmhsDiaChi">Địa chỉ thửa đất (cấp xã/phường)</label>
-                  <input
-                    id="dmhsDiaChi"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.dia_chi_thua_dat}
-                    onChange={(event) => handleChangeField("dia_chi_thua_dat", event.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="dmhsThuaMoi">Thửa đất số (Mới)</label>
-                  <input
-                    id="dmhsThuaMoi"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.thua_dat_so_moi}
-                    onChange={(event) => handleChangeField("thua_dat_so_moi", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="dmhsBanDoMoi">Bản đồ số (Mới)</label>
-                  <input
-                    id="dmhsBanDoMoi"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.ban_do_so_moi}
-                    onChange={(event) => handleChangeField("ban_do_so_moi", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="dmhsThuaCu">Thửa đất số (Cũ)</label>
-                  <input
-                    id="dmhsThuaCu"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.thua_dat_so_cu}
-                    onChange={(event) => handleChangeField("thua_dat_so_cu", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="dmhsBanDoCu">Bản đồ số (Cũ)</label>
-                  <input
-                    id="dmhsBanDoCu"
-                    type="text"
-                    className="filterInput"
-                    style={fieldStyle}
-                    value={form.ban_do_so_cu}
-                    onChange={(event) => handleChangeField("ban_do_so_cu", event.target.value)}
-                  />
-                </div>
-
-                <div style={{ gridColumn: "span 2" }}>
-                  <label htmlFor="dmhsGcn">Số sêri GCN</label>
+                  <label htmlFor="dmhsGcn">Số sêri GCN *</label>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input
                       id="dmhsGcn"
                       type="text"
                       className="filterInput"
                       style={fieldStyle}
+                      required
+                      placeholder="VD: AL 642898"
                       value={form.so_seri_gcn}
                       onChange={(event) => handleChangeField("so_seri_gcn", event.target.value)}
                       onBlur={handleCheckGcn}
@@ -388,13 +276,156 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                     </div>
                   )}
                 </div>
+                <div>
+                  <label htmlFor="dmhsNam">Năm *</label>
+                  <input
+                    id="dmhsNam"
+                    type="number"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.nam}
+                    onChange={(event) => handleChangeField("nam", event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dmhsChiNhanh">Chi nhánh *</label>
+                  <select
+                    id="dmhsChiNhanh"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.chi_nhanh}
+                    onChange={(event) => handleChangeField("chi_nhanh", event.target.value)}
+                  >
+                    <option value="">— Chọn chi nhánh —</option>
+                    {CHI_NHANH_OPTIONS.map((ten) => (
+                      <option key={ten} value={ten}>
+                        {ten}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="dmhsCap">Cặp *</label>
+                  <input
+                    id="dmhsCap"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.cap}
+                    onChange={(event) => handleChangeField("cap", event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dmhsSoTt">Số TT hồ sơ *</label>
+                  <input
+                    id="dmhsSoTt"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.so_tt_ho_so}
+                    onChange={(event) => handleChangeField("so_tt_ho_so", event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dmhsLoai">Loại hồ sơ *</label>
+                  <input
+                    id="dmhsLoai"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.loai_ho_so}
+                    onChange={(event) => handleChangeField("loai_ho_so", event.target.value)}
+                  />
+                </div>
+
                 <div style={{ gridColumn: "span 2" }}>
-                  <label htmlFor="dmhsGhiChu">Ghi chú</label>
+                  <label htmlFor="dmhsTen">Tên người sử dụng đất *</label>
+                  <input
+                    id="dmhsTen"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.ten_nguoi_su_dung_dat}
+                    onChange={(event) => handleChangeField("ten_nguoi_su_dung_dat", event.target.value)}
+                  />
+                </div>
+                <div style={{ gridColumn: "span 2" }}>
+                  <label htmlFor="dmhsDiaChi">Địa chỉ thửa đất (cấp xã/phường) *</label>
+                  <input
+                    id="dmhsDiaChi"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.dia_chi_thua_dat}
+                    onChange={(event) => handleChangeField("dia_chi_thua_dat", event.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="dmhsThuaMoi">Thửa đất số (Mới) *</label>
+                  <input
+                    id="dmhsThuaMoi"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.thua_dat_so_moi}
+                    onChange={(event) => handleChangeField("thua_dat_so_moi", event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dmhsBanDoMoi">Bản đồ số (Mới) *</label>
+                  <input
+                    id="dmhsBanDoMoi"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.ban_do_so_moi}
+                    onChange={(event) => handleChangeField("ban_do_so_moi", event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dmhsThuaCu">Thửa đất số (Cũ) *</label>
+                  <input
+                    id="dmhsThuaCu"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.thua_dat_so_cu}
+                    onChange={(event) => handleChangeField("thua_dat_so_cu", event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dmhsBanDoCu">Bản đồ số (Cũ) *</label>
+                  <input
+                    id="dmhsBanDoCu"
+                    type="text"
+                    className="filterInput"
+                    style={fieldStyle}
+                    required
+                    value={form.ban_do_so_cu}
+                    onChange={(event) => handleChangeField("ban_do_so_cu", event.target.value)}
+                  />
+                </div>
+
+                <div style={{ gridColumn: "span 2" }}>
+                  <label htmlFor="dmhsGhiChu">Ghi chú *</label>
                   <input
                     id="dmhsGhiChu"
                     type="text"
                     className="filterInput"
                     style={fieldStyle}
+                    required
                     value={form.ghi_chu}
                     onChange={(event) => handleChangeField("ghi_chu", event.target.value)}
                   />
