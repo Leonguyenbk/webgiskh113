@@ -2073,6 +2073,19 @@ $$;
 revoke all on function public.refresh_nhom3_trang_thai_cache() from public;
 grant execute on function public.refresh_nhom3_trang_thai_cache() to service_role;
 
+-- Ghi chú riêng theo xã cho trang "/nhom-3-con-thieu" — dùng cho xã
+-- KHÔNG có (và sẽ không có) danh sách gửi xã Nhóm 3 KH 2959 vì thuộc 1 dự
+-- án tổng thể khác (ví dụ khu vực Đồng Xuân, Cư Kuin) -> không tô màu gì
+-- trên bản đồ (khác hẳn cơ chế ranh_du_an/thuoc_du_an), CHỈ hiện 1 dòng
+-- ghi chú thay số liệu trong bảng "Chi tiết theo xã/phường" để không bị
+-- hiểu lầm là "còn thiếu" cần làm.
+create table if not exists public.nhom3_xa_ghi_chu (
+    ma_xa text primary key,
+    ghi_chu text not null,
+    tao_luc timestamptz not null default now()
+);
+alter table public.nhom3_xa_ghi_chu enable row level security;
+
 -- Tổng hợp toàn dự án — trang tổng quan. CHỈ đọc cache (vài chục mili
 -- giây bất kể bảng gốc bao nhiêu triệu dòng) — xem refresh_nhom3_trang_thai_cache
 -- ở trên để biết cache được tính thế nào và khi nào cần gọi lại.
@@ -2090,10 +2103,23 @@ as $$
             count(*) as tong,
             count(*) filter (where c.la_nhom_1_2) as da_nhom_1_2,
             count(*) filter (where not c.la_nhom_1_2 and c.da_thu_thap) as da_thu_thap,
-            count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu
+            count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu,
+            null::text as ghi_chu
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         group by c.ma_xa, xp.ten_xa
+
+        union all
+
+        -- Xã có ghi chú riêng (xem nhom3_xa_ghi_chu) VÀ chưa có dữ liệu
+        -- trong cache -> hiện 1 dòng ghi chú (0 khắp số liệu, không cộng
+        -- dồn gì thêm vào tổng).
+        select g.ma_xa, xp.ten_xa, 0, 0, 0, 0, g.ghi_chu
+        from public.nhom3_xa_ghi_chu g
+        left join public.danhsachxaphuong xp on xp.ma_xa = g.ma_xa
+        where not exists (
+            select 1 from public.nhom3_trang_thai_cache c where c.ma_xa = g.ma_xa
+        )
     )
     select jsonb_build_object(
         'tong', coalesce(sum(tong), 0),

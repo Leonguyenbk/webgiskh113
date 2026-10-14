@@ -256,51 +256,58 @@ export default function Nhom3ConThieuPage({
                         </td>
                       </tr>
                     ) : (
-                      filteredRows.map((row) => (
-                        <tr key={row.ma_xa}>
-                          <td>{row.ten_xa}</td>
-                          <td>{formatSo(row.tong)}</td>
-                          <td>{formatSo(row.da_nhom_1_2)}</td>
-                          <td>{formatSo(row.da_thu_thap)}</td>
-                          <td>{formatSo(row.da_lam)}</td>
-                          <td>{row.percent}%</td>
-                          <td>{formatSo(row.con_thieu)}</td>
-                          <td style={{ textAlign: "center" }}>
-                            <button
-                              type="button"
-                              title={`Xem danh sách thửa còn thiếu của ${row.ten_xa}`}
-                              onClick={() => onNavigateNhom3ChiTiet?.(row.ma_xa, row.ten_xa)}
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                cursor: "pointer",
-                                fontSize: 18,
-                                lineHeight: 1,
-                              }}
-                            >
-                              📋
-                            </button>
-                          </td>
-                          <td style={{ textAlign: "center" }}>
-                            <button
-                              type="button"
-                              title={`Tải Excel danh sách thửa còn thiếu của ${row.ten_xa}`}
-                              disabled={downloadingXa === row.ma_xa}
-                              onClick={() => handleExportConThieu(row.ma_xa)}
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                cursor: downloadingXa === row.ma_xa ? "default" : "pointer",
-                                fontSize: 18,
-                                lineHeight: 1,
-                                opacity: downloadingXa === row.ma_xa ? 0.5 : 1,
-                              }}
-                            >
-                              {downloadingXa === row.ma_xa ? "⏳" : "⬇️"}
-                            </button>
-                          </td>
-                        </tr>
-                      ))
+                      filteredRows.map((row) =>
+                        row.ghi_chu ? (
+                          <tr key={row.ma_xa} style={{ color: "#6b7280", fontStyle: "italic" }}>
+                            <td>{row.ten_xa}</td>
+                            <td colSpan={SORT_COLUMNS.length - 1 + 2}>{row.ghi_chu}</td>
+                          </tr>
+                        ) : (
+                          <tr key={row.ma_xa}>
+                            <td>{row.ten_xa}</td>
+                            <td>{formatSo(row.tong)}</td>
+                            <td>{formatSo(row.da_nhom_1_2)}</td>
+                            <td>{formatSo(row.da_thu_thap)}</td>
+                            <td>{formatSo(row.da_lam)}</td>
+                            <td>{row.percent}%</td>
+                            <td>{formatSo(row.con_thieu)}</td>
+                            <td style={{ textAlign: "center" }}>
+                              <button
+                                type="button"
+                                title={`Xem danh sách thửa còn thiếu của ${row.ten_xa}`}
+                                onClick={() => onNavigateNhom3ChiTiet?.(row.ma_xa, row.ten_xa)}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  cursor: "pointer",
+                                  fontSize: 18,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                📋
+                              </button>
+                            </td>
+                            <td style={{ textAlign: "center" }}>
+                              <button
+                                type="button"
+                                title={`Tải Excel danh sách thửa còn thiếu của ${row.ten_xa}`}
+                                disabled={downloadingXa === row.ma_xa}
+                                onClick={() => handleExportConThieu(row.ma_xa)}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  cursor: downloadingXa === row.ma_xa ? "default" : "pointer",
+                                  fontSize: 18,
+                                  lineHeight: 1,
+                                  opacity: downloadingXa === row.ma_xa ? 0.5 : 1,
+                                }}
+                              >
+                                {downloadingXa === row.ma_xa ? "⏳" : "⬇️"}
+                              </button>
+                            </td>
+                          </tr>
+                        ),
+                      )
                     )}
                   </tbody>
                 </table>
