@@ -15,25 +15,16 @@ import psycopg2.extras
 
 from app.config import Config
 
-_MDRAK = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\kv-mdrak"
-_KRONGBUK = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\kv-krong buk"
+# "DS khu vuc Tay Hoa.xlsx": 4 xã, mỗi xã 1 sheet riêng (Hòa Mỹ=22285,
+# Hòa Thịnh=22276 có vài nghìn dòng trống cuối sheet — doc_danh_sach đã tự
+# bỏ qua dòng ma_xa/so_to/so_thua rỗng; Tây Hòa=22255, Sơn Thành=22250
+# sạch).
+_TAYHOA = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS khu vuc Tay Hoa.xlsx"
 SRC_LIST = [
-    _MDRAK + "\\24412_Xã M'Drắk.xlsx",
-    _MDRAK + r"\24415_Xã Cư Prao.xlsx",
-    # 24433_Xã Ea Riêng.xlsx: cột MAXA trong file ghi SAI 24415 (trùng mã
-    # Cư Prao) cho toàn bộ dòng — không phải lỗi dạng số thứ tự/offset như
-    # các lần trước, mà là 1 giá trị hợp lệ nhưng SAI xã. Đối chiếu khoá
-    # (so_to, so_thua) với 24415_Xã Cư Prao.xlsx chỉ trùng ~15% (2.126/14.353)
-    # -> không phải dữ liệu trùng lặp của Cư Prao, mà là dữ liệu THẬT của
-    # Ea Riêng bị gắn nhầm mã xã khi xuất. Ép lại mã xã = 24433 theo đúng
-    # tên file (cấu trúc thư mục: mỗi file = 1 xã).
-    (_MDRAK + "\\24433_Xã Ea Riêng.xlsx", None, "24433"),
-    _MDRAK + "\\24436_Xã Cư M'ta.xlsx",
-    _MDRAK + r"\24444_Xã Krông Á.xlsx",
-    _MDRAK + r"\24445_Xã Ea Trang.xlsx",
-    _KRONGBUK + r"\24310_Xã Krông Buk.xlsx",
-    _KRONGBUK + r"\24313_Xã Cư Pơng.xlsx",
-    _KRONGBUK + r"\24316_Xã Pơng Drang.xlsx",
+    (_TAYHOA, "Hoa My"),
+    (_TAYHOA, "Hoa Thinh"),
+    (_TAYHOA, "Tay Hoa"),
+    (_TAYHOA, "Son thanh"),
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
