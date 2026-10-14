@@ -15,20 +15,25 @@ import psycopg2.extras
 
 from app.config import Config
 
-_BASE = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\LOC DANH SACH GUI XA TUY HOA DONG HOA"
+_MDRAK = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\kv-mdrak"
+_KRONGBUK = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\kv-krong buk"
 SRC_LIST = [
-    _BASE + r"\BINH KIEN\22045_Phường Bình Kiến.xlsx",
-    # Header cột A của sheet này là số 1 (không phải chữ "MAXA") nên dò
-    # sheet tự động (chon_sheet_du_lieu) không nhận ra -> chỉ định thẳng
-    # tên sheet duy nhất trong file.
-    (_BASE + r"\DONG HOA\PHUONG DONG HOA - 365.xlsx", "DSCanThuThap,DangKy (Do VPĐK(2)"),
-    _BASE + r"\HOA HIEP\PHUONG HOA HIEP -325.xlsx",
-    # HOA XUAN -3605.xlsx: cột MAXA bị lỗi (số thứ tự dòng 1..16401, không
-    # phải mã xã cố định) — ép mã xã = 22291 ("Xã Hòa Xuân", tra
-    # danhsachxaphuong) vì cả file chỉ thuộc đúng 1 xã (đúng cấu trúc thư
-    # mục LOC DANH SACH GUI XA TUY HOA DONG HOA: mỗi thư mục con = 1
-    # xã/phường). SOTO/SOTHUA/MADINHDANH không bị ảnh hưởng.
-    (_BASE + r"\HOA XUAN\HOA XUAN -3605.xlsx", None, "22291"),
+    _MDRAK + "\\24412_Xã M'Drắk.xlsx",
+    _MDRAK + r"\24415_Xã Cư Prao.xlsx",
+    # 24433_Xã Ea Riêng.xlsx: cột MAXA trong file ghi SAI 24415 (trùng mã
+    # Cư Prao) cho toàn bộ dòng — không phải lỗi dạng số thứ tự/offset như
+    # các lần trước, mà là 1 giá trị hợp lệ nhưng SAI xã. Đối chiếu khoá
+    # (so_to, so_thua) với 24415_Xã Cư Prao.xlsx chỉ trùng ~15% (2.126/14.353)
+    # -> không phải dữ liệu trùng lặp của Cư Prao, mà là dữ liệu THẬT của
+    # Ea Riêng bị gắn nhầm mã xã khi xuất. Ép lại mã xã = 24433 theo đúng
+    # tên file (cấu trúc thư mục: mỗi file = 1 xã).
+    (_MDRAK + "\\24433_Xã Ea Riêng.xlsx", None, "24433"),
+    _MDRAK + "\\24436_Xã Cư M'ta.xlsx",
+    _MDRAK + r"\24444_Xã Krông Á.xlsx",
+    _MDRAK + r"\24445_Xã Ea Trang.xlsx",
+    _KRONGBUK + r"\24310_Xã Krông Buk.xlsx",
+    _KRONGBUK + r"\24313_Xã Cư Pơng.xlsx",
+    _KRONGBUK + r"\24316_Xã Pơng Drang.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
