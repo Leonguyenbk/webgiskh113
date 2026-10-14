@@ -56,11 +56,12 @@ def nhom3_con_thieu_tong_hop():
 
 @gcn_bp.get("/api/nhom3-con-thieu/danh-sach")
 def nhom3_con_thieu_danh_sach():
-    # ?ma_xa=&limit=&offset=
+    # ?ma_xa=&limit=&offset=&co_nhap=1|0 (bỏ trống = tất cả trạng thái)
     data, error_response = gcn_service.get_nhom3_danh_sach_con_thieu(
         request.args.get("ma_xa"),
         request.args.get("limit"),
         request.args.get("offset"),
+        request.args.get("co_nhap"),
     )
     if error_response:
         return error_response

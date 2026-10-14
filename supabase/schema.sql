@@ -2110,11 +2110,16 @@ grant execute on function public.nhom3_tong_hop() to service_role;
 
 -- Danh sách phân trang thửa CÒN THIẾU dữ liệu — CHỈ đọc cache (có index
 -- riêng cho đúng điều kiện "not la_nhom_1_2 and not da_thu_thap" ở trên).
--- p_ma_xa lọc thêm theo xã (tuỳ chọn).
+-- p_ma_xa lọc thêm theo xã (tuỳ chọn). p_co_nhap lọc theo trạng thái (tuỳ
+-- chọn): null = tất cả, true = "đã nhập nhưng sai form", false = "chưa
+-- nhập" — xem trang /nhom-3-chi-tiet (bộ lọc trạng thái).
+drop function if exists public.nhom3_list_con_thieu(text, integer, integer);
+
 create or replace function public.nhom3_list_con_thieu(
     p_ma_xa text default null,
     p_limit integer default 100,
-    p_offset integer default 0
+    p_offset integer default 0,
+    p_co_nhap boolean default null
 )
 returns jsonb
 language plpgsql
@@ -2129,6 +2134,7 @@ begin
     select count(*) into v_total
     from public.nhom3_trang_thai_cache c
     where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+      and (p_co_nhap is null or c.co_nhap = p_co_nhap)
       and not c.la_nhom_1_2 and not c.da_thu_thap;
 
     select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
@@ -2139,6 +2145,7 @@ begin
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+          and (p_co_nhap is null or c.co_nhap = p_co_nhap)
           and not c.la_nhom_1_2 and not c.da_thu_thap
         order by c.ma_xa, c.so_to, c.so_thua
         limit p_limit offset p_offset
@@ -2148,8 +2155,8 @@ begin
 end;
 $$;
 
-revoke all on function public.nhom3_list_con_thieu(text, integer, integer) from public;
-grant execute on function public.nhom3_list_con_thieu(text, integer, integer) to service_role;
+revoke all on function public.nhom3_list_con_thieu(text, integer, integer, boolean) from public;
+grant execute on function public.nhom3_list_con_thieu(text, integer, integer, boolean) to service_role;
 
 -- Trend tiến độ theo xã, đọc từ nhom3_tien_do_lich_su — mỗi lát cắt kèm
 -- tốc độ xử lý (thửa/ngày) tính bằng hiệu "đã làm" (Nhóm 1/2 + đã thu

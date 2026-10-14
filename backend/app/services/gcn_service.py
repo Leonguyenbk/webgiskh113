@@ -270,10 +270,26 @@ def refresh_nhom3_cache():
     return {"ok": True, "rows": rows}, None
 
 
-def get_nhom3_danh_sach_con_thieu(ma_xa_raw: str | None, limit_raw: str | None, offset_raw: str | None):
+def get_nhom3_danh_sach_con_thieu(
+    ma_xa_raw: str | None,
+    limit_raw: str | None,
+    offset_raw: str | None,
+    co_nhap_raw: str | None = None,
+):
     """Danh sách phân trang thửa còn thiếu dữ liệu (Nhóm 3, chỉ thửa có
-    bản đồ), lọc theo xã (tuỳ chọn)."""
+    bản đồ), lọc theo xã (tuỳ chọn) và trạng thái (tuỳ chọn: co_nhap=1 =
+    "đã nhập nhưng sai form", co_nhap=0 = "chưa nhập", bỏ trống = tất cả)."""
     ma_xa = (ma_xa_raw or "").strip() or None
+
+    co_nhap_text = (co_nhap_raw or "").strip().lower()
+    if co_nhap_text in ("1", "true", "yes"):
+        co_nhap = True
+    elif co_nhap_text in ("0", "false", "no"):
+        co_nhap = False
+    elif co_nhap_text:
+        return None, (jsonify({"error": "co_nhap không hợp lệ"}), 400)
+    else:
+        co_nhap = None
 
     try:
         limit = min(max(int(limit_raw or _NHOM3_DEFAULT_LIMIT), 1), _NHOM3_MAX_LIMIT)
@@ -281,7 +297,7 @@ def get_nhom3_danh_sach_con_thieu(ma_xa_raw: str | None, limit_raw: str | None, 
     except (TypeError, ValueError):
         return None, (jsonify({"error": "limit hoặc offset không hợp lệ"}), 400)
 
-    result, error_response = gcn_repository.nhom3_list_con_thieu(ma_xa, limit, offset)
+    result, error_response = gcn_repository.nhom3_list_con_thieu(ma_xa, limit, offset, co_nhap)
     if error_response:
         return None, error_response
     if not isinstance(result, dict):

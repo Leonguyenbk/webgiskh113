@@ -85,10 +85,10 @@ def nhom3_tong_hop():
     return supabase_client.call_rpc("nhom3_tong_hop", {}, timeout=25)
 
 
-def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int):
+def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int, co_nhap: bool | None = None):
     return supabase_client.call_rpc(
         "nhom3_list_con_thieu",
-        {"p_ma_xa": ma_xa, "p_limit": limit, "p_offset": offset},
+        {"p_ma_xa": ma_xa, "p_limit": limit, "p_offset": offset, "p_co_nhap": co_nhap},
         timeout=25,
     )
 
