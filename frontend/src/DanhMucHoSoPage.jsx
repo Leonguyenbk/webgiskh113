@@ -39,8 +39,6 @@ const NGUON_LABEL = {
 // tồn tại trên hệ thống (đã nhập form Nhóm 4, đã đồng bộ MPLIS, hoặc đã
 // có trong chính danh mục này) — xem backend/app/services/danhmuchoso_service.py.
 export default function DanhMucHoSoPage({ onNavigateHome }) {
-  const [token, setToken] = useState("");
-
   const [form, setForm] = useState(FORM_EMPTY);
   const [gcnCheck, setGcnCheck] = useState(null); // {ton_tai, ...} | null
   const [gcnChecking, setGcnChecking] = useState(false);
@@ -60,17 +58,11 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
   const [exportError, setExportError] = useState("");
 
   useEffect(() => {
-    if (!token) {
-      setItems([]);
-      setTotal(0);
-      return undefined;
-    }
     const controller = new AbortController();
     setLoading(true);
     setListError("");
     getDanhMucHoSo(
       { limit: PAGE_SIZE, offset, keyword: keyword.trim() || undefined, nam: namFilter || undefined },
-      token,
       { signal: controller.signal },
     )
       .then((result) => {
@@ -82,8 +74,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, offset, keyword, namFilter]);
+  }, [offset, keyword, namFilter]);
 
   const handleChangeField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -92,10 +83,10 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
 
   const handleCheckGcn = async () => {
     const soSeriGcn = form.so_seri_gcn.trim();
-    if (!soSeriGcn || !token) return;
+    if (!soSeriGcn) return;
     setGcnChecking(true);
     try {
-      const result = await kiemTraGcnDanhMuc(soSeriGcn, token);
+      const result = await kiemTraGcnDanhMuc(soSeriGcn);
       setGcnCheck(result);
     } catch (err) {
       setFormError(err.message);
@@ -112,7 +103,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (saving || !token) return;
+    if (saving) return;
     setFormError("");
     setFormNotice("");
     if (!form.so_seri_gcn.trim()) {
@@ -121,7 +112,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     }
     setSaving(true);
     try {
-      await themDanhMucHoSo(form, token);
+      await themDanhMucHoSo(form);
       setFormNotice(`Đã lưu hồ sơ — Số sêri GCN "${form.so_seri_gcn.trim()}".`);
       setForm((prev) => ({ ...FORM_EMPTY, nam: prev.nam }));
       setGcnCheck(null);
@@ -134,14 +125,14 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
   };
 
   const handleExport = async () => {
-    if (exporting || !token) return;
+    if (exporting) return;
     setExporting(true);
     setExportError("");
     try {
-      const blob = await exportDanhMucHoSo(
-        { nam: namFilter || undefined, keyword: keyword.trim() || undefined },
-        token,
-      );
+      const blob = await exportDanhMucHoSo({
+        nam: namFilter || undefined,
+        keyword: keyword.trim() || undefined,
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -185,26 +176,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       </header>
 
       <section className="dashboardWrap">
-        <div className="importCard" style={{ maxWidth: 560, margin: "0 auto 16px" }}>
-          <label htmlFor="dmhsToken">Mã xác thực</label>
-          <input
-            id="dmhsToken"
-            type="password"
-            className="filterInput"
-            autoComplete="off"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            placeholder="Nhập mã do quản trị viên cấp"
-          />
-        </div>
-
-        {!token ? (
-          <div className="notice" style={{ maxWidth: 560, margin: "0 auto" }}>
-            <span>Nhập mã xác thực ở trên để dùng trang này (chứa tên người sử dụng đất).</span>
-          </div>
-        ) : (
-          <>
-            <form
+        <form
               className="importCard"
               style={{ width: "80%", maxWidth: "80%", margin: "0 auto 16px" }}
               onSubmit={handleSubmit}
@@ -530,8 +502,6 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                 </table>
               </div>
             </div>
-          </>
-        )}
       </section>
     </main>
   );

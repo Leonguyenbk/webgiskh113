@@ -3,7 +3,6 @@ from __future__ import annotations
 from flask import Blueprint, Response, jsonify, request
 
 from ..services import danhmuchoso_service
-from ..utils.validators import check_import_token
 
 danhmuchoso_bp = Blueprint("danhmuchoso", __name__)
 
@@ -12,11 +11,6 @@ _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 @danhmuchoso_bp.get("/api/danhmuchoso")
 def danhmuchoso_list():
-    # Chứa tên người sử dụng đất (thông tin cá nhân) -> bắt buộc mã xác
-    # thực, giống /api/gcn-export-nhom3.
-    if not check_import_token():
-        return jsonify({"error": "Mã xác thực không đúng"}), 401
-
     data, error_response = danhmuchoso_service.get_danh_sach(
         request.args.get("limit"),
         request.args.get("offset"),
@@ -30,9 +24,6 @@ def danhmuchoso_list():
 
 @danhmuchoso_bp.get("/api/danhmuchoso/kiem-tra-gcn")
 def danhmuchoso_kiem_tra_gcn():
-    if not check_import_token():
-        return jsonify({"error": "Mã xác thực không đúng"}), 401
-
     data, error_response = danhmuchoso_service.kiem_tra_gcn(request.args.get("so_seri_gcn"))
     if error_response:
         return error_response
@@ -41,9 +32,6 @@ def danhmuchoso_kiem_tra_gcn():
 
 @danhmuchoso_bp.post("/api/danhmuchoso")
 def danhmuchoso_them():
-    if not check_import_token():
-        return jsonify({"error": "Mã xác thực không đúng"}), 401
-
     body = request.get_json(silent=True) or {}
     data, error_response = danhmuchoso_service.them_ho_so(body)
     if error_response:
@@ -53,9 +41,6 @@ def danhmuchoso_them():
 
 @danhmuchoso_bp.get("/api/danhmuchoso/export")
 def danhmuchoso_export():
-    if not check_import_token():
-        return jsonify({"error": "Mã xác thực không đúng"}), 401
-
     result, error_response = danhmuchoso_service.export_xlsx(
         request.args.get("nam"), request.args.get("keyword")
     )
