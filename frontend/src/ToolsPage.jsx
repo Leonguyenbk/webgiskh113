@@ -31,6 +31,7 @@ export default function ToolsPage({
   onNavigateThongKeNguonNhap,
   onNavigateNhom3ConThieu,
   onNavigateNhom3Dashboard,
+  onNavigateDanhMucHoSo,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -93,6 +94,11 @@ export default function ToolsPage({
       name: "📊 Nhóm 3 — Dashboard tỉ lệ & tốc độ",
       description: "So sánh tỉ lệ hoàn thành và tốc độ xử lý (thửa/ngày) giữa các xã/phường, kèm trend theo thời gian.",
       onNavigate: onNavigateNhom3Dashboard,
+    },
+    {
+      name: "🗂️ Danh mục hồ sơ lưu trữ",
+      description: "Nhập và tra cứu danh mục hồ sơ lưu trữ theo mẫu MAUFILE.xlsx — chặn nhập trùng số sêri GCN đã có trên hệ thống.",
+      onNavigate: onNavigateDanhMucHoSo,
     },
   ];
 

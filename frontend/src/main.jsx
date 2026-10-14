@@ -17,6 +17,7 @@ import ThongKeNguonNhapPage from "./ThongKeNguonNhapPage.jsx";
 import Nhom3ConThieuPage from "./Nhom3ConThieuPage.jsx";
 import Nhom3ConThieuChiTietPage from "./Nhom3ConThieuChiTietPage.jsx";
 import Nhom3DashboardPage from "./Nhom3DashboardPage.jsx";
+import DanhMucHoSoPage from "./DanhMucHoSoPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -68,8 +69,12 @@ function Root() {
         onNavigateThongKeNguonNhap={() => navigate("/thong-ke-nguon-nhap")}
         onNavigateNhom3ConThieu={() => navigate("/nhom-3-con-thieu")}
         onNavigateNhom3Dashboard={() => navigate("/nhom-3-dashboard")}
+        onNavigateDanhMucHoSo={() => navigate("/danh-muc-ho-so")}
       />
     );
+  }
+  if (path.startsWith("/danh-muc-ho-so")) {
+    return <DanhMucHoSoPage onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/nguon-gcn")) {
     return <ManageGcnLinksPage onNavigateHome={() => navigate("/")} />;

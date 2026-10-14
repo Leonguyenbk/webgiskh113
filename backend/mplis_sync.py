@@ -210,6 +210,7 @@ def map_record(row: dict[str, Any]) -> dict[str, Any] | None:
     trang_thai_xac_thuc = row.get("trangThaiXacThucChu")
     van_hanh = row.get("duLieuDangVanHanh247")
     nhom_1 = row.get("thongTinDangKyDapUngNhom1")
+    so_gcn = row.get("thongTinGiayChungNhan")
 
     return {
         "ma_xa": str(xa_id),
@@ -226,6 +227,11 @@ def map_record(row: dict[str, Any]) -> dict[str, Any] | None:
         "van_hanh_24_7": van_hanh is True,
         "khong_van_hanh_24_7": van_hanh is False,
         "phan_loai_ke_hoach_2959": "Nhóm 1" if nhom_1 is True else "Nhóm 2",
+        # Số sêri GCN lấy thẳng từ MPLIS ("thongTinGiayChungNhan") — khác
+        # du_lieu_gcn.sophathanhgcn (nhập tay form Nhóm 4). Dùng để đối
+        # chiếu trùng GCN khi nhập "Danh mục hồ sơ lưu trữ" (xem
+        # public.danhmuchoso_them trong supabase/schema.sql).
+        "so_gcn_mplis": (str(so_gcn).strip() or None) if so_gcn is not None else None,
     }
 
 
