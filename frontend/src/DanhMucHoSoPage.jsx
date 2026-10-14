@@ -164,6 +164,12 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       setFormError(`Số sêri GCN "${soSeriGcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").`);
       return;
     }
+    const coThuaMoi = form.thua_dat_so_moi.trim() && form.ban_do_so_moi.trim();
+    const coThuaCu = form.thua_dat_so_cu.trim() && form.ban_do_so_cu.trim();
+    if (!coThuaMoi && !coThuaCu) {
+      setFormError("Thiếu thông tin thửa đất — nhập đủ cặp Thửa/Bản đồ (Mới) HOẶC cặp Thửa/Bản đồ (Cũ).");
+      return;
+    }
     setSaving(true);
     try {
       await themDanhMucHoSo({ ...form, so_seri_gcn: soSeriGcn });
@@ -369,50 +375,49 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   />
                 </div>
 
+                <div style={{ gridColumn: "span 4", fontSize: 13, color: "#666", marginTop: -4 }}>
+                  Chỉ cần nhập đủ 1 trong 2 cặp dưới đây — Thửa/Bản đồ (Mới) hoặc Thửa/Bản đồ (Cũ), không bắt buộc cả 4 ô.
+                </div>
                 <div>
-                  <label htmlFor="dmhsThuaMoi">Thửa đất số (Mới) *</label>
+                  <label htmlFor="dmhsThuaMoi">Thửa đất số (Mới)</label>
                   <input
                     id="dmhsThuaMoi"
                     type="text"
                     className="filterInput"
                     style={fieldStyle}
-                    required
                     value={form.thua_dat_so_moi}
                     onChange={(event) => handleChangeField("thua_dat_so_moi", event.target.value)}
                   />
                 </div>
                 <div>
-                  <label htmlFor="dmhsBanDoMoi">Bản đồ số (Mới) *</label>
+                  <label htmlFor="dmhsBanDoMoi">Bản đồ số (Mới)</label>
                   <input
                     id="dmhsBanDoMoi"
                     type="text"
                     className="filterInput"
                     style={fieldStyle}
-                    required
                     value={form.ban_do_so_moi}
                     onChange={(event) => handleChangeField("ban_do_so_moi", event.target.value)}
                   />
                 </div>
                 <div>
-                  <label htmlFor="dmhsThuaCu">Thửa đất số (Cũ) *</label>
+                  <label htmlFor="dmhsThuaCu">Thửa đất số (Cũ)</label>
                   <input
                     id="dmhsThuaCu"
                     type="text"
                     className="filterInput"
                     style={fieldStyle}
-                    required
                     value={form.thua_dat_so_cu}
                     onChange={(event) => handleChangeField("thua_dat_so_cu", event.target.value)}
                   />
                 </div>
                 <div>
-                  <label htmlFor="dmhsBanDoCu">Bản đồ số (Cũ) *</label>
+                  <label htmlFor="dmhsBanDoCu">Bản đồ số (Cũ)</label>
                   <input
                     id="dmhsBanDoCu"
                     type="text"
                     className="filterInput"
                     style={fieldStyle}
-                    required
                     value={form.ban_do_so_cu}
                     onChange={(event) => handleChangeField("ban_do_so_cu", event.target.value)}
                   />

@@ -17,16 +17,15 @@ _MAX_LIMIT = 500
 _SO_SERI_GCN_RE = re.compile(r"^[A-ZĐ]{1,2}\s?\d{6,8}$")
 
 # Tất cả các trường đều bắt buộc khi nhập 1 hồ sơ (yêu cầu người dùng) —
-# (tên field trong body, nhãn tiếng Việt để báo lỗi).
+# TRỪ cặp "Thửa/Bản đồ (Mới)" và "Thửa/Bản đồ (Cũ)": theo đúng chú thích
+# trên mẫu MAUFILE.xlsx ("Chỉ nhập thông tin cũ nếu như không có thông
+# tin mới") — chỉ cần đủ 1 trong 2 cặp (xem kiểm tra riêng trong
+# them_ho_so), không bắt cả 4 ô cùng lúc.
 _REQUIRED_FIELDS = [
     ("chi_nhanh", "Chi nhánh"),
     ("cap", "Cặp"),
     ("so_tt_ho_so", "Số TT hồ sơ"),
     ("ten_nguoi_su_dung_dat", "Tên người sử dụng đất"),
-    ("thua_dat_so_moi", "Thửa đất số (Mới)"),
-    ("ban_do_so_moi", "Bản đồ số (Mới)"),
-    ("thua_dat_so_cu", "Thửa đất số (Cũ)"),
-    ("ban_do_so_cu", "Bản đồ số (Cũ)"),
     ("dia_chi_thua_dat", "Địa chỉ thửa đất"),
     ("loai_ho_so", "Loại hồ sơ"),
     ("ghi_chu", "Ghi chú"),
@@ -108,6 +107,22 @@ def them_ho_so(body: dict):
     for field, label in _REQUIRED_FIELDS:
         if not str(body.get(field) or "").strip():
             return None, (jsonify({"error": f"Thiếu {label}"}), 400)
+
+    co_thua_moi = bool(str(body.get("thua_dat_so_moi") or "").strip()) and bool(
+        str(body.get("ban_do_so_moi") or "").strip()
+    )
+    co_thua_cu = bool(str(body.get("thua_dat_so_cu") or "").strip()) and bool(
+        str(body.get("ban_do_so_cu") or "").strip()
+    )
+    if not co_thua_moi and not co_thua_cu:
+        return None, (
+            jsonify(
+                {
+                    "error": "Thiếu thông tin thửa đất — nhập đủ cặp Thửa/Bản đồ (Mới) HOẶC cặp Thửa/Bản đồ (Cũ)."
+                }
+            ),
+            400,
+        )
 
     kiem_tra, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn)
     if error_response:
