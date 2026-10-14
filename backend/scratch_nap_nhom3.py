@@ -15,9 +15,20 @@ import psycopg2.extras
 
 from app.config import Config
 
+_BASE = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\LOC DANH SACH GUI XA TUY HOA DONG HOA"
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\22171_Xã Tây Sơn.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24193_Xã Ea Wy.xlsx",
+    _BASE + r"\BINH KIEN\22045_Phường Bình Kiến.xlsx",
+    # Header cột A của sheet này là số 1 (không phải chữ "MAXA") nên dò
+    # sheet tự động (chon_sheet_du_lieu) không nhận ra -> chỉ định thẳng
+    # tên sheet duy nhất trong file.
+    (_BASE + r"\DONG HOA\PHUONG DONG HOA - 365.xlsx", "DSCanThuThap,DangKy (Do VPĐK(2)"),
+    _BASE + r"\HOA HIEP\PHUONG HOA HIEP -325.xlsx",
+    # HOA XUAN -3605.xlsx: cột MAXA bị lỗi (số thứ tự dòng 1..16401, không
+    # phải mã xã cố định) — ép mã xã = 22291 ("Xã Hòa Xuân", tra
+    # danhsachxaphuong) vì cả file chỉ thuộc đúng 1 xã (đúng cấu trúc thư
+    # mục LOC DANH SACH GUI XA TUY HOA DONG HOA: mỗi thư mục con = 1
+    # xã/phường). SOTO/SOTHUA/MADINHDANH không bị ảnh hưởng.
+    (_BASE + r"\HOA XUAN\HOA XUAN -3605.xlsx", None, "22291"),
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
@@ -46,9 +57,19 @@ def chon_sheet_du_lieu(wb):
 
 
 def doc_danh_sach(src):
-    # src có thể là 1 đường dẫn (tự dò sheet dữ liệu) hoặc (đường dẫn, tên
-    # sheet) khi 1 file có nhiều xã, mỗi xã riêng 1 sheet.
-    path, sheet_name = src if isinstance(src, tuple) else (src, None)
+    # src có thể là 1 đường dẫn (tự dò sheet dữ liệu), (đường dẫn, tên
+    # sheet) khi 1 file có nhiều xã mỗi xã riêng 1 sheet, hoặc (đường dẫn,
+    # tên sheet hoặc None, force_ma_xa) khi cột MAXA trong file bị lỗi
+    # (không phải mã xã cố định) — ép mọi dòng về force_ma_xa, bỏ qua giá
+    # trị cột MAXA gốc.
+    force_ma_xa = None
+    if isinstance(src, tuple):
+        if len(src) == 3:
+            path, sheet_name, force_ma_xa = src
+        else:
+            path, sheet_name = src
+    else:
+        path, sheet_name = src, None
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     ws = wb[sheet_name] if sheet_name else chon_sheet_du_lieu(wb)
     rows = ws.iter_rows(values_only=True)
@@ -56,6 +77,8 @@ def doc_danh_sach(src):
     seen = {}
     for row in rows:
         ma_xa, so_to, so_thua, ma_dinh_danh = row[0], row[1], row[2], row[3]
+        if force_ma_xa is not None:
+            ma_xa = force_ma_xa
         if ma_xa is None or so_to is None or so_thua is None:
             continue
         try:
