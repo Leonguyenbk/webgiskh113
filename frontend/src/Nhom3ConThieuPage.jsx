@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { API_URL } from "./config/env";
 import { getNhom3TongHop } from "./services/parcelService";
 
 function formatSo(n) {
@@ -24,10 +25,16 @@ const SORT_COLUMNS = [
   { key: "con_thieu", label: "Còn thiếu", type: "number", defaultDir: "desc" },
 ];
 
-export default function Nhom3ConThieuPage({ onNavigateHome, onNavigateNhom3Dashboard }) {
+export default function Nhom3ConThieuPage({
+  onNavigateHome,
+  onNavigateNhom3Dashboard,
+  onNavigateNhom3ChiTiet,
+}) {
   const [tongHop, setTongHop] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [downloadingXa, setDownloadingXa] = useState("");
+  const [downloadError, setDownloadError] = useState("");
 
   // Mặc định sắp theo "Còn thiếu" giảm dần — xã còn nhiều việc nhất lên
   // đầu bảng, đúng mục đích chính của trang. Bấm tiêu đề cột để đổi.
@@ -42,6 +49,39 @@ export default function Nhom3ConThieuPage({ onNavigateHome, onNavigateNhom3Dashb
       const column = SORT_COLUMNS.find((c) => c.key === key);
       return { key, dir: column?.defaultDir || "asc" };
     });
+  };
+
+  const handleExportConThieu = async (maXa) => {
+    if (downloadingXa) return;
+    setDownloadingXa(maXa);
+    setDownloadError("");
+    try {
+      const res = await fetch(
+        `${API_URL}/api/nhom3-con-thieu/export?ma_xa=${encodeURIComponent(maXa)}`,
+      );
+      if (!res.ok) {
+        let message = `Tải thất bại (HTTP ${res.status})`;
+        try {
+          message = (await res.json())?.error || message;
+        } catch {
+          /* body không phải JSON */
+        }
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `nhom3_con_thieu_${maXa}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadingXa("");
+    }
   };
 
   useEffect(() => {
@@ -180,6 +220,13 @@ export default function Nhom3ConThieuPage({ onNavigateHome, onNavigateNhom3Dashb
                 onChange={(event) => setTableFilter(event.target.value)}
               />
 
+              {downloadError && (
+                <div className="notice error" style={{ marginBottom: 10 }}>
+                  <strong>Không tải được file</strong>
+                  <span>{downloadError}</span>
+                </div>
+              )}
+
               <div className="statsTableWrap">
                 <table className="statsTable">
                   <thead>
@@ -197,12 +244,14 @@ export default function Nhom3ConThieuPage({ onNavigateHome, onNavigateNhom3Dashb
                           </span>
                         </th>
                       ))}
+                      <th style={{ whiteSpace: "nowrap" }}>Danh sách</th>
+                      <th style={{ whiteSpace: "nowrap" }}>Excel</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredRows.length === 0 ? (
                       <tr>
-                        <td colSpan={SORT_COLUMNS.length}>
+                        <td colSpan={SORT_COLUMNS.length + 2}>
                           {theoXaRows.length === 0 ? "Chưa có dữ liệu" : "Không tìm thấy xã/phường phù hợp"}
                         </td>
                       </tr>
@@ -216,6 +265,40 @@ export default function Nhom3ConThieuPage({ onNavigateHome, onNavigateNhom3Dashb
                           <td>{formatSo(row.da_lam)}</td>
                           <td>{row.percent}%</td>
                           <td>{formatSo(row.con_thieu)}</td>
+                          <td style={{ textAlign: "center" }}>
+                            <button
+                              type="button"
+                              title={`Xem danh sách thửa còn thiếu của ${row.ten_xa}`}
+                              onClick={() => onNavigateNhom3ChiTiet?.(row.ma_xa, row.ten_xa)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                cursor: "pointer",
+                                fontSize: 18,
+                                lineHeight: 1,
+                              }}
+                            >
+                              📋
+                            </button>
+                          </td>
+                          <td style={{ textAlign: "center" }}>
+                            <button
+                              type="button"
+                              title={`Tải Excel danh sách thửa còn thiếu của ${row.ten_xa}`}
+                              disabled={downloadingXa === row.ma_xa}
+                              onClick={() => handleExportConThieu(row.ma_xa)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                cursor: downloadingXa === row.ma_xa ? "default" : "pointer",
+                                fontSize: 18,
+                                lineHeight: 1,
+                                opacity: downloadingXa === row.ma_xa ? 0.5 : 1,
+                              }}
+                            >
+                              {downloadingXa === row.ma_xa ? "⏳" : "⬇️"}
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}

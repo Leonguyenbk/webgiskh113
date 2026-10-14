@@ -1930,6 +1930,12 @@ create table if not exists public.nhom3_trang_thai_cache (
     ma_dinh_danh text,
     la_nhom_1_2 boolean not null,
     da_thu_thap boolean not null,
+    -- true = đã có ÍT NHẤT 1 dòng du_lieu_gcn cho thửa này (nhưng có thể
+    -- chưa đạt đủ dữ liệu bắt buộc -> da_thu_thap vẫn false) — phân biệt
+    -- "đã nhập nhưng sai form" (co_nhap=true, da_thu_thap=false) với "chưa
+    -- nhập" (co_nhap=false) cho trang chi tiết/export (xem
+    -- nhom3_list_con_thieu bên dưới).
+    co_nhap boolean not null default false,
     computed_at timestamptz not null default now(),
     constraint nhom3_trang_thai_cache_key primary key (ma_xa, so_to, so_thua)
 );
@@ -1993,11 +1999,18 @@ begin
     -- bật pg-safeupdate -> "DELETE requires a WHERE clause"), và người đọc
     -- luôn thấy 1 bộ đầy đủ (cũ hoặc mới), không có khoảng trống rỗng.
     insert into public.nhom3_trang_thai_cache
-        (ma_xa, so_to, so_thua, ma_dinh_danh, la_nhom_1_2, da_thu_thap, computed_at)
+        (ma_xa, so_to, so_thua, ma_dinh_danh, la_nhom_1_2, da_thu_thap, co_nhap, computed_at)
     with gcn_du_keys as (
         select distinct g.madvhc_soto_sothua
         from public.du_lieu_gcn g
         where public._nhom3_gcn_du_du_lieu(g)
+    ),
+    -- MỌI thửa có ít nhất 1 dòng du_lieu_gcn, bất kể đủ dữ liệu hay không
+    -- — dùng để phân biệt "đã nhập nhưng sai form" với "chưa nhập" (xem
+    -- co_nhap trên cột bảng).
+    gcn_any_keys as (
+        select distinct g.madvhc_soto_sothua
+        from public.du_lieu_gcn g
     ),
     nhom12_keys as (
         select d.ma_xa, d.so_to, d.so_thua
@@ -2008,6 +2021,7 @@ begin
         t.ma_xa, t.so_to, t.so_thua, t.ma_dinh_danh,
         (n12.ma_xa is not null) as la_nhom_1_2,
         (k.madvhc_soto_sothua is not null) as da_thu_thap,
+        (a.madvhc_soto_sothua is not null) as co_nhap,
         v_now
     from public.nhom3_can_thu_thap t
     join public.thua_dat p
@@ -2016,6 +2030,8 @@ begin
         on n12.ma_xa = t.ma_xa and n12.so_to = t.so_to and n12.so_thua = t.so_thua
     left join gcn_du_keys k
         on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
+    left join gcn_any_keys a
+        on a.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
     -- Thửa đã đánh dấu thuộc 1 ranh dự án (xem
     -- luu_ranh_du_an_va_danh_dau_nhom3) không còn tính vào khối lượng
     -- Nhóm 3 cần gửi xã nữa -> loại khỏi cache ngay từ đây, mọi hàm đọc
@@ -2026,6 +2042,7 @@ begin
         ma_dinh_danh = excluded.ma_dinh_danh,
         la_nhom_1_2  = excluded.la_nhom_1_2,
         da_thu_thap  = excluded.da_thu_thap,
+        co_nhap      = excluded.co_nhap,
         computed_at  = excluded.computed_at;
 
     get diagnostics v_rows = row_count;
@@ -2116,7 +2133,9 @@ begin
 
     select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
     from (
-        select c.ma_xa, xp.ten_xa, c.so_to, c.so_thua, c.ma_dinh_danh
+        select
+            c.ma_xa, xp.ten_xa, c.so_to, c.so_thua, c.ma_dinh_danh, c.co_nhap,
+            case when c.co_nhap then 'Đã nhập nhưng sai form' else 'Chưa nhập' end as ghi_chu
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         where (p_ma_xa is null or c.ma_xa = p_ma_xa)

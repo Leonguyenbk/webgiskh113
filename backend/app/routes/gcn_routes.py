@@ -113,6 +113,23 @@ def gcn_export_theo_nhom():
     )
 
 
+@gcn_bp.get("/api/nhom3-con-thieu/export")
+def nhom3_con_thieu_export():
+    # Xuất .xlsx danh sách thửa Nhóm 3 còn thiếu dữ liệu của 1 xã — mã xã,
+    # số tờ, số thửa, mã định danh, ghi chú. ?ma_xa=<mã xã>
+    result, error_response = gcn_service.export_nhom3_con_thieu_xlsx(
+        request.args.get("ma_xa", "")
+    )
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @gcn_bp.get("/api/gcn-export-nhom3")
 def gcn_export_nhom3():
     # Xuất .xlsx đúng bố cục file mẫu TANAN.xlsx của 1 đơn vị hành chính —

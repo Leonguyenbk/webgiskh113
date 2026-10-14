@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import requests
 from flask import current_app, jsonify
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import PatternFill
 
 import gcn_sync
 from ..repositories import gcn_repository
@@ -389,6 +390,58 @@ def export_nhom3_xlsx(ma_xa: str, chi_nhom3: bool):
     wb.save(buf)
     pham_vi = "nhom3" if chi_nhom3 else "toanbo"
     return (buf.getvalue(), f"du_lieu_gcn_{ma_xa}_{pham_vi}.xlsx"), None
+
+
+_CON_THIEU_FILL_DA_LAM = PatternFill("solid", fgColor="FFF9E79F")  # vàng nhạt
+
+
+def export_nhom3_con_thieu_xlsx(ma_xa: str):
+    """Xuất .xlsx danh sách thửa Nhóm 3 CÒN THIẾU dữ liệu của 1 xã/phường —
+    mã xã, số tờ, số thửa, mã định danh, ghi chú (đã nhập nhưng sai form /
+    chưa nhập). Tô vàng dòng "đã nhập nhưng sai form" (đã có người làm, chỉ
+    cần sửa) để phân biệt trực quan với dòng "chưa nhập" (chưa động tới).
+    Trang '/nhom-3-con-thieu', icon tải Excel cuối mỗi dòng xã. Không chứa
+    thông tin cá nhân (CCCD/tên/địa chỉ) nên không cần IMPORT_TOKEN, giống
+    /api/gcn-danh-sach."""
+    ma_xa = (ma_xa or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+
+    rows: list = []
+    offset = 0
+    while True:
+        page, error_response = gcn_repository.nhom3_list_con_thieu(ma_xa, _EXPORT_PAGE, offset)
+        if error_response:
+            return None, error_response
+        page = page if isinstance(page, dict) else {}
+        items = page.get("items") if isinstance(page.get("items"), list) else []
+        rows.extend(items)
+        if len(items) < _EXPORT_PAGE or len(rows) >= _EXPORT_MAX:
+            break
+        offset += _EXPORT_PAGE
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Con thieu"[:31]
+    ws.append(["Mã xã", "Số tờ", "Số thửa", "Mã định danh", "Ghi chú"])
+    for row in rows:
+        ws.append([
+            _xlsx_cell(row.get("ma_xa")),
+            _xlsx_cell(row.get("so_to")),
+            _xlsx_cell(row.get("so_thua")),
+            _xlsx_cell(row.get("ma_dinh_danh")),
+            _xlsx_cell(row.get("ghi_chu")),
+        ])
+        if row.get("co_nhap"):
+            r = ws.max_row
+            for col in range(1, 6):
+                ws.cell(row=r, column=col).fill = _CON_THIEU_FILL_DA_LAM
+    if not rows:
+        ws.append(["Không có thửa còn thiếu dữ liệu"])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return (buf.getvalue(), f"nhom3_con_thieu_{ma_xa}.xlsx"), None
 
 
 def list_sources():
