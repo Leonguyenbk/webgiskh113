@@ -15,16 +15,25 @@ import psycopg2.extras
 
 from app.config import Config
 
-# "DS khu vuc Tay Hoa.xlsx": 4 xã, mỗi xã 1 sheet riêng (Hòa Mỹ=22285,
-# Hòa Thịnh=22276 có vài nghìn dòng trống cuối sheet — doc_danh_sach đã tự
-# bỏ qua dòng ma_xa/so_to/so_thua rỗng; Tây Hòa=22255, Sơn Thành=22250
-# sạch).
-_TAYHOA = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS khu vuc Tay Hoa.xlsx"
+# "DANHSACHGUIXA/CUMGAR": 9 xã, mỗi xã 1 file riêng, tên sheet dữ liệu
+# khác nhau tuỳ file ("biểu", "biểu (2)", "nhập biểu", "Sheet1", hoặc
+# "DSCanThuThap,DangKy..." kèm các sheet NHAT_KY/INDEX_THUA khác —
+# chon_sheet_du_lieu tự dò đúng sheet theo header MAXA, không cần truyền
+# tên sheet). Đã kiểm tra ma_xa trong từng file: cu mgar=24280,
+# cuor dang=24301, dray bhang=24561, ea kiet=24265, ea ktur=24544,
+# ea mdroh=24286, ea ning=24540, ea tul=24277, Quảng Phú=24259 — không
+# cần force_ma_xa.
+_CUMGAR = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\CUMGAR"
 SRC_LIST = [
-    (_TAYHOA, "Hoa My"),
-    (_TAYHOA, "Hoa Thinh"),
-    (_TAYHOA, "Tay Hoa"),
-    (_TAYHOA, "Son thanh"),
+    rf"{_CUMGAR}\24259_Xã Quảng Phú-4 nhom.xlsx",
+    rf"{_CUMGAR}\cu mgar-3 nhom.xlsx",
+    rf"{_CUMGAR}\cuor dang-3 nhom.xlsx",
+    rf"{_CUMGAR}\dray bhang-3 nhom.xlsx",
+    rf"{_CUMGAR}\ea kiet-3 nhom.xlsx",
+    rf"{_CUMGAR}\ea ktur-3 nhom.xlsx",
+    rf"{_CUMGAR}\ea mdroh-3 nhom.xlsx",
+    rf"{_CUMGAR}\ea ning-3 nhom.xlsx",
+    rf"{_CUMGAR}\ea tul-3 nhom.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
