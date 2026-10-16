@@ -29,7 +29,7 @@ const TO_GIAM_SAT_OPTIONS = [
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
   { key: "tong", label: "Khối lượng thực tế gửi xã", type: "number", defaultDir: "desc" },
-  { key: "da_nhom_1_2", label: "Đã Nhóm 1/2", type: "number", defaultDir: "desc" },
+  { key: "da_nhom_1_2", label: "Đã Nhóm 1", type: "number", defaultDir: "desc" },
   { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", type: "number", defaultDir: "desc" },
   { key: "da_lam", label: "Đã làm", type: "number", defaultDir: "desc" },
   { key: "percent", label: "%", type: "number", defaultDir: "asc" },
@@ -186,7 +186,7 @@ export default function Nhom3ConThieuPage({
         <div>
           <h1>Nhóm 3 — thống kê còn thiếu dữ liệu</h1>
           <p>
-            Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với thửa đã thuộc Nhóm 1/2 và thửa đã thu thập — chỉ còn lại là thửa thật sự cần nhập biểu.
+            Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với thửa đã thuộc Nhóm 1 và thửa đã thu thập — chỉ còn lại là thửa thật sự cần nhập biểu.
           </p>
         </div>
         <a
@@ -267,7 +267,7 @@ export default function Nhom3ConThieuPage({
                 <strong>{formatSo(tongHop.tong)}</strong>
               </div>
               <div className="statTile">
-                <span>Đã lên Nhóm 1/2 (không cần nhập biểu)</span>
+                <span>Đã lên Nhóm 1 (không cần nhập biểu)</span>
                 <strong>{formatSo(tongHop.da_nhom_1_2)}</strong>
               </div>
               <div className="statTile">
@@ -275,7 +275,7 @@ export default function Nhom3ConThieuPage({
                 <strong>{formatSo(tongHop.da_thu_thap)}</strong>
               </div>
               <div className="statTile">
-                <span>Số thửa đã làm (Nhóm 1/2 + đã nhập biểu)</span>
+                <span>Số thửa đã làm (Nhóm 1 + đã nhập biểu)</span>
                 <strong style={{ color: "#2e7d32" }}>
                   {formatSo(daLam)} <span style={{ fontWeight: 400, fontSize: 14 }}>({tyLeDaLam}%)</span>
                 </strong>

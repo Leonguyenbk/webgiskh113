@@ -87,7 +87,7 @@ export default function ToolsPage({
     },
     {
       name: "📉 Nhóm 3 — thửa còn thiếu dữ liệu",
-      description: "Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với Nhóm 1/2 và dữ liệu đã thu thập — lọc theo xã, tách thửa có/không có bản đồ.",
+      description: "Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với Nhóm 1 và dữ liệu đã thu thập — lọc theo xã, tách thửa có/không có bản đồ.",
       onNavigate: onNavigateNhom3ConThieu,
     },
     {

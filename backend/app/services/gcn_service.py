@@ -284,7 +284,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     ws.title = "Tong hop Nhom 3"[:31]
     ws.append([
         "Tổ giám sát", "Khu vực", "Mã xã", "Xã/Phường",
-        "Khối lượng thực tế gửi xã", "Đã Nhóm 1/2", "Đã nhập đủ dữ liệu",
+        "Khối lượng thực tế gửi xã", "Đã Nhóm 1", "Đã nhập đủ dữ liệu",
         "Đã làm", "%", "Còn thiếu", "Ghi chú",
     ])
 
