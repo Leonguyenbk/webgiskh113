@@ -48,10 +48,30 @@ def thong_ke_nguon_nhap():
 
 @gcn_bp.get("/api/nhom3-con-thieu/tong-hop")
 def nhom3_con_thieu_tong_hop():
-    data, error_response = gcn_service.get_nhom3_tong_hop()
+    # ?to_giam_sat=1|2|3|4 (bỏ trống = tất cả) — lọc theo Tổ kiểm tra,
+    # giám sát KH113 (Quyết định 867/QĐ-VPĐKĐĐ ngày 01/10/2026).
+    data, error_response = gcn_service.get_nhom3_tong_hop(request.args.get("to_giam_sat"))
     if error_response:
         return error_response
     return jsonify(data)
+
+
+@gcn_bp.get("/api/nhom3-con-thieu/export-tong-hop")
+def nhom3_con_thieu_export_tong_hop():
+    # Xuất .xlsx tổng hợp tiến độ theo xã: khối lượng gửi xuống, đã vào dữ
+    # liệu, đã nhập biểu, tổng đã làm, tỷ lệ. ?to_giam_sat=1|2|3|4 (bỏ
+    # trống = tất cả).
+    result, error_response = gcn_service.export_nhom3_tong_hop_xlsx(
+        request.args.get("to_giam_sat")
+    )
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @gcn_bp.get("/api/nhom3-con-thieu/danh-sach")

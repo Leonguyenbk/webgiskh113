@@ -12,6 +12,17 @@ function formatPercent(phan, tong) {
   return Math.round((phan / tong) * 1000) / 10;
 }
 
+// 4 Tổ kiểm tra, giám sát KH113 (Quyết định 867/QĐ-VPĐKĐĐ ngày
+// 01/10/2026) — khu vực liệt kê theo đúng Danh sách kèm theo quyết định,
+// chỉ để hiển thị gợi nhớ trong dropdown; việc lọc thật nằm ở bảng
+// nhom3_to_giam_sat phía backend (xem supabase/schema.sql).
+const TO_GIAM_SAT_OPTIONS = [
+  { value: "1", label: "Tổ 1 — Buôn Đôn, Ea Súp, Tuy Hòa, Đông Hòa, Tuy An" },
+  { value: "2", label: "Tổ 2 — Cư Kuin, Krông Ana, Krông Bông, Lắk, Phú Hòa, Tây Hòa" },
+  { value: "3", label: "Tổ 3 — Buôn Ma Thuột, Buôn Hồ, Cư M'gar, Ea H'leo, Krông Búk, Krông Năng" },
+  { value: "4", label: "Tổ 4 — Krông Pắc, Ea Kar, M'Drắk, Sơn Hòa, Sông Hinh, Đồng Xuân, Sông Cầu" },
+];
+
 // Cấu hình cột cho phép bấm tiêu đề để sắp xếp bảng "Chi tiết theo
 // xã/phường" — cùng pattern với GcnDashboardPage.jsx (SORT_COLUMNS/handleSort).
 // defaultDir: hướng áp dụng khi bấm lần đầu vào 1 cột khác.
@@ -35,6 +46,8 @@ export default function Nhom3ConThieuPage({
   const [error, setError] = useState("");
   const [downloadingXa, setDownloadingXa] = useState("");
   const [downloadError, setDownloadError] = useState("");
+  const [toGiamSat, setToGiamSat] = useState("");
+  const [downloadingTongHop, setDownloadingTongHop] = useState(false);
 
   // Mặc định sắp theo "Còn thiếu" giảm dần — xã còn nhiều việc nhất lên
   // đầu bảng, đúng mục đích chính của trang. Bấm tiêu đề cột để đổi.
@@ -87,11 +100,43 @@ export default function Nhom3ConThieuPage({
   useEffect(() => {
     setLoading(true);
     setError("");
-    getNhom3TongHop()
+    getNhom3TongHop(toGiamSat ? { to_giam_sat: toGiamSat } : undefined)
       .then((result) => setTongHop(result))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [toGiamSat]);
+
+  const handleExportTongHop = async () => {
+    if (downloadingTongHop) return;
+    setDownloadingTongHop(true);
+    setDownloadError("");
+    try {
+      const query = toGiamSat ? `?to_giam_sat=${encodeURIComponent(toGiamSat)}` : "";
+      const res = await fetch(`${API_URL}/api/nhom3-con-thieu/export-tong-hop${query}`);
+      if (!res.ok) {
+        let message = `Tải thất bại (HTTP ${res.status})`;
+        try {
+          message = (await res.json())?.error || message;
+        } catch {
+          /* body không phải JSON */
+        }
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `nhom3_tong_hop_${toGiamSat ? `to${toGiamSat}` : "tatca"}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadingTongHop(false);
+    }
+  };
 
   const theoXaRows = useMemo(() => {
     return (tongHop?.theo_xa || []).map((row) => {
@@ -167,6 +212,45 @@ export default function Nhom3ConThieuPage({
       </header>
 
       <section className="dashboardWrap">
+        <div
+          style={{
+            width: "80%",
+            maxWidth: "80%",
+            margin: "0 auto 12px",
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <label htmlFor="nhom3ToGiamSat" style={{ fontWeight: 600 }}>
+            Tổ kiểm tra, giám sát:
+          </label>
+          <select
+            id="nhom3ToGiamSat"
+            className="filterInput"
+            style={{ maxWidth: 440 }}
+            value={toGiamSat}
+            onChange={(event) => setToGiamSat(event.target.value)}
+          >
+            <option value="">Tất cả</option>
+            {TO_GIAM_SAT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="downloadButton"
+            disabled={downloadingTongHop}
+            style={{ opacity: downloadingTongHop ? 0.5 : 1 }}
+            onClick={handleExportTongHop}
+          >
+            {downloadingTongHop ? "⏳ Đang tải…" : "⬇️ Xuất Excel tổng hợp"}
+          </button>
+        </div>
+
         {loading && <div className="notice">Đang tải số liệu thống kê…</div>}
         {error && (
           <div className="notice error">

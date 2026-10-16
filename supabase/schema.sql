@@ -1777,6 +1777,41 @@ $$;
 revoke all on function public._nhom3_nguon_goc_hop_le(text) from public;
 grant execute on function public._nhom3_nguon_goc_hop_le(text) to service_role;
 
+-- Nhận diện chủ sử dụng đất (thua_dat.ten_chu) là TỔ CHỨC (công ty, UBND,
+-- ban quản lý, trường, nông/lâm trường, đồn biên phòng...) thay vì cá
+-- nhân/hộ gia đình — các thửa này không gửi xã thu thập Nhóm 3 nữa (yêu
+-- cầu người dùng). Dùng \m/\M (ranh giới từ) để tránh dính chữ thường
+-- xuất hiện trong tên người, ví dụ "Nguyễn Văn Trường"/"Nguyễn Văn Đồng"
+-- (chữ "Trường"/"Đồn" đứng riêng vẫn là tên người, không phải tổ chức) —
+-- chỉ nhận "Trường" khi đi kèm loại trường cụ thể (THCS, Tiểu học...).
+-- Đã kiểm tra thủ công với toàn bộ thua_dat.ten_chu hiện có — không còn
+-- false positive rõ ràng, trừ vài trường hợp hiếm chữ đệm trùng tên tổ
+-- chức y hệt sau khi bỏ dấu (ví dụ "Trần Công An" — chữ đệm "Công An"
+-- trùng "Công an"; "... Nông Trưởng" — chữ đệm "Trưởng" trùng "Nông
+-- trường") — chấp nhận rủi ro nhỏ này vì khối lượng đúng áp đảo.
+create or replace function public._nhom3_la_dat_to_chuc(ten_chu text)
+returns boolean
+language sql
+immutable
+set search_path = public, extensions
+as $$
+    select coalesce(
+        lower(extensions.unaccent(ten_chu)) ~ (
+            '\mcong ty\M|\mcty\M|\mdntn\M|\mdoanh nghiep\M|\mhop tac xa\M|\mhtx\M|\mubnd\M|' ||
+            '\muy ban nhan dan\M|\mban quan ly\M|\mbql|\mchi cuc\M|\mnong truong\M|\mlam truong\M|' ||
+            '\mxi nghiep\M|\mngan hang\M|\mbenh vien\M|\mtong cong ty\M|\mtap doan\M|\mdon bien phong\M|' ||
+            '\mtram y te\M|\mtram kiem lam\M|\mtram bao ve rung\M|\mtrung tam\M|\mban dieu hanh\M|' ||
+            '\mtrai giam\M|\mquan khu\M|\msu doan\M|\mlu doan\M|\mcong an\M|\mgiao xu\M|\mnha tho\M|' ||
+            '\mto chuc\M|\mquy dat\M|\mlien doan\M|\mchi nhanh\M|' ||
+            '\mtruong (thcs|thpt|tieu hoc|mam non|day nghe|dai hoc|cao dang|trung hoc|pho thong|mau giao)\M'
+        ),
+        false
+    )
+$$;
+
+revoke all on function public._nhom3_la_dat_to_chuc(text) from public;
+grant execute on function public._nhom3_la_dat_to_chuc(text) to service_role;
+
 -- pháp_nhan/vai_trò_phap_nhan hợp lệ — suy trực tiếp từ tinhPhapNhanVaiTro()
 -- trong frontend/src/utils/nhom4Constants.js (form không cho gõ tay, chỉ
 -- suy từ tab "loại chủ" đang chọn), CỘNG "Tổ chức" (owner đại diện tổ chức,
@@ -1915,6 +1950,39 @@ $$;
 revoke all on function public._nhom3_gcn_du_du_lieu(public.du_lieu_gcn) from public;
 grant execute on function public._nhom3_gcn_du_du_lieu(public.du_lieu_gcn) to service_role;
 
+-- Lưu SẴN kết quả _nhom3_gcn_du_du_lieu() thành 1 cột boolean, tính 1
+-- lần qua trigger khi insert/update (KHÔNG tính lại mỗi lần
+-- refresh_nhom3_trang_thai_cache() chạy) — tránh quét regex trên toàn bộ
+-- du_lieu_gcn mỗi 3 giờ (734k dòng, đo thực tế gây refresh chạy 20+
+-- phút khi còn gọi hàm per-row trực tiếp trong CTE gcn_du_keys).
+alter table public.du_lieu_gcn
+    add column if not exists nhom3_du_du_lieu boolean not null default false;
+
+create index if not exists idx_du_lieu_gcn_nhom3_du_du_lieu
+    on public.du_lieu_gcn (madvhc_soto_sothua)
+    where nhom3_du_du_lieu;
+
+create or replace function public._nhom3_set_du_du_lieu()
+returns trigger
+language plpgsql
+as $$
+begin
+    new.nhom3_du_du_lieu := public._nhom3_gcn_du_du_lieu(new);
+    return new;
+end;
+$$;
+
+drop trigger if exists trg_nhom3_set_du_du_lieu on public.du_lieu_gcn;
+create trigger trg_nhom3_set_du_du_lieu
+before insert or update on public.du_lieu_gcn
+for each row execute function public._nhom3_set_du_du_lieu();
+
+-- Backfill 1 LẦN cho dữ liệu đã có trước khi có trigger ở trên — chạy
+-- tay (xem backend/scratch_apply_nhom3_du_du_lieu.py), KHÔNG chạy lại
+-- mỗi lần deploy schema (update toàn bộ 734k dòng, chậm, và từ sau
+-- trigger này dữ liệu luôn đã đúng sẵn).
+-- update public.du_lieu_gcn set nhom3_du_du_lieu = public._nhom3_gcn_du_du_lieu(du_lieu_gcn.*);
+
 -- =========================================================
 -- CACHE TRẠNG THÁI NHÓM 3 (theo từng thửa) — nhom3_can_thu_thap đã lên
 -- hàng trăm nghìn dòng (sắp nạp thêm cả triệu dòng nữa). Đo thực tế lúc
@@ -1982,10 +2050,15 @@ returns integer
 language plpgsql
 security definer
 set search_path = public, extensions
--- Đo thực tế ~10.7s ở 139.6k dòng; sắp nạp thêm ~1,9 triệu dòng (lên ~2
--- triệu, gấp ~14 lần) -> ước tính theo tỉ lệ ~150s, khá sát 180s nếu chỉ
--- để mức đó -> nới rộng thêm biên an toàn.
-set statement_timeout = '300s'
+-- Trước khi có cột du_lieu_gcn.nhom3_du_du_lieu (xem dưới), CTE
+-- gcn_du_keys gọi _nhom3_gcn_du_du_lieu() (regex) cho TỪNG dòng
+-- du_lieu_gcn MỖI LẦN refresh -> sau khi bảng lên ~1.9 triệu dòng
+-- (nhom3_can_thu_thap) + du_lieu_gcn 734k dòng, đo thực tế 20+ phút, có
+-- lúc statement_timeout 600s không kịp hủy. Đã chuyển sang đọc thẳng cột
+-- boolean lưu sẵn (tính 1 lần qua trigger trg_nhom3_set_du_du_lieu khi
+-- insert/update du_lieu_gcn, không tính lại mỗi lần refresh nữa) -> đo
+-- lại còn ~92s ở quy mô hiện tại -> hạ statement_timeout về 180s.
+set statement_timeout = '180s'
 set work_mem = '512MB'
 as $$
 declare
@@ -2010,9 +2083,13 @@ begin
     insert into public.nhom3_trang_thai_cache
         (ma_xa, so_to, so_thua, ma_dinh_danh, la_nhom_1_2, da_thu_thap, co_nhap, computed_at)
     with gcn_du_keys as (
+        -- Đọc thẳng cột lưu sẵn (xem du_lieu_gcn.nhom3_du_du_lieu +
+        -- trigger trg_nhom3_set_du_du_lieu dưới) thay vì gọi
+        -- _nhom3_gcn_du_du_lieu() per-row ở đây — tránh tính lại regex
+        -- trên toàn bộ bảng mỗi lần refresh.
         select distinct g.madvhc_soto_sothua
         from public.du_lieu_gcn g
-        where public._nhom3_gcn_du_du_lieu(g)
+        where g.nhom3_du_du_lieu
     ),
     -- MỌI thửa có ít nhất 1 dòng du_lieu_gcn, bất kể đủ dữ liệu hay không
     -- — dùng để phân biệt "đã nhập nhưng sai form" với "chưa nhập" (xem
@@ -2035,6 +2112,15 @@ begin
     from public.nhom3_can_thu_thap t
     join public.thua_dat p
         on p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
+    -- Xã thuộc 1 dự án tổng thể khác (ghi chú ở nhom3_xa_ghi_chu, ví dụ
+    -- Ea Ning/Ea Ktur/Dray Bhăng — Cư Kuin) KHÔNG đánh giá Nhóm 3 ở xã đó
+    -- nữa, dù nhom3_can_thu_thap lỡ có nạp danh sách — loại NGAY TỪ ĐÂY
+    -- (LEFT JOIN + gc.ma_xa is null, anti-join hiệu quả hơn NOT EXISTS
+    -- tương quan khi bảng t đã lên tới hàng triệu dòng) để nhom3_tong_hop
+    -- (nhánh ghi_chu, where not exists cache) tự hiện đúng dòng ghi chú,
+    -- không bị đè bởi số liệu thật.
+    left join public.nhom3_xa_ghi_chu gc
+        on gc.ma_xa = t.ma_xa
     left join nhom12_keys n12
         on n12.ma_xa = t.ma_xa and n12.so_to = t.so_to and n12.so_thua = t.so_thua
     left join gcn_du_keys k
@@ -2046,7 +2132,11 @@ begin
     -- Nhóm 3 cần gửi xã nữa -> loại khỏi cache ngay từ đây, mọi hàm đọc
     -- cache (nhom3_tong_hop, nhom3_list_con_thieu, lịch sử tiến độ) tự
     -- động không thấy các thửa này nữa, không cần sửa thêm nơi khác.
+    -- Tương tự, thửa đất tổ chức (p.ten_chu, xem _nhom3_la_dat_to_chuc)
+    -- cũng không gửi xã nữa (yêu cầu người dùng).
     where not t.thuoc_du_an
+      and gc.ma_xa is null
+      and not public._nhom3_la_dat_to_chuc(p.ten_chu)
     on conflict (ma_xa, so_to, so_thua) do update set
         ma_dinh_danh = excluded.ma_dinh_danh,
         la_nhom_1_2  = excluded.la_nhom_1_2,
@@ -2095,10 +2185,30 @@ create table if not exists public.nhom3_xa_ghi_chu (
 );
 alter table public.nhom3_xa_ghi_chu enable row level security;
 
+-- Ánh xạ xã -> khu vực (Chi nhánh VPĐK) -> Tổ kiểm tra, giám sát (1-4)
+-- theo Quyết định 867/QĐ-VPĐKĐĐ ngày 01/10/2026 + Danh sách kèm theo —
+-- dùng để lọc trang "/nhom-3-con-thieu" và xuất Excel tổng hợp theo Tổ
+-- (xem nhom3_tong_hop(p_to_giam_sat) bên dưới, backend/app/services/gcn_service.py
+-- export_nhom3_tong_hop_xlsx). 102 xã hiện có trong danhsachxaphuong đều
+-- đã map đủ (đối chiếu bằng tay theo khối mã ma_xa liên tục từng
+-- huyện/khu vực cũ) — 2 trường hợp map theo suy luận, chưa xác nhận
+-- 100%: "Phường Phú Yên" (22240, tạm xếp khu vực Tuy Hòa, cùng kiểu đặt
+-- tên với "Phường Buôn Ma Thuột" 24133) và "Xã Ea Đrông" (24328, tạm xếp
+-- khu vực Buôn Hồ) — sửa lại nếu sai.
+create table if not exists public.nhom3_to_giam_sat (
+    ma_xa text primary key,
+    khu_vuc text not null,
+    to_giam_sat smallint not null check (to_giam_sat between 1 and 4),
+    created_at timestamptz not null default now()
+);
+alter table public.nhom3_to_giam_sat enable row level security;
+
 -- Tổng hợp toàn dự án — trang tổng quan. CHỈ đọc cache (vài chục mili
 -- giây bất kể bảng gốc bao nhiêu triệu dòng) — xem refresh_nhom3_trang_thai_cache
 -- ở trên để biết cache được tính thế nào và khi nào cần gọi lại.
-create or replace function public.nhom3_tong_hop()
+-- p_to_giam_sat lọc theo Tổ kiểm tra, giám sát (1-4, xem
+-- nhom3_to_giam_sat) — null = tất cả (mặc định, giữ nguyên hành vi cũ).
+create or replace function public.nhom3_tong_hop(p_to_giam_sat integer default null)
 returns jsonb
 language sql
 stable
@@ -2109,39 +2219,51 @@ as $$
         select
             c.ma_xa,
             xp.ten_xa,
+            tg.khu_vuc,
+            tg.to_giam_sat,
             count(*) as tong,
             count(*) filter (where c.la_nhom_1_2) as da_nhom_1_2,
             count(*) filter (where not c.la_nhom_1_2 and c.da_thu_thap) as da_thu_thap,
             count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu,
+            -- Đã nhập (co_nhap) nhưng CHƯA đạt chuẩn đủ dữ liệu (da_thu_thap
+            -- false) — "đã nhập biểu" (dùng cho xuất Excel tổng hợp, xem
+            -- export_nhom3_tong_hop_xlsx) khác với "còn thiếu" (gồm cả
+            -- thửa chưa đụng tới lẫn thửa này).
+            count(*) filter (where not c.la_nhom_1_2 and c.co_nhap and not c.da_thu_thap) as da_nhap_chua_dat,
             null::text as ghi_chu
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
-        group by c.ma_xa, xp.ten_xa
+        left join public.nhom3_to_giam_sat tg on tg.ma_xa = c.ma_xa
+        where p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat
+        group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat
 
         union all
 
         -- Xã có ghi chú riêng (xem nhom3_xa_ghi_chu) VÀ chưa có dữ liệu
         -- trong cache -> hiện 1 dòng ghi chú (0 khắp số liệu, không cộng
         -- dồn gì thêm vào tổng).
-        select g.ma_xa, xp.ten_xa, 0, 0, 0, 0, g.ghi_chu
+        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, g.ghi_chu
         from public.nhom3_xa_ghi_chu g
         left join public.danhsachxaphuong xp on xp.ma_xa = g.ma_xa
-        where not exists (
-            select 1 from public.nhom3_trang_thai_cache c where c.ma_xa = g.ma_xa
-        )
+        left join public.nhom3_to_giam_sat tg on tg.ma_xa = g.ma_xa
+        where (p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat)
+          and not exists (
+              select 1 from public.nhom3_trang_thai_cache c where c.ma_xa = g.ma_xa
+          )
     )
     select jsonb_build_object(
         'tong', coalesce(sum(tong), 0),
         'da_nhom_1_2', coalesce(sum(da_nhom_1_2), 0),
         'da_thu_thap', coalesce(sum(da_thu_thap), 0),
         'con_thieu', coalesce(sum(con_thieu), 0),
+        'da_nhap_chua_dat', coalesce(sum(da_nhap_chua_dat), 0),
         'theo_xa', coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
     )
     from theo_xa;
 $$;
 
-revoke all on function public.nhom3_tong_hop() from public;
-grant execute on function public.nhom3_tong_hop() to service_role;
+revoke all on function public.nhom3_tong_hop(integer) from public;
+grant execute on function public.nhom3_tong_hop(integer) to service_role;
 
 -- Danh sách phân trang thửa CÒN THIẾU dữ liệu — CHỈ đọc cache (có index
 -- riêng cho đúng điều kiện "not la_nhom_1_2 and not da_thu_thap" ở trên).

@@ -222,10 +222,32 @@ def get_thong_ke_nguon_nhap():
     return result, None
 
 
-def get_nhom3_tong_hop():
+_TO_GIAM_SAT_HOP_LE = {1, 2, 3, 4}
+
+
+def _parse_to_giam_sat(raw: str | None):
+    text = (raw or "").strip()
+    if not text:
+        return None, None
+    try:
+        value = int(text)
+    except ValueError:
+        return None, (jsonify({"error": "to_giam_sat không hợp lệ"}), 400)
+    if value not in _TO_GIAM_SAT_HOP_LE:
+        return None, (jsonify({"error": "to_giam_sat phải là 1, 2, 3 hoặc 4"}), 400)
+    return value, None
+
+
+def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
     """Trang '/nhom-3-con-thieu' — tổng hợp danh sách thửa cần thu thập
-    Nhóm 3 (bảng nhom3_can_thu_thap) so với Nhóm 1/2 và đã thu thập."""
-    result, error_response = gcn_repository.nhom3_tong_hop()
+    Nhóm 3 (bảng nhom3_can_thu_thap) so với Nhóm 1/2 và đã thu thập. Lọc
+    tuỳ chọn theo Tổ kiểm tra, giám sát (1-4, xem nhom3_to_giam_sat —
+    Quyết định 867/QĐ-VPĐKĐĐ ngày 01/10/2026)."""
+    to_giam_sat, error_response = _parse_to_giam_sat(to_giam_sat_raw)
+    if error_response:
+        return None, error_response
+
+    result, error_response = gcn_repository.nhom3_tong_hop(to_giam_sat)
     if error_response:
         return None, error_response
     if not isinstance(result, dict):
@@ -234,8 +256,77 @@ def get_nhom3_tong_hop():
     result.setdefault("da_nhom_1_2", 0)
     result.setdefault("da_thu_thap", 0)
     result.setdefault("con_thieu", 0)
+    result.setdefault("da_nhap_chua_dat", 0)
     result.setdefault("theo_xa", [])
     return result, None
+
+
+def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
+    """Xuất .xlsx tổng hợp tiến độ Nhóm 3 theo xã (lọc tuỳ chọn theo Tổ
+    kiểm tra, giám sát 1-4) — Y HỆT bảng "Chi tiết theo xã/phường" trên
+    trang /nhom-3-con-thieu (xem SORT_COLUMNS trong Nhom3ConThieuPage.jsx):
+    Khối lượng thực tế gửi xã (= tong, CHƯA trừ Nhóm 1/2), Đã Nhóm 1/2,
+    Đã nhập đủ dữ liệu, Đã làm (= Nhóm 1/2 + đã nhập đủ dữ liệu), %, Còn
+    thiếu. Xã "ghi chú" (thuộc dự án tổng thể khác, xem nhom3_xa_ghi_chu)
+    vẫn liệt kê nhưng số liệu = 0, % bỏ trống."""
+    to_giam_sat, error_response = _parse_to_giam_sat(to_giam_sat_raw)
+    if error_response:
+        return None, error_response
+
+    result, error_response = gcn_repository.nhom3_tong_hop(to_giam_sat)
+    if error_response:
+        return None, error_response
+    result = result if isinstance(result, dict) else {}
+    theo_xa = result.get("theo_xa") if isinstance(result.get("theo_xa"), list) else []
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tong hop Nhom 3"[:31]
+    ws.append([
+        "Tổ giám sát", "Khu vực", "Mã xã", "Xã/Phường",
+        "Khối lượng thực tế gửi xã", "Đã Nhóm 1/2", "Đã nhập đủ dữ liệu",
+        "Đã làm", "%", "Còn thiếu", "Ghi chú",
+    ])
+
+    tong_chung = da_nhom12_chung = da_thu_thap_chung = con_thieu_chung = 0
+    for row in theo_xa:
+        tong = int(row.get("tong") or 0)
+        da_nhom12 = int(row.get("da_nhom_1_2") or 0)
+        da_thu_thap = int(row.get("da_thu_thap") or 0)
+        con_thieu = int(row.get("con_thieu") or 0)
+        da_lam = da_nhom12 + da_thu_thap
+        percent = round(da_lam / tong * 1000) / 10 if tong > 0 else None
+        tong_chung += tong
+        da_nhom12_chung += da_nhom12
+        da_thu_thap_chung += da_thu_thap
+        con_thieu_chung += con_thieu
+        ws.append([
+            _xlsx_cell(row.get("to_giam_sat")),
+            _xlsx_cell(row.get("khu_vuc")),
+            _xlsx_cell(row.get("ma_xa")),
+            _xlsx_cell(row.get("ten_xa")),
+            tong,
+            da_nhom12,
+            da_thu_thap,
+            da_lam,
+            f"{percent}%" if percent is not None else "",
+            con_thieu,
+            _xlsx_cell(row.get("ghi_chu")),
+        ])
+
+    da_lam_chung = da_nhom12_chung + da_thu_thap_chung
+    percent_chung = round(da_lam_chung / tong_chung * 1000) / 10 if tong_chung > 0 else None
+    ws.append([
+        "", "", "", "TỔNG CỘNG",
+        tong_chung, da_nhom12_chung, da_thu_thap_chung, da_lam_chung,
+        f"{percent_chung}%" if percent_chung is not None else "",
+        con_thieu_chung, "",
+    ])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    ten_to = f"to{to_giam_sat}" if to_giam_sat else "tatca"
+    return (buf.getvalue(), f"nhom3_tong_hop_{ten_to}.xlsx"), None
 
 
 _NHOM3_DEFAULT_LIMIT = 100

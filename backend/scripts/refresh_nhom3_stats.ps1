@@ -26,7 +26,7 @@ $port = if ($portLine) { ($portLine -replace '^PORT=', '').Trim() } else { "5000
 try {
     $resp = Invoke-WebRequest -Uri "http://localhost:$port/api/nhom3-con-thieu/refresh" `
         -Method POST -Headers @{ "X-Import-Token" = $token } `
-        -UseBasicParsing -TimeoutSec 320
+        -UseBasicParsing -TimeoutSec 220
     Write-Output "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] OK: $($resp.Content)"
 } catch {
     Write-Output "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] LỖI: $_"

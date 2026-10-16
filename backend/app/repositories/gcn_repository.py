@@ -79,10 +79,14 @@ def thong_ke_nguon_nhap():
     return supabase_client.call_rpc("thong_ke_nguon_nhap", {}, timeout=25)
 
 
-def nhom3_tong_hop():
+def nhom3_tong_hop(to_giam_sat: int | None = None):
     # Tổng hợp danh sách thửa cần thu thập Nhóm 3 (nhom3_can_thu_thap) so
-    # với Nhóm 1/2 + đã thu thập — xem public.nhom3_tong_hop.
-    return supabase_client.call_rpc("nhom3_tong_hop", {}, timeout=25)
+    # với Nhóm 1/2 + đã thu thập — xem public.nhom3_tong_hop. p_to_giam_sat
+    # lọc theo Tổ kiểm tra, giám sát (1-4, xem nhom3_to_giam_sat) — None =
+    # tất cả.
+    return supabase_client.call_rpc(
+        "nhom3_tong_hop", {"p_to_giam_sat": to_giam_sat}, timeout=25
+    )
 
 
 def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int, co_nhap: bool | None = None):
@@ -106,7 +110,7 @@ def refresh_nhom3_trang_thai_cache():
     # sau mỗi lần nạp thêm danh sách Nhóm 3 mới — không có cron. Hàm SQL
     # nới statement_timeout 300s nên timeout HTTP ở đây phải lớn hơn.
     return supabase_client.call_rpc(
-        "refresh_nhom3_trang_thai_cache", {}, timeout=320
+        "refresh_nhom3_trang_thai_cache", {}, timeout=200
     )
 
 

@@ -47,8 +47,9 @@ export function getThongKeNguonNhap({ signal } = {}) {
   });
 }
 
-export function getNhom3TongHop({ signal } = {}) {
+export function getNhom3TongHop(params, { signal } = {}) {
   return request("/api/nhom3-con-thieu/tong-hop", {
+    params,
     signal,
     errorFallback: "Không tải được tổng hợp Nhóm 3",
   });
