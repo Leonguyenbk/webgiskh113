@@ -97,6 +97,17 @@ def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int, co_nhap: bo
     )
 
 
+def nhom3_list_nhom1_chua_nhap(ma_xa: str | None, limit: int, offset: int):
+    # Thửa đã thuộc Nhóm 1 (phan_loai_ke_hoach_2959) nhưng CHƯA có dòng
+    # du_lieu_gcn nào (co_nhap=false) — nhóm này do Chi nhánh khu vực làm
+    # trực tiếp, không qua form Nhóm 4/xã — xem public.nhom3_list_nhom1_chua_nhap.
+    return supabase_client.call_rpc(
+        "nhom3_list_nhom1_chua_nhap",
+        {"p_ma_xa": ma_xa, "p_limit": limit, "p_offset": offset},
+        timeout=25,
+    )
+
+
 def nhom3_tien_do_trend(ma_xa: str | None, tu: str | None, den: str | None):
     # Trend tiến độ theo xã (thửa/ngày) — xem public.nhom3_tien_do_trend.
     return supabase_client.call_rpc(

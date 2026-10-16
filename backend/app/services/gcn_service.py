@@ -254,6 +254,8 @@ def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
         result = {}
     result.setdefault("tong", 0)
     result.setdefault("da_nhom_1_2", 0)
+    result.setdefault("da_nhom_1_2_da_nhap", 0)
+    result.setdefault("da_nhom_1_2_chua_nhap", 0)
     result.setdefault("da_thu_thap", 0)
     result.setdefault("con_thieu", 0)
     result.setdefault("da_nhap_chua_dat", 0)
@@ -284,20 +286,22 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     ws.title = "Tong hop Nhom 3"[:31]
     ws.append([
         "Tổ giám sát", "Khu vực", "Mã xã", "Xã/Phường",
-        "Khối lượng thực tế gửi xã", "Đã Nhóm 1", "Đã nhập đủ dữ liệu",
-        "Đã làm", "%", "Còn thiếu", "Ghi chú",
+        "Khối lượng thực tế gửi xã", "Đã Nhóm 1", "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)",
+        "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Ghi chú",
     ])
 
-    tong_chung = da_nhom12_chung = da_thu_thap_chung = con_thieu_chung = 0
+    tong_chung = da_nhom12_chung = nhom12_chua_nhap_chung = da_thu_thap_chung = con_thieu_chung = 0
     for row in theo_xa:
         tong = int(row.get("tong") or 0)
         da_nhom12 = int(row.get("da_nhom_1_2") or 0)
+        nhom12_chua_nhap = int(row.get("da_nhom_1_2_chua_nhap") or 0)
         da_thu_thap = int(row.get("da_thu_thap") or 0)
         con_thieu = int(row.get("con_thieu") or 0)
         da_lam = da_nhom12 + da_thu_thap
         percent = round(da_lam / tong * 1000) / 10 if tong > 0 else None
         tong_chung += tong
         da_nhom12_chung += da_nhom12
+        nhom12_chua_nhap_chung += nhom12_chua_nhap
         da_thu_thap_chung += da_thu_thap
         con_thieu_chung += con_thieu
         ws.append([
@@ -307,6 +311,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
             _xlsx_cell(row.get("ten_xa")),
             tong,
             da_nhom12,
+            nhom12_chua_nhap,
             da_thu_thap,
             da_lam,
             f"{percent}%" if percent is not None else "",
@@ -318,7 +323,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     percent_chung = round(da_lam_chung / tong_chung * 1000) / 10 if tong_chung > 0 else None
     ws.append([
         "", "", "", "TỔNG CỘNG",
-        tong_chung, da_nhom12_chung, da_thu_thap_chung, da_lam_chung,
+        tong_chung, da_nhom12_chung, nhom12_chua_nhap_chung, da_thu_thap_chung, da_lam_chung,
         f"{percent_chung}%" if percent_chung is not None else "",
         con_thieu_chung, "",
     ])
@@ -389,6 +394,28 @@ def get_nhom3_danh_sach_con_thieu(
         return None, (jsonify({"error": "limit hoặc offset không hợp lệ"}), 400)
 
     result, error_response = gcn_repository.nhom3_list_con_thieu(ma_xa, limit, offset, co_nhap)
+    if error_response:
+        return None, error_response
+    if not isinstance(result, dict):
+        result = {}
+    result.setdefault("total", 0)
+    result.setdefault("items", [])
+    return result, None
+
+
+def get_nhom3_list_nhom1_chua_nhap(ma_xa_raw: str | None, limit_raw: str | None, offset_raw: str | None):
+    """Danh sách phân trang thửa đã thuộc Nhóm 1 nhưng CHƯA có dòng
+    du_lieu_gcn nào (chưa nhập biểu qua xã/form Nhóm 4) — nhóm do Chi
+    nhánh khu vực làm trực tiếp (yêu cầu người dùng, tách riêng khỏi
+    "còn thiếu" của Nhóm 3)."""
+    ma_xa = (ma_xa_raw or "").strip() or None
+    try:
+        limit = min(max(int(limit_raw or _NHOM3_DEFAULT_LIMIT), 1), _NHOM3_MAX_LIMIT)
+        offset = max(int(offset_raw or 0), 0)
+    except (TypeError, ValueError):
+        return None, (jsonify({"error": "limit hoặc offset không hợp lệ"}), 400)
+
+    result, error_response = gcn_repository.nhom3_list_nhom1_chua_nhap(ma_xa, limit, offset)
     if error_response:
         return None, error_response
     if not isinstance(result, dict):
@@ -549,6 +576,46 @@ def export_nhom3_con_thieu_xlsx(ma_xa: str):
     buf = io.BytesIO()
     wb.save(buf)
     return (buf.getvalue(), f"nhom3_con_thieu_{ma_xa}.xlsx"), None
+
+
+def export_nhom3_nhom1_chua_nhap_xlsx(ma_xa: str):
+    """Xuất .xlsx danh sách thửa đã thuộc Nhóm 1 nhưng CHƯA nhập biểu (do
+    Chi nhánh khu vực làm trực tiếp, không qua xã/form Nhóm 4) của 1
+    xã/phường — mã xã, số tờ, số thửa, mã định danh."""
+    ma_xa = (ma_xa or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+
+    rows: list = []
+    offset = 0
+    while True:
+        page, error_response = gcn_repository.nhom3_list_nhom1_chua_nhap(ma_xa, _EXPORT_PAGE, offset)
+        if error_response:
+            return None, error_response
+        page = page if isinstance(page, dict) else {}
+        items = page.get("items") if isinstance(page.get("items"), list) else []
+        rows.extend(items)
+        if len(items) < _EXPORT_PAGE or len(rows) >= _EXPORT_MAX:
+            break
+        offset += _EXPORT_PAGE
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Nhom 1 chua nhap"[:31]
+    ws.append(["Mã xã", "Số tờ", "Số thửa", "Mã định danh"])
+    for row in rows:
+        ws.append([
+            _xlsx_cell(row.get("ma_xa")),
+            _xlsx_cell(row.get("so_to")),
+            _xlsx_cell(row.get("so_thua")),
+            _xlsx_cell(row.get("ma_dinh_danh")),
+        ])
+    if not rows:
+        ws.append(["Không có thửa Nhóm 1 chưa nhập biểu"])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return (buf.getvalue(), f"nhom3_nhom1_chua_nhap_{ma_xa}.xlsx"), None
 
 
 def list_sources():

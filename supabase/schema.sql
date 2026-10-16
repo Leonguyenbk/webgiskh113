@@ -2223,6 +2223,12 @@ as $$
             tg.to_giam_sat,
             count(*) as tong,
             count(*) filter (where c.la_nhom_1_2) as da_nhom_1_2,
+            -- Nhóm 1 TÁCH theo đã/chưa nhập biểu qua xã (co_nhap) — thửa
+            -- Nhóm 1 chưa nhập là thửa do Chi nhánh khu vực làm trực
+            -- tiếp, không qua form Nhóm 4/xã (yêu cầu người dùng, xem
+            -- nhom3_list_nhom1_chua_nhap bên dưới để lấy danh sách thửa).
+            count(*) filter (where c.la_nhom_1_2 and c.co_nhap) as da_nhom_1_2_da_nhap,
+            count(*) filter (where c.la_nhom_1_2 and not c.co_nhap) as da_nhom_1_2_chua_nhap,
             count(*) filter (where not c.la_nhom_1_2 and c.da_thu_thap) as da_thu_thap,
             count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu,
             -- Đã nhập (co_nhap) nhưng CHƯA đạt chuẩn đủ dữ liệu (da_thu_thap
@@ -2242,7 +2248,7 @@ as $$
         -- Xã có ghi chú riêng (xem nhom3_xa_ghi_chu) VÀ chưa có dữ liệu
         -- trong cache -> hiện 1 dòng ghi chú (0 khắp số liệu, không cộng
         -- dồn gì thêm vào tổng).
-        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, g.ghi_chu
+        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, 0, 0, g.ghi_chu
         from public.nhom3_xa_ghi_chu g
         left join public.danhsachxaphuong xp on xp.ma_xa = g.ma_xa
         left join public.nhom3_to_giam_sat tg on tg.ma_xa = g.ma_xa
@@ -2254,6 +2260,8 @@ as $$
     select jsonb_build_object(
         'tong', coalesce(sum(tong), 0),
         'da_nhom_1_2', coalesce(sum(da_nhom_1_2), 0),
+        'da_nhom_1_2_da_nhap', coalesce(sum(da_nhom_1_2_da_nhap), 0),
+        'da_nhom_1_2_chua_nhap', coalesce(sum(da_nhom_1_2_chua_nhap), 0),
         'da_thu_thap', coalesce(sum(da_thu_thap), 0),
         'con_thieu', coalesce(sum(con_thieu), 0),
         'da_nhap_chua_dat', coalesce(sum(da_nhap_chua_dat), 0),
@@ -2314,6 +2322,48 @@ $$;
 
 revoke all on function public.nhom3_list_con_thieu(text, integer, integer, boolean) from public;
 grant execute on function public.nhom3_list_con_thieu(text, integer, integer, boolean) to service_role;
+
+-- Danh sách phân trang thửa đã thuộc Nhóm 1 nhưng CHƯA có dòng
+-- du_lieu_gcn nào (co_nhap=false) — nhóm này do Chi nhánh khu vực làm
+-- trực tiếp, không qua xã/form Nhóm 4 (yêu cầu người dùng, tách riêng
+-- khỏi "còn thiếu" của Nhóm 3 — xem nhom3_tong_hop.da_nhom_1_2_chua_nhap).
+create or replace function public.nhom3_list_nhom1_chua_nhap(
+    p_ma_xa text default null,
+    p_limit integer default 100,
+    p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+    v_total integer;
+    v_items jsonb;
+begin
+    select count(*) into v_total
+    from public.nhom3_trang_thai_cache c
+    where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+      and c.la_nhom_1_2 and not c.co_nhap;
+
+    select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
+    from (
+        select c.ma_xa, xp.ten_xa, c.so_to, c.so_thua, c.ma_dinh_danh
+        from public.nhom3_trang_thai_cache c
+        left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
+        where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+          and c.la_nhom_1_2 and not c.co_nhap
+        order by c.ma_xa, c.so_to, c.so_thua
+        limit p_limit offset p_offset
+    ) y;
+
+    return jsonb_build_object('total', v_total, 'items', v_items);
+end;
+$$;
+
+revoke all on function public.nhom3_list_nhom1_chua_nhap(text, integer, integer) from public;
+grant execute on function public.nhom3_list_nhom1_chua_nhap(text, integer, integer) to service_role;
 
 -- Trend tiến độ theo xã, đọc từ nhom3_tien_do_lich_su — mỗi lát cắt kèm
 -- tốc độ xử lý (thửa/ngày) tính bằng hiệu "đã làm" (Nhóm 1/2 + đã thu
