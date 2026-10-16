@@ -122,11 +122,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const [error, setError] = useState("");
 
   // Modal "Xem/Sửa" — chiTietTarget = thửa đang xem (null = đóng modal).
-  // Giữ mã xác thực trong state (không localStorage) cho tới khi đóng tab,
-  // giống quy ước ImportGmlPage/MplisSyncPage — khỏi phải nhập lại mỗi lần
-  // mở modal trong cùng phiên.
   const [chiTietTarget, setChiTietTarget] = useState(null);
-  const [chiTietToken, setChiTietToken] = useState("");
   const [chiTietData, setChiTietData] = useState(null);
   const [chiTietLoading, setChiTietLoading] = useState(false);
   const [chiTietError, setChiTietError] = useState("");
@@ -216,13 +212,10 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const canPrev = offset > 0;
   const canNext = offset + PAGE_SIZE < total;
 
-  const fetchChiTiet = (target, token) => {
+  const fetchChiTiet = (target) => {
     setChiTietLoading(true);
     setChiTietError("");
-    getGcnChiTiet(
-      { ma_xa: target.ma_xa, so_to: target.so_to, so_thua: target.so_thua },
-      { token },
-    )
+    getGcnChiTiet({ ma_xa: target.ma_xa, so_to: target.so_to, so_thua: target.so_thua })
       .then((result) => setChiTietData(result))
       .catch((err) => setChiTietError(err.message))
       .finally(() => setChiTietLoading(false));
@@ -235,7 +228,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
     setChiTietError("");
     setChiTietEdits({});
     setChiTietSavedAt({});
-    if (chiTietToken.trim()) fetchChiTiet(target, chiTietToken.trim());
+    fetchChiTiet(target);
   };
 
   const handleCloseChiTiet = () => {
@@ -243,12 +236,6 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
     setChiTietData(null);
     setChiTietError("");
     setChiTietEdits({});
-  };
-
-  const handleXacNhanToken = (event) => {
-    event.preventDefault();
-    if (!chiTietToken.trim() || !chiTietTarget) return;
-    fetchChiTiet(chiTietTarget, chiTietToken.trim());
   };
 
   const handleChiTietFieldChange = (rowId, field, value) => {
@@ -267,7 +254,6 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
       rowId,
       { ma_xa: chiTietTarget.ma_xa, so_to: chiTietTarget.so_to, so_thua: chiTietTarget.so_thua },
       edits,
-      { token: chiTietToken.trim() },
     )
       .then((result) => {
         setChiTietData((prev) => ({
@@ -522,34 +508,12 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
             </div>
 
             <div className="chiTietModalBody">
-              {!chiTietData && (
-                <form onSubmit={handleXacNhanToken} style={{ marginTop: 6 }}>
-                  <p>Dữ liệu này chứa thông tin cá nhân (CCCD, địa chỉ…) — nhập mã xác thực để xem.</p>
-                  <div className="chiTietField" style={{ maxWidth: 280 }}>
-                    <label htmlFor="chiTietToken">Mã xác thực</label>
-                    <input
-                      id="chiTietToken"
-                      type="password"
-                      autoComplete="off"
-                      value={chiTietToken}
-                      onChange={(event) => setChiTietToken(event.target.value)}
-                    />
-                  </div>
-                  {chiTietError && (
-                    <div className="notice error" style={{ marginTop: 10 }}>
-                      <span>{chiTietError}</span>
-                    </div>
-                  )}
-                  <div className="modalActions">
-                    <button
-                      type="submit"
-                      className="downloadButton"
-                      disabled={chiTietLoading || !chiTietToken.trim()}
-                    >
-                      {chiTietLoading ? "Đang tải…" : "Xác nhận"}
-                    </button>
-                  </div>
-                </form>
+              {!chiTietData && chiTietLoading && <p style={{ marginTop: 6 }}>Đang tải…</p>}
+
+              {!chiTietData && chiTietError && (
+                <div className="notice error" style={{ marginTop: 6 }}>
+                  <span>{chiTietError}</span>
+                </div>
               )}
 
               {chiTietData && (
