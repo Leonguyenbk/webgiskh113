@@ -30,6 +30,7 @@ const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
   { key: "tong", label: "Khối lượng thực tế gửi xã", type: "number", defaultDir: "desc" },
   { key: "da_nhom_1_2", label: "Đã Nhóm 1", type: "number", defaultDir: "desc" },
+  { key: "da_nhom_1_2_da_nhap", label: "Nhóm 1 đã nhập biểu (Xã làm)", type: "number", defaultDir: "desc" },
   { key: "da_nhom_1_2_chua_nhap", label: "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)", type: "number", defaultDir: "desc" },
   { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", type: "number", defaultDir: "desc" },
   { key: "da_lam", label: "Đã làm", type: "number", defaultDir: "desc" },
@@ -46,7 +47,8 @@ export default function Nhom3ConThieuPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloadingXa, setDownloadingXa] = useState("");
-  const [downloadingNhom1Xa, setDownloadingNhom1Xa] = useState("");
+  const [downloadingNhom1ChuaXa, setDownloadingNhom1ChuaXa] = useState("");
+  const [downloadingNhom1DaXa, setDownloadingNhom1DaXa] = useState("");
   const [downloadError, setDownloadError] = useState("");
   const [toGiamSat, setToGiamSat] = useState("");
   const [downloadingTongHop, setDownloadingTongHop] = useState(false);
@@ -100,8 +102,8 @@ export default function Nhom3ConThieuPage({
   };
 
   const handleExportNhom1ChuaNhap = async (maXa) => {
-    if (downloadingNhom1Xa) return;
-    setDownloadingNhom1Xa(maXa);
+    if (downloadingNhom1ChuaXa) return;
+    setDownloadingNhom1ChuaXa(maXa);
     setDownloadError("");
     try {
       const res = await fetch(
@@ -128,7 +130,40 @@ export default function Nhom3ConThieuPage({
     } catch (err) {
       setDownloadError(err.message);
     } finally {
-      setDownloadingNhom1Xa("");
+      setDownloadingNhom1ChuaXa("");
+    }
+  };
+
+  const handleExportNhom1DaNhap = async (maXa) => {
+    if (downloadingNhom1DaXa) return;
+    setDownloadingNhom1DaXa(maXa);
+    setDownloadError("");
+    try {
+      const res = await fetch(
+        `${API_URL}/api/nhom3-con-thieu/export-nhom1-da-nhap?ma_xa=${encodeURIComponent(maXa)}`,
+      );
+      if (!res.ok) {
+        let message = `Tải thất bại (HTTP ${res.status})`;
+        try {
+          message = (await res.json())?.error || message;
+        } catch {
+          /* body không phải JSON */
+        }
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `nhom3_nhom1_da_nhap_${maXa}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadingNhom1DaXa("");
     }
   };
 
@@ -306,6 +341,10 @@ export default function Nhom3ConThieuPage({
                 <strong>{formatSo(tongHop.da_nhom_1_2)}</strong>
               </div>
               <div className="statTile">
+                <span>Trong đó: Nhóm 1 đã nhập biểu (Xã làm)</span>
+                <strong style={{ color: "#2e7d32" }}>{formatSo(tongHop.da_nhom_1_2_da_nhap)}</strong>
+              </div>
+              <div className="statTile">
                 <span>Trong đó: Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)</span>
                 <strong style={{ color: "#8e5c00" }}>{formatSo(tongHop.da_nhom_1_2_chua_nhap)}</strong>
               </div>
@@ -369,13 +408,14 @@ export default function Nhom3ConThieuPage({
                       ))}
                       <th style={{ whiteSpace: "nowrap" }}>Danh sách</th>
                       <th style={{ whiteSpace: "nowrap" }}>Excel</th>
+                      <th style={{ whiteSpace: "nowrap" }}>Excel (Nhóm 1 đã nhập)</th>
                       <th style={{ whiteSpace: "nowrap" }}>Excel (Nhóm 1 chưa nhập)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredRows.length === 0 ? (
                       <tr>
-                        <td colSpan={SORT_COLUMNS.length + 3}>
+                        <td colSpan={SORT_COLUMNS.length + 4}>
                           {theoXaRows.length === 0 ? "Chưa có dữ liệu" : "Không tìm thấy xã/phường phù hợp"}
                         </td>
                       </tr>
@@ -384,13 +424,14 @@ export default function Nhom3ConThieuPage({
                         row.ghi_chu ? (
                           <tr key={row.ma_xa} style={{ color: "#6b7280", fontStyle: "italic" }}>
                             <td>{row.ten_xa}</td>
-                            <td colSpan={SORT_COLUMNS.length - 1 + 3}>{row.ghi_chu}</td>
+                            <td colSpan={SORT_COLUMNS.length - 1 + 4}>{row.ghi_chu}</td>
                           </tr>
                         ) : (
                           <tr key={row.ma_xa}>
                             <td>{row.ten_xa}</td>
                             <td>{formatSo(row.tong)}</td>
                             <td>{formatSo(row.da_nhom_1_2)}</td>
+                            <td>{formatSo(row.da_nhom_1_2_da_nhap)}</td>
                             <td>{formatSo(row.da_nhom_1_2_chua_nhap)}</td>
                             <td>{formatSo(row.da_thu_thap)}</td>
                             <td>{formatSo(row.da_lam)}</td>
@@ -433,19 +474,37 @@ export default function Nhom3ConThieuPage({
                             <td style={{ textAlign: "center" }}>
                               <button
                                 type="button"
+                                title={`Tải Excel thửa Nhóm 1 đã nhập biểu của ${row.ten_xa}`}
+                                disabled={downloadingNhom1DaXa === row.ma_xa}
+                                onClick={() => handleExportNhom1DaNhap(row.ma_xa)}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  cursor: downloadingNhom1DaXa === row.ma_xa ? "default" : "pointer",
+                                  fontSize: 18,
+                                  lineHeight: 1,
+                                  opacity: downloadingNhom1DaXa === row.ma_xa ? 0.5 : 1,
+                                }}
+                              >
+                                {downloadingNhom1DaXa === row.ma_xa ? "⏳" : "🏛️"}
+                              </button>
+                            </td>
+                            <td style={{ textAlign: "center" }}>
+                              <button
+                                type="button"
                                 title={`Tải Excel thửa Nhóm 1 chưa nhập biểu của ${row.ten_xa}`}
-                                disabled={downloadingNhom1Xa === row.ma_xa}
+                                disabled={downloadingNhom1ChuaXa === row.ma_xa}
                                 onClick={() => handleExportNhom1ChuaNhap(row.ma_xa)}
                                 style={{
                                   border: "none",
                                   background: "transparent",
-                                  cursor: downloadingNhom1Xa === row.ma_xa ? "default" : "pointer",
+                                  cursor: downloadingNhom1ChuaXa === row.ma_xa ? "default" : "pointer",
                                   fontSize: 18,
                                   lineHeight: 1,
-                                  opacity: downloadingNhom1Xa === row.ma_xa ? 0.5 : 1,
+                                  opacity: downloadingNhom1ChuaXa === row.ma_xa ? 0.5 : 1,
                                 }}
                               >
-                                {downloadingNhom1Xa === row.ma_xa ? "⏳" : "🏢"}
+                                {downloadingNhom1ChuaXa === row.ma_xa ? "⏳" : "🏢"}
                               </button>
                             </td>
                           </tr>

@@ -181,6 +181,35 @@ def nhom3_con_thieu_export_nhom1_chua_nhap():
     )
 
 
+@gcn_bp.get("/api/nhom3-con-thieu/danh-sach-nhom1-da-nhap")
+def nhom3_con_thieu_danh_sach_nhom1_da_nhap():
+    # Thửa đã thuộc Nhóm 1 ĐÃ nhập biểu (xã làm). ?ma_xa=&limit=&offset=
+    data, error_response = gcn_service.get_nhom3_list_nhom1_da_nhap(
+        request.args.get("ma_xa"),
+        request.args.get("limit"),
+        request.args.get("offset"),
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
+@gcn_bp.get("/api/nhom3-con-thieu/export-nhom1-da-nhap")
+def nhom3_con_thieu_export_nhom1_da_nhap():
+    # Xuất .xlsx danh sách thửa Nhóm 1 đã nhập biểu của 1 xã. ?ma_xa=<mã xã>
+    result, error_response = gcn_service.export_nhom3_nhom1_da_nhap_xlsx(
+        request.args.get("ma_xa", "")
+    )
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @gcn_bp.get("/api/gcn-export-nhom3")
 def gcn_export_nhom3():
     # Xuất .xlsx đúng bố cục file mẫu TANAN.xlsx của 1 đơn vị hành chính —

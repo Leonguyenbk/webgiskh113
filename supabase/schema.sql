@@ -2365,6 +2365,46 @@ $$;
 revoke all on function public.nhom3_list_nhom1_chua_nhap(text, integer, integer) from public;
 grant execute on function public.nhom3_list_nhom1_chua_nhap(text, integer, integer) to service_role;
 
+-- Đối xứng với nhom3_list_nhom1_chua_nhap — thửa Nhóm 1 ĐÃ có dòng
+-- du_lieu_gcn (co_nhap=true), do xã làm (yêu cầu người dùng).
+create or replace function public.nhom3_list_nhom1_da_nhap(
+    p_ma_xa text default null,
+    p_limit integer default 100,
+    p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+    v_total integer;
+    v_items jsonb;
+begin
+    select count(*) into v_total
+    from public.nhom3_trang_thai_cache c
+    where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+      and c.la_nhom_1_2 and c.co_nhap;
+
+    select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
+    from (
+        select c.ma_xa, xp.ten_xa, c.so_to, c.so_thua, c.ma_dinh_danh
+        from public.nhom3_trang_thai_cache c
+        left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
+        where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+          and c.la_nhom_1_2 and c.co_nhap
+        order by c.ma_xa, c.so_to, c.so_thua
+        limit p_limit offset p_offset
+    ) y;
+
+    return jsonb_build_object('total', v_total, 'items', v_items);
+end;
+$$;
+
+revoke all on function public.nhom3_list_nhom1_da_nhap(text, integer, integer) from public;
+grant execute on function public.nhom3_list_nhom1_da_nhap(text, integer, integer) to service_role;
+
 -- Trend tiến độ theo xã, đọc từ nhom3_tien_do_lich_su — mỗi lát cắt kèm
 -- tốc độ xử lý (thửa/ngày) tính bằng hiệu "đã làm" (Nhóm 1/2 + đã thu
 -- thập) so với lát cắt NGAY TRƯỚC của CÙNG xã, quy ra theo ngày (khoảng

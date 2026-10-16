@@ -108,6 +108,16 @@ def nhom3_list_nhom1_chua_nhap(ma_xa: str | None, limit: int, offset: int):
     )
 
 
+def nhom3_list_nhom1_da_nhap(ma_xa: str | None, limit: int, offset: int):
+    # Đối xứng với nhom3_list_nhom1_chua_nhap — thửa Nhóm 1 ĐÃ có dòng
+    # du_lieu_gcn (co_nhap=true), do xã làm — xem public.nhom3_list_nhom1_da_nhap.
+    return supabase_client.call_rpc(
+        "nhom3_list_nhom1_da_nhap",
+        {"p_ma_xa": ma_xa, "p_limit": limit, "p_offset": offset},
+        timeout=25,
+    )
+
+
 def nhom3_tien_do_trend(ma_xa: str | None, tu: str | None, den: str | None):
     # Trend tiến độ theo xã (thửa/ngày) — xem public.nhom3_tien_do_trend.
     return supabase_client.call_rpc(
