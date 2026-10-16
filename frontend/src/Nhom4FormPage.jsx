@@ -328,12 +328,6 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setError("Thửa này đã có dữ liệu GCN — không thêm được vào danh sách.");
       return;
     }
-    if (!fileChinh) {
-      setError(
-        `Vui lòng chọn file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"} cho thửa này trước khi thêm.`,
-      );
-      return;
-    }
     setError("");
     setThuaList((prev) => [
       ...prev,
@@ -405,16 +399,6 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         `Thiếu loại đất cho ${thieuLoaiDat.length} thửa: ` +
           thieuLoaiDat.map((p) => `${p.thua.soTo}/${p.thua.soThua}`).join(", ") +
           " — bấm Sửa để chọn loại đất trước khi nộp.",
-      );
-    }
-    // Mỗi thửa có hồ sơ quét riêng (xem themThuaVaoDanhSach) — thửa nào
-    // cũng phải có file chính, không còn dùng chung 1 file cho cả lô.
-    const thieuFile = parcels.filter((p) => !p.fileChinh);
-    if (thieuFile.length) {
-      return setError(
-        `Thiếu file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"} cho ${thieuFile.length} thửa: ` +
-          thieuFile.map((p) => `${p.thua.soTo}/${p.thua.soThua}`).join(", ") +
-          " — bấm Sửa để chọn file trước khi nộp.",
       );
     }
     if (nguoiHienTai.hoTen && !nguoiHienTai.cccd) {
@@ -974,7 +958,9 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               themThuaVaoDanhSach). Nộp trực tiếp không qua danh sách (chỉ
               1 thửa) thì dùng thẳng file đang chọn ở đây. */}
           <h2 className="nhom4SectionTitle">Hồ sơ quét (của thửa đang nhập ở trên)</h2>
-          <label>{cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"}</label>
+          <label>
+            {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận" : "File PDF Đơn đăng ký"} (tùy chọn)
+          </label>
           <input
             key={`chinh-${fileInputKey}`}
             type="file"
@@ -1029,7 +1015,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
                     <span>
                       Tờ {p.thua.soTo} / Thửa {p.thua.soThua} — {p.thua.dienTichThuaDat} m²
                       {p.dat1.loaiDat ? ` — ${p.dat1.loaiDat}` : " — ⚠ chưa chọn loại đất"}
-                      {p.fileChinh ? ` — 📎 ${p.fileChinh.name}` : " — ⚠ chưa có file quét"}
+                      {p.fileChinh ? ` — 📎 ${p.fileChinh.name}` : " — (không có file quét)"}
                     </span>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button type="button" className="nhom4MiniBtn" onClick={() => suaThua(index)}>

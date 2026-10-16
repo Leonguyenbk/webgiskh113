@@ -10,8 +10,6 @@ _SO_PHAT_HANH_10_SO = re.compile(r"^\d{10}$")
 _SO_PHAT_HANH_CHU_SO = re.compile(r"^[A-ZĐ]{1,2} \d+$")
 _SO_NAM = re.compile(r"^(\d{1,3})\s*(?:năm)?$", re.IGNORECASE)
 
-CCCD_PATTERN = re.compile(r"^\d{12}$")
-
 # ONT/ODT (đất ở) mặc định thời hạn "Lâu dài"; loại đất khác bắt buộc nhập
 # SỐ NĂM sử dụng (VD "50") — không còn nhập ngày dd/mm/yyyy. Khớp đúng
 # logic ở frontend (Nhom4FormPage.jsx, hằng số LOAI_DAT_LAU_DAI / SO_NAM).
@@ -156,9 +154,6 @@ def validate_payload(payload: dict) -> str | None:
         to_chuc = payload.get("to_chuc") or {}
         if not to_chuc.get("ten_to_chuc"):
             return "Vui lòng nhập Tên tổ chức."
-        ma_dinh_danh_dai_dien = to_chuc.get("ma_dinh_danh_ca_nhan_dai_dien")
-        if ma_dinh_danh_dai_dien and not CCCD_PATTERN.match(str(ma_dinh_danh_dai_dien)):
-            return "Mã định danh cá nhân phải đủ 12 số."
     else:
         owners = payload.get("owners") or []
         if not owners:
@@ -178,9 +173,9 @@ def validate_payload(payload: dict) -> str | None:
                 ]
             ):
                 return f"Vui lòng nhập đủ thông tin chủ sử dụng thứ {i + 1}."
+            # Không còn ép CCCD đúng 12 số — nhiều nơi nhập CCCD từ nguồn
+            # khác bị mất số 0 ở đầu, buộc đủ 12 số chặn luôn việc nộp.
             cccd = str(owner.get("cccd") or "")
-            if not CCCD_PATTERN.match(cccd):
-                return f"Số CCCD người thứ {i + 1} phải đủ 12 số."
             if cccd in seen_cccd:
                 return f"Số CCCD người thứ {i + 1} bị trùng trong hồ sơ."
             seen_cccd.add(cccd)
@@ -196,11 +191,8 @@ def validate_payload(payload: dict) -> str | None:
     # — không bắt buộc, nhưng đã điền họ tên thì phải có CCCD. KHÔNG có
     # năm sinh (xem giải thích trong sync_gcn/create_du_lieu_gcn.sql).
     nguoi_hien_tai = payload.get("nguoi_su_dung_hien_tai") or {}
-    if nguoi_hien_tai.get("ho_ten"):
-        if not nguoi_hien_tai.get("cccd"):
-            return "Đã nhập tên người sử dụng đất hiện tại thì phải nhập CCCD."
-        if not CCCD_PATTERN.match(str(nguoi_hien_tai.get("cccd") or "")):
-            return "Số CCCD người sử dụng đất hiện tại phải đủ 12 số."
+    if nguoi_hien_tai.get("ho_ten") and not nguoi_hien_tai.get("cccd"):
+        return "Đã nhập tên người sử dụng đất hiện tại thì phải nhập CCCD."
 
     for i, parcel in enumerate(parcels):
         error = validate_parcel(parcel, i)

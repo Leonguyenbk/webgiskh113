@@ -263,7 +263,6 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict]):
     parcels = payload.get("thua_list") or []
     che_do = payload.get("che_do") or ""
     da_co_gcn = che_do == "Đã có GCN"
-    label_chinh = "Giấy chứng nhận" if da_co_gcn else "Đơn đăng ký"
 
     if len(files_by_parcel) != len(parcels):
         return None, (
@@ -271,17 +270,15 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict]):
             400,
         )
 
+    # File chính (hồ sơ quét) không còn bắt buộc — nhiều nơi nhập dữ liệu
+    # không có sẵn file quét, buộc có file chặn luôn việc nộp. _validate_pdf
+    # tự bỏ qua khi storage rỗng (không chọn file), giống phu/tbxn vốn đã
+    # tùy chọn từ trước.
     for parcel, files in zip(parcels, files_by_parcel):
         thua = parcel.get("thua") or {}
         nhan_thua = f"thửa {thua.get('so_thua')}, tờ {thua.get('so_to')}"
-        chinh = files.get("chinh")
-        if not chinh or not chinh.filename:
-            return None, (
-                jsonify({"error": f"{nhan_thua}: chưa chọn file PDF {label_chinh}."}),
-                400,
-            )
         for storage, label in (
-            (chinh, "File chính"),
+            (files.get("chinh"), "File chính"),
             (files.get("phu"), "Giấy tờ"),
             (files.get("tbxn"), "Thông báo xác nhận"),
         ):
@@ -428,8 +425,9 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict]):
         base_name = _base_name_cho_thua(so_to, so_thua)
 
         # Đọc nội dung file NGAY (trong request), vì FileStorage của Flask
-        # không dùng được nữa sau khi request kết thúc.
-        chinh_bytes = files["chinh"].read()
+        # không dùng được nữa sau khi request kết thúc. chinh (file chính/
+        # hồ sơ quét) không còn bắt buộc, đọc có điều kiện giống phu/tbxn.
+        chinh_bytes = files["chinh"].read() if (files.get("chinh") and files["chinh"].filename) else None
         phu_bytes = files["phu"].read() if (files.get("phu") and files["phu"].filename) else None
         # Thông báo xác nhận (-TBXN) chỉ dùng ở chế độ "Chưa được cấp GCN" và
         # luôn là tùy chọn — không có thì bỏ qua, không chặn nộp.
@@ -472,20 +470,23 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict]):
 
 def _upload_files(
     ma_xa: str, ten_xa, base_name: str, chinh_suffix: str,
-    chinh_bytes: bytes, phu_bytes: bytes | None, tbxn_bytes: bytes | None,
+    chinh_bytes: bytes | None, phu_bytes: bytes | None, tbxn_bytes: bytes | None,
 ) -> tuple[dict | None, tuple | None]:
     """Lưu PDF hồ sơ quét vào đĩa máy chủ ngay trong request. Trả
     (file_info, None) khi mọi file đã lưu, hoặc (None, (jsonify, 502)) nếu
     lỗi — caller dừng luôn, KHÔNG ghi thửa nào (khác cơ chế thread nền cũ:
-    ghi trước rồi lưu file sau, lỗi thì file rớt âm thầm)."""
+    ghi trước rồi lưu file sau, lỗi thì file rớt âm thầm). chinh_bytes giờ
+    có thể None (file chính không còn bắt buộc)."""
     file_info: dict = {}
     try:
         folder_id = local_file_storage.resolve_xa_folder(ma_xa, ten_xa)
-        uploaded_chinh = local_file_storage.upload_pdf(
-            folder_id, f"{base_name}-{chinh_suffix}.pdf", chinh_bytes
-        )
-        file_info["chinh_id"] = uploaded_chinh["id"]
-        file_info["chinh_name"] = uploaded_chinh["name"]
+
+        if chinh_bytes:
+            uploaded_chinh = local_file_storage.upload_pdf(
+                folder_id, f"{base_name}-{chinh_suffix}.pdf", chinh_bytes
+            )
+            file_info["chinh_id"] = uploaded_chinh["id"]
+            file_info["chinh_name"] = uploaded_chinh["name"]
 
         if phu_bytes:
             uploaded_phu = local_file_storage.upload_pdf(folder_id, f"{base_name}-GT.pdf", phu_bytes)

@@ -1909,8 +1909,11 @@ grant execute on function public._nhom3_so_phat_hanh_hop_le(text) to service_rol
 --   - nguongoc1 (và nguongoc2 nếu có dat2) phải khớp ĐÚNG 1 trong 9 giá trị
 --     hợp lệ của form (_nhom3_nguon_goc_hop_le) — không chỉ cần khác rỗng,
 --     tránh lọt dữ liệu nhập sai/gõ tự do.
---   - Bắt buộc có tên file quét (tenfilequet) — khớp yêu cầu file_chinh bắt
---     buộc của form Nhóm 4 (không có nghĩa là chưa đính hồ sơ).
+--   - KHÔNG còn bắt buộc tên file quét (tenfilequet) — nhiều nơi nhập dữ
+--     liệu không có sẵn file quét để đính kèm (dữ liệu cũ/đồng bộ Sheet),
+--     bắt buộc sẽ khiến thửa bị tính nhầm thành "con thiếu" dù dữ liệu còn
+--     lại đã đủ. Biểu Nhóm 4 (nhom4_service.py) cũng không còn bắt buộc
+--     chọn file chính khi nộp, khớp với nới lỏng này.
 --   - phapnhantrengcn/vaitrophapnhan phải khớp đúng danh sách hữu hạn suy từ
 --     tinhPhapNhanVaiTro() (_nhom3_phap_nhan_hop_le/_nhom3_vai_tro_phap_nhan_hop_le)
 --     — form không cho gõ tay 2 ô này, gõ tự do coi như dữ liệu sai/nguồn khác.
@@ -1930,7 +1933,6 @@ as $$
         and public._nhom3_nguon_goc_hop_le(g.nguongoc1)
         and trim(coalesce(g.hinhthucsudung1, '')) <> ''
         and trim(coalesce(g.thoihansudung1, '')) <> ''
-        and trim(coalesce(g.tenfilequet, '')) <> ''
         and (
             starts_with(trim(coalesce(g.sophathanhgcn, '')), 'CHUACOGIAY_')
             or (
