@@ -1802,16 +1802,16 @@ grant execute on function public._nhom3_nguon_goc_hop_le(text) to service_role;
 
 -- Nhận diện chủ sử dụng đất (thua_dat.ten_chu) là TỔ CHỨC (công ty, UBND,
 -- ban quản lý, trường, nông/lâm trường, đồn biên phòng...) thay vì cá
--- nhân/hộ gia đình — các thửa này không gửi xã thu thập Nhóm 3 nữa (yêu
--- cầu người dùng). Dùng \m/\M (ranh giới từ) để tránh dính chữ thường
--- xuất hiện trong tên người, ví dụ "Nguyễn Văn Trường"/"Nguyễn Văn Đồng"
--- (chữ "Trường"/"Đồn" đứng riêng vẫn là tên người, không phải tổ chức) —
--- chỉ nhận "Trường" khi đi kèm loại trường cụ thể (THCS, Tiểu học...).
--- Đã kiểm tra thủ công với toàn bộ thua_dat.ten_chu hiện có — không còn
--- false positive rõ ràng, trừ vài trường hợp hiếm chữ đệm trùng tên tổ
--- chức y hệt sau khi bỏ dấu (ví dụ "Trần Công An" — chữ đệm "Công An"
--- trùng "Công an"; "... Nông Trưởng" — chữ đệm "Trưởng" trùng "Nông
--- trường") — chấp nhận rủi ro nhỏ này vì khối lượng đúng áp đảo.
+-- nhân/hộ gia đình. KHÔNG dùng để loại khỏi đếm/danh sách Nhóm 3 nữa (đã
+-- revert — đất tổ chức vẫn tính vào "gửi xã"/"còn thiếu" như bình thường,
+-- xem refresh_nhom3_trang_thai_cache) — giữ lại hàm này phòng khi cần 1
+-- chỉ dấu RIÊNG trên bản đồ (khác hẳn "đất tổ chức chưa phân loại" hiện có
+-- ở frontend/src/utils/constants.js — TO_CHUC_LAND_CODES đó nhận diện theo
+-- MỤC ĐÍCH sử dụng đất, không bắt được đất công ích/NTS... đứng tên UBND xã
+-- như hàm này). Dùng \m/\M (ranh giới từ) để tránh dính chữ thường xuất
+-- hiện trong tên người, ví dụ "Nguyễn Văn Trường"/"Nguyễn Văn Đồng" (chữ
+-- "Trường"/"Đồn" đứng riêng vẫn là tên người, không phải tổ chức) — chỉ
+-- nhận "Trường" khi đi kèm loại trường cụ thể (THCS, Tiểu học...).
 create or replace function public._nhom3_la_dat_to_chuc(ten_chu text)
 returns boolean
 language sql
@@ -2157,11 +2157,12 @@ begin
     -- Nhóm 3 cần gửi xã nữa -> loại khỏi cache ngay từ đây, mọi hàm đọc
     -- cache (nhom3_tong_hop, nhom3_list_con_thieu, lịch sử tiến độ) tự
     -- động không thấy các thửa này nữa, không cần sửa thêm nơi khác.
-    -- Tương tự, thửa đất tổ chức (p.ten_chu, xem _nhom3_la_dat_to_chuc)
-    -- cũng không gửi xã nữa (yêu cầu người dùng).
+    -- ĐÃ REVERT loại đất tổ chức (p.ten_chu, _nhom3_la_dat_to_chuc) khỏi
+    -- đây — đất tổ chức/đất công ích do UBND xã quản lý vẫn phải nhập biểu
+    -- bình thường, chỉ nên phân biệt trên bản đồ (nếu cần), không loại
+    -- khỏi đếm/danh sách "còn thiếu" (yêu cầu người dùng).
     where not t.thuoc_du_an
       and gc.ma_xa is null
-      and not public._nhom3_la_dat_to_chuc(p.ten_chu)
     on conflict (ma_xa, so_to, so_thua) do update set
         ma_dinh_danh = excluded.ma_dinh_danh,
         la_nhom_1_2  = excluded.la_nhom_1_2,
