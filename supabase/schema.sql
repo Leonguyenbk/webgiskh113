@@ -1730,12 +1730,35 @@ create table if not exists public.ranh_du_an (
     geom geometry(MultiPolygon, 4326) not null,
     so_polygon integer not null,
     nguon_file text,
-    tao_luc timestamptz not null default now()
+    tao_luc timestamptz not null default now(),
+    -- true = đã "trả lại nguyên trạng" (huy_danh_dau_du_an_nhom3) — không
+    -- xoá hàng để giữ lịch sử đã từng nạp ranh này.
+    da_huy boolean not null default false,
+    huy_luc timestamptz
 );
 
 alter table public.ranh_du_an enable row level security;
 
 create index if not exists idx_ranh_du_an_geom on public.ranh_du_an using gist (geom);
+
+-- Mỗi lần luu_ranh_du_an_va_danh_dau_nhom3 đánh dấu 1 thửa Nhóm 3 thuộc 1
+-- ranh dự án, ghi 1 dòng ở đây — để huy_danh_dau_du_an_nhom3 (revert) biết
+-- CHÍNH XÁC thửa nào do ranh này đánh dấu, không ảnh hưởng tới thửa cũng
+-- giao >=95% với 1 ranh dự án KHÁC (nếu ranh đó còn hiệu lực, giữ nguyên
+-- thuoc_du_an = true khi huỷ ranh này).
+create table if not exists public.nhom3_du_an_danh_dau (
+    ranh_du_an_id bigint not null references public.ranh_du_an(id) on delete cascade,
+    ma_xa text not null,
+    so_to integer not null,
+    so_thua integer not null,
+    danh_dau_luc timestamptz not null default now(),
+    primary key (ranh_du_an_id, ma_xa, so_to, so_thua)
+);
+
+alter table public.nhom3_du_an_danh_dau enable row level security;
+
+create index if not exists idx_nhom3_du_an_danh_dau_thua
+    on public.nhom3_du_an_danh_dau (ma_xa, so_to, so_thua);
 
 -- Nhận diện 9 NHÓM nguồn gốc sử dụng hợp lệ (khớp ý nghĩa với
 -- NGUON_GOC_OPTIONS trong frontend/src/utils/nhom4Constants.js), KHÔNG so
@@ -2610,6 +2633,10 @@ begin
     values (trim(p_ten), ST_Multi(v_ranh), v_so_polygon, p_nguon_file)
     returning id into v_ranh_id;
 
+    -- Không lọc "not n3.thuoc_du_an" ở đây (khác bản trước khi có revert) —
+    -- cần biết TOÀN BỘ thửa giao đủ ngưỡng với ranh này để ghi vào
+    -- nhom3_du_an_danh_dau, kể cả thửa đã thuộc 1 ranh dự án khác từ trước
+    -- (để huy_danh_dau_du_an_nhom3 biết thửa đó còn ranh khác giữ, không gỡ nhầm).
     with giao as (
         select
             t.ma_xa, t.so_to, t.so_thua,
@@ -2618,8 +2645,7 @@ begin
         from public.thua_dat t
         join public.nhom3_can_thu_thap n3
             on n3.ma_xa = t.ma_xa and n3.so_to = t.so_to and n3.so_thua = t.so_thua
-        where not n3.thuoc_du_an
-          and ST_Intersects(t.geom, v_ranh)
+        where ST_Intersects(t.geom, v_ranh)
     ),
     du_an as (
         select ma_xa, so_to, so_thua
@@ -2627,10 +2653,17 @@ begin
         where dien_tich_thua_m2 > 0
           and (dien_tich_giao_m2 / dien_tich_thua_m2 * 100) >= p_nguong_ty_le
     )
+    insert into public.nhom3_du_an_danh_dau (ranh_du_an_id, ma_xa, so_to, so_thua)
+    select v_ranh_id, ma_xa, so_to, so_thua from du_an
+    on conflict do nothing;
+
     update public.nhom3_can_thu_thap n3
     set thuoc_du_an = true
-    from du_an
-    where n3.ma_xa = du_an.ma_xa and n3.so_to = du_an.so_to and n3.so_thua = du_an.so_thua;
+    from (
+        select ma_xa, so_to, so_thua from public.nhom3_du_an_danh_dau where ranh_du_an_id = v_ranh_id
+    ) du_an
+    where n3.ma_xa = du_an.ma_xa and n3.so_to = du_an.so_to and n3.so_thua = du_an.so_thua
+      and not n3.thuoc_du_an;
 
     get diagnostics v_so_danh_dau = row_count;
 
@@ -2645,6 +2678,102 @@ $$;
 
 revoke all on function public.luu_ranh_du_an_va_danh_dau_nhom3(text, text, text, numeric) from public;
 grant execute on function public.luu_ranh_du_an_va_danh_dau_nhom3(text, text, text, numeric) to service_role;
+
+-- Trả lại nguyên trạng ban đầu cho thửa Nhóm 3 do 1 ranh dự án đánh dấu —
+-- CHỈ gỡ thuoc_du_an = false cho thửa KHÔNG còn bị ranh dự án nào khác
+-- (chưa huỷ) đánh dấu, để không ảnh hưởng tới ranh dự án khác cùng giao
+-- tới thửa đó. Không xoá public.ranh_du_an — chỉ đánh dấu da_huy = true để
+-- giữ lịch sử (biết đã từng nạp + đã trả lại).
+create or replace function public.huy_danh_dau_du_an_nhom3(p_ranh_du_an_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+set statement_timeout = '60s'
+as $$
+declare
+    v_ten text;
+    v_da_huy boolean;
+    v_so_go integer;
+begin
+    select ten, da_huy into v_ten, v_da_huy
+    from public.ranh_du_an where id = p_ranh_du_an_id;
+
+    if v_ten is null then
+        raise exception 'Không tìm thấy ranh dự án id %', p_ranh_du_an_id;
+    end if;
+    if v_da_huy then
+        raise exception 'Ranh dự án "%" đã được trả lại nguyên trạng trước đó', v_ten;
+    end if;
+
+    with cua_ranh_nay as (
+        select ma_xa, so_to, so_thua
+        from public.nhom3_du_an_danh_dau
+        where ranh_du_an_id = p_ranh_du_an_id
+    ),
+    con_ranh_khac as (
+        select distinct d.ma_xa, d.so_to, d.so_thua
+        from public.nhom3_du_an_danh_dau d
+        join public.ranh_du_an r on r.id = d.ranh_du_an_id
+        join cua_ranh_nay c
+            on c.ma_xa = d.ma_xa and c.so_to = d.so_to and c.so_thua = d.so_thua
+        where d.ranh_du_an_id <> p_ranh_du_an_id
+          and not r.da_huy
+    ),
+    chi_ranh_nay as (
+        select ma_xa, so_to, so_thua from cua_ranh_nay
+        except
+        select ma_xa, so_to, so_thua from con_ranh_khac
+    )
+    update public.nhom3_can_thu_thap n3
+    set thuoc_du_an = false
+    from chi_ranh_nay c
+    where n3.ma_xa = c.ma_xa and n3.so_to = c.so_to and n3.so_thua = c.so_thua;
+
+    get diagnostics v_so_go = row_count;
+
+    delete from public.nhom3_du_an_danh_dau where ranh_du_an_id = p_ranh_du_an_id;
+
+    update public.ranh_du_an set da_huy = true, huy_luc = now() where id = p_ranh_du_an_id;
+
+    return jsonb_build_object(
+        'ranh_du_an_id', p_ranh_du_an_id,
+        'ten', v_ten,
+        'so_thua_go_danh_dau', v_so_go
+    );
+end;
+$$;
+
+revoke all on function public.huy_danh_dau_du_an_nhom3(bigint) from public;
+grant execute on function public.huy_danh_dau_du_an_nhom3(bigint) to service_role;
+
+-- Liệt kê ranh dự án đã lưu (kể cả đã huỷ) kèm số thửa hiện đang bị đánh
+-- dấu bởi ranh đó — cho GUI tool desktop chọn để trả lại nguyên trạng.
+create or replace function public.danh_sach_ranh_du_an()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    select coalesce(jsonb_agg(row_to_json(t) order by t.tao_luc desc), '[]'::jsonb)
+    from (
+        select
+            r.id as ranh_du_an_id,
+            r.ten,
+            r.nguon_file,
+            r.so_polygon,
+            r.tao_luc,
+            r.da_huy,
+            r.huy_luc,
+            (select count(*) from public.nhom3_du_an_danh_dau d where d.ranh_du_an_id = r.id)::int
+                as so_thua_dang_danh_dau
+        from public.ranh_du_an r
+    ) t;
+$$;
+
+revoke all on function public.danh_sach_ranh_du_an() from public;
+grant execute on function public.danh_sach_ranh_du_an() to service_role;
 
 
 -- Công tác "ứng thửa": đối chiếu MỘT LÔ polygon thửa cũ (mỗi polygon kèm
