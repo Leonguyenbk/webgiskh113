@@ -512,6 +512,99 @@ label[for="mplisCookie"] {
   margin-top: 16px;
 }
 
+/* Modal "Xem/Sửa" thông tin đã nhập (DanhSachThuaDatPage) — nhiều trường
+   (56 cột du_lieu_gcn) nên cần rộng + cuộn riêng phần nội dung, khác
+   .modalCard mặc định (xác nhận ngắn, 420px). */
+.chiTietModalCard {
+  width: 100%;
+  max-width: 880px;
+  max-height: 90vh;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 20px 50px #0f172a55;
+  display: flex;
+  flex-direction: column;
+}
+.chiTietModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.chiTietModalHeader h2 { margin: 0; font-size: 17px; color: #102a2b; }
+.chiTietModalHeader span { font-size: 12px; color: #6a817e; }
+.chiTietModalClose {
+  border: none;
+  background: #eef3f2;
+  color: #345b57;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chiTietModalClose:hover { background: #dfe9e7; }
+.chiTietModalBody { overflow-y: auto; padding-right: 4px; }
+.chiTietNguonBadge {
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+.chiTietNguonBadge.suaDuoc { background: #e3f6ec; color: #0f7a46; }
+.chiTietNguonBadge.chiXem { background: #fdf3e0; color: #9a6b0a; }
+.chiTietOwnerCard {
+  border: 1px solid #e2e8e6;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.chiTietOwnerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.chiTietOwnerHeader strong { font-size: 14px; color: #102a2b; }
+.chiTietFieldGroup { margin-bottom: 10px; }
+.chiTietFieldGroup h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6a817e;
+}
+.chiTietFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 12px;
+}
+.chiTietField label {
+  display: block;
+  font-size: 11px;
+  color: #6a817e;
+  margin-bottom: 2px;
+}
+.chiTietField input,
+.chiTietField textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #d6e2df;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.chiTietField input:disabled,
+.chiTietField textarea:disabled {
+  background: #f4f7f6;
+  color: #556b67;
+}
+
 /* Trang "Nhập đường link": danh sách nguồn cần rộng hơn form để hiện
    trọn link Google Sheet, không bị cắt ngắn như .parcelListItem. */
 .gcnLinksListCard { max-width: 640px; }

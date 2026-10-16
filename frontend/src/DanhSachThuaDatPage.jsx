@@ -1,8 +1,89 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getGcnDanhSach, getXaList } from "./services/parcelService";
+import { getGcnChiTiet, getGcnDanhSach, getXaList, updateGcnChiTiet } from "./services/parcelService";
 
 const PAGE_SIZE = 100;
+
+// Nhóm trường cho modal "Xem/Sửa" — khớp đúng tên cột public.du_lieu_gcn
+// (xem sync_gcn/create_du_lieu_gcn.sql) + nhãn tiếng Việt lấy theo đúng
+// cách gọi đã dùng ở biểu Nhóm 4 (Nhom4FormPage.jsx) cho người dùng quen mắt.
+const CHI_TIET_FIELD_GROUPS = [
+  {
+    title: "Thông tin GCN",
+    fields: [
+      ["sophathanhgcn", "Số phát hành GCN"],
+      ["ngaycapgcn", "Ngày cấp GCN"],
+      ["sovaosogcn", "Số vào sổ GCN"],
+      ["soto_gcn", "Số tờ ghi trên GCN"],
+      ["sothua_gcn", "Số thửa ghi trên GCN"],
+      ["madinhdanhthuadat", "Mã định danh thửa đất"],
+    ],
+  },
+  {
+    title: "Chủ sử dụng / tổ chức",
+    fields: [
+      ["tentochuc", "Tên tổ chức"],
+      ["madinhdanhtochuc", "Mã định danh tổ chức"],
+      ["hovatenchusudung", "Họ và tên chủ sử dụng"],
+      ["ngaythangnamsinh", "Ngày tháng năm sinh"],
+      ["gioitinh", "Giới tính"],
+      ["sodinhdanhcanhan", "Số CCCD"],
+      ["diachithuongtru", "Địa chỉ thường trú"],
+      ["phapnhantrengcn", "Pháp nhân"],
+      ["vaitrophapnhan", "Vai trò pháp nhân"],
+    ],
+  },
+  {
+    title: "Người sử dụng hiện tại (nếu khác GCN)",
+    fields: [
+      ["tenchusudunghientai", "Tên người sử dụng hiện tại"],
+      ["sodinhdanh_chusudunghientai", "Số định danh cá nhân"],
+      ["diachi_chusudunghientai", "Địa chỉ thường trú"],
+      ["lydothaydoi", "Lý do thay đổi"],
+    ],
+  },
+  {
+    title: "Thửa đất",
+    fields: [
+      ["diachi_thuadat", "Địa chỉ thửa đất"],
+      ["dientichthuadat", "Diện tích thửa đất"],
+    ],
+  },
+  {
+    title: "Loại đất 1",
+    fields: [
+      ["loaidat1", "Loại đất"],
+      ["dientich1", "Diện tích"],
+      ["nguongoc1", "Nguồn gốc sử dụng"],
+      ["hinhthucsudung1", "Hình thức sử dụng"],
+      ["thoihansudung1", "Thời hạn sử dụng"],
+    ],
+  },
+  {
+    title: "Loại đất 2",
+    fields: [
+      ["loaidat2", "Loại đất"],
+      ["dientich2", "Diện tích"],
+      ["nguongoc2", "Nguồn gốc sử dụng"],
+      ["hinhthucsudung2", "Hình thức sử dụng"],
+      ["thoihansudung2", "Thời hạn sử dụng"],
+    ],
+  },
+  {
+    title: "Loại đất 3",
+    fields: [
+      ["loaidat3", "Loại đất"],
+      ["dientich3", "Diện tích"],
+      ["nguongoc3", "Nguồn gốc sử dụng"],
+      ["hinhthucsudung3", "Hình thức sử dụng"],
+      ["thoihansudung3", "Thời hạn sử dụng"],
+    ],
+  },
+  {
+    title: "Ghi chú",
+    fields: [["ghichu", "Ghi chú"]],
+  },
+];
 
 function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
@@ -39,6 +120,19 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const [totalKhac, setTotalKhac] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Modal "Xem/Sửa" — chiTietTarget = thửa đang xem (null = đóng modal).
+  // Giữ mã xác thực trong state (không localStorage) cho tới khi đóng tab,
+  // giống quy ước ImportGmlPage/MplisSyncPage — khỏi phải nhập lại mỗi lần
+  // mở modal trong cùng phiên.
+  const [chiTietTarget, setChiTietTarget] = useState(null);
+  const [chiTietToken, setChiTietToken] = useState("");
+  const [chiTietData, setChiTietData] = useState(null);
+  const [chiTietLoading, setChiTietLoading] = useState(false);
+  const [chiTietError, setChiTietError] = useState("");
+  const [chiTietEdits, setChiTietEdits] = useState({});
+  const [chiTietSavingId, setChiTietSavingId] = useState(null);
+  const [chiTietSavedAt, setChiTietSavedAt] = useState({});
 
   useEffect(() => {
     setXaLoading(true);
@@ -121,6 +215,75 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const rangeTo = Math.min(offset + PAGE_SIZE, total);
   const canPrev = offset > 0;
   const canNext = offset + PAGE_SIZE < total;
+
+  const fetchChiTiet = (target, token) => {
+    setChiTietLoading(true);
+    setChiTietError("");
+    getGcnChiTiet(
+      { ma_xa: target.ma_xa, so_to: target.so_to, so_thua: target.so_thua },
+      { token },
+    )
+      .then((result) => setChiTietData(result))
+      .catch((err) => setChiTietError(err.message))
+      .finally(() => setChiTietLoading(false));
+  };
+
+  const handleOpenChiTiet = (row) => {
+    const target = { ma_xa: row.ma_xa, so_to: row.so_to, so_thua: row.so_thua, ten_xa: row.ten_xa };
+    setChiTietTarget(target);
+    setChiTietData(null);
+    setChiTietError("");
+    setChiTietEdits({});
+    setChiTietSavedAt({});
+    if (chiTietToken.trim()) fetchChiTiet(target, chiTietToken.trim());
+  };
+
+  const handleCloseChiTiet = () => {
+    setChiTietTarget(null);
+    setChiTietData(null);
+    setChiTietError("");
+    setChiTietEdits({});
+  };
+
+  const handleXacNhanToken = (event) => {
+    event.preventDefault();
+    if (!chiTietToken.trim() || !chiTietTarget) return;
+    fetchChiTiet(chiTietTarget, chiTietToken.trim());
+  };
+
+  const handleChiTietFieldChange = (rowId, field, value) => {
+    setChiTietEdits((prev) => ({
+      ...prev,
+      [rowId]: { ...(prev[rowId] || {}), [field]: value },
+    }));
+  };
+
+  const handleSaveChiTietRow = (rowId) => {
+    const edits = chiTietEdits[rowId];
+    if (!edits || Object.keys(edits).length === 0 || !chiTietTarget) return;
+
+    setChiTietSavingId(rowId);
+    updateGcnChiTiet(
+      rowId,
+      { ma_xa: chiTietTarget.ma_xa, so_to: chiTietTarget.so_to, so_thua: chiTietTarget.so_thua },
+      edits,
+      { token: chiTietToken.trim() },
+    )
+      .then((result) => {
+        setChiTietData((prev) => ({
+          ...prev,
+          items: prev.items.map((item) => (item.id === rowId ? { ...item, ...result.item } : item)),
+        }));
+        setChiTietEdits((prev) => {
+          const next = { ...prev };
+          delete next[rowId];
+          return next;
+        });
+        setChiTietSavedAt((prev) => ({ ...prev, [rowId]: Date.now() }));
+      })
+      .catch((err) => setChiTietError(err.message))
+      .finally(() => setChiTietSavingId(null));
+  };
 
   return (
     <main className="toolsShell">
@@ -306,12 +469,13 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                         Ngày nhập
                         <span style={{ marginLeft: 4 }}>{sortDesc ? "▼" : "▲"}</span>
                       </th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {!loading && items.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>Xã/phường này chưa có dữ liệu trong du_lieu_gcn</td>
+                        <td colSpan={6}>Xã/phường này chưa có dữ liệu trong du_lieu_gcn</td>
                       </tr>
                     ) : (
                       items.map((row, index) => (
@@ -321,6 +485,15 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                           <td>{row.so_thua}</td>
                           <td>{row.ma_dinh_danh || ""}</td>
                           <td>{formatNgay(row.ngay_nhap)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="downloadButton"
+                              onClick={() => handleOpenChiTiet(row)}
+                            >
+                              👁 Xem / Sửa
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -331,6 +504,132 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
           )}
         </div>
       </section>
+
+      {chiTietTarget && (
+        <div className="modalOverlay" onMouseDown={handleCloseChiTiet}>
+          <div className="chiTietModalCard" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="chiTietModalHeader">
+              <div>
+                <h2>Thông tin đã nhập</h2>
+                <span>
+                  {chiTietTarget.ten_xa || chiTietTarget.ma_xa} — Tờ {chiTietTarget.so_to}, Thửa{" "}
+                  {chiTietTarget.so_thua}
+                </span>
+              </div>
+              <button type="button" className="chiTietModalClose" onClick={handleCloseChiTiet}>
+                ✕
+              </button>
+            </div>
+
+            <div className="chiTietModalBody">
+              {!chiTietData && (
+                <form onSubmit={handleXacNhanToken} style={{ marginTop: 6 }}>
+                  <p>Dữ liệu này chứa thông tin cá nhân (CCCD, địa chỉ…) — nhập mã xác thực để xem.</p>
+                  <div className="chiTietField" style={{ maxWidth: 280 }}>
+                    <label htmlFor="chiTietToken">Mã xác thực</label>
+                    <input
+                      id="chiTietToken"
+                      type="password"
+                      autoComplete="off"
+                      value={chiTietToken}
+                      onChange={(event) => setChiTietToken(event.target.value)}
+                    />
+                  </div>
+                  {chiTietError && (
+                    <div className="notice error" style={{ marginTop: 10 }}>
+                      <span>{chiTietError}</span>
+                    </div>
+                  )}
+                  <div className="modalActions">
+                    <button
+                      type="submit"
+                      className="downloadButton"
+                      disabled={chiTietLoading || !chiTietToken.trim()}
+                    >
+                      {chiTietLoading ? "Đang tải…" : "Xác nhận"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {chiTietData && (
+                <>
+                  <span
+                    className={`chiTietNguonBadge ${chiTietData.sua_duoc ? "suaDuoc" : "chiXem"}`}
+                  >
+                    Nguồn: {chiTietData.ten_nguon}
+                    {chiTietData.sua_duoc ? " — sửa được" : " — chỉ xem"}
+                  </span>
+                  {!chiTietData.sua_duoc && (
+                    <p style={{ fontSize: 12, color: "#9a6b0a", marginTop: -4 }}>
+                      Dữ liệu đồng bộ từ Google Sheet — sửa trực tiếp trên Sheet nguồn, hệ thống sẽ tự
+                      đồng bộ lại ở lần sau. Không sửa được ở đây.
+                    </p>
+                  )}
+                  {chiTietError && (
+                    <div className="notice error" style={{ marginTop: 10 }}>
+                      <span>{chiTietError}</span>
+                    </div>
+                  )}
+
+                  {chiTietData.items.map((item, ownerIndex) => {
+                    const edits = chiTietEdits[item.id] || {};
+                    const hasEdits = Object.keys(edits).length > 0;
+                    const valueOf = (field) => (field in edits ? edits[field] : item[field] || "");
+                    return (
+                      <div className="chiTietOwnerCard" key={item.id}>
+                        <div className="chiTietOwnerHeader">
+                          <strong>
+                            Chủ sử dụng #{ownerIndex + 1}
+                            {item.hovatenchusudung ? `: ${item.hovatenchusudung}` : ""}
+                          </strong>
+                          {chiTietData.sua_duoc && (
+                            <button
+                              type="button"
+                              className="downloadButton"
+                              disabled={!hasEdits || chiTietSavingId === item.id}
+                              onClick={() => handleSaveChiTietRow(item.id)}
+                            >
+                              {chiTietSavingId === item.id
+                                ? "Đang lưu…"
+                                : chiTietSavedAt[item.id]
+                                  ? "💾 Đã lưu — lưu tiếp"
+                                  : "💾 Lưu thay đổi"}
+                            </button>
+                          )}
+                        </div>
+
+                        {CHI_TIET_FIELD_GROUPS.map((group) => (
+                          <div className="chiTietFieldGroup" key={group.title}>
+                            <h4>{group.title}</h4>
+                            <div className="chiTietFieldGrid">
+                              {group.fields.map(([field, label]) => (
+                                <div className="chiTietField" key={field}>
+                                  <label htmlFor={`${item.id}_${field}`}>{label}</label>
+                                  <input
+                                    id={`${item.id}_${field}`}
+                                    type="text"
+                                    autoComplete="off"
+                                    disabled={!chiTietData.sua_duoc}
+                                    value={valueOf(field)}
+                                    onChange={(event) =>
+                                      handleChiTietFieldChange(item.id, field, event.target.value)
+                                    }
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

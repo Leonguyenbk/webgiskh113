@@ -3,8 +3,10 @@ from __future__ import annotations
 from flask import jsonify
 
 from . import supabase_client
+from .nhom4_repository import NHOM4_MA_NGUON
 
 NGUON_GCN_TABLE = "nguon_gcn"
+DU_LIEU_GCN_TABLE = "du_lieu_gcn"
 
 
 def _json_or_error(response, error_response):
@@ -195,3 +197,34 @@ def list_active_sources():
         return None, error_response
     response.raise_for_status()
     return response.json(), None
+
+
+def get_du_lieu_gcn_rows(madvhc_soto_sothua: str):
+    # Mọi dòng (1 dòng/chủ sử dụng) của 1 thửa — trang "Danh sách thửa đã
+    # nhập" (nút "Xem/Sửa"). select "*" rồi lọc cột ở service layer, không
+    # lọc ở đây để còn biết ma_nguon (quyết định cho sửa hay chỉ xem).
+    response, error_response = supabase_client.rest_request(
+        "GET",
+        DU_LIEU_GCN_TABLE,
+        params={"select": "*", "madvhc_soto_sothua": f"eq.{madvhc_soto_sothua}", "order": "id.asc"},
+    )
+    return _json_or_error(response, error_response)
+
+
+def update_du_lieu_gcn_row(row_id: int, madvhc_soto_sothua: str, updates: dict):
+    # CHỈ sửa được dòng nguồn "biểu Nhóm 4" (NHOM4_MA_NGUON) — dữ liệu đồng
+    # bộ Google Sheet bị ghi đè lại ở lần đồng bộ sau nên sửa tay ở đây vô
+    # nghĩa (chặn luôn ở điều kiện lọc, không chỉ ở UI). Thêm điều kiện
+    # madvhc_soto_sothua để chặn id không khớp thửa đang xem (phòng hờ).
+    response, error_response = supabase_client.rest_request(
+        "PATCH",
+        DU_LIEU_GCN_TABLE,
+        params={
+            "id": f"eq.{row_id}",
+            "madvhc_soto_sothua": f"eq.{madvhc_soto_sothua}",
+            "ma_nguon": f"eq.{NHOM4_MA_NGUON}",
+        },
+        json_body=updates,
+        extra_headers={"Content-Type": "application/json", "Prefer": "return=representation"},
+    )
+    return _json_or_error(response, error_response)

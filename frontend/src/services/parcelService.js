@@ -40,6 +40,28 @@ export function getGcnDanhSach(params, { signal, errorFallback } = {}) {
   });
 }
 
+// Nút "Xem/Sửa" ở trang "Danh sách thửa đã nhập" — lộ dữ liệu cá nhân
+// (CCCD, ngày sinh, địa chỉ...) nên backend bắt buộc mã xác thực
+// IMPORT_TOKEN (header X-Import-Token, giống ImportGmlPage/MplisSyncPage).
+export function getGcnChiTiet(params, { signal, token, errorFallback } = {}) {
+  return request("/api/gcn-danh-sach/chi-tiet", {
+    params,
+    signal,
+    token,
+    errorFallback: errorFallback || "Không tải được thông tin đã nhập",
+  });
+}
+
+export function updateGcnChiTiet(rowId, params, body, { token, errorFallback } = {}) {
+  return request(`/api/gcn-danh-sach/chi-tiet/${rowId}`, {
+    method: "PATCH",
+    params,
+    body,
+    token,
+    errorFallback: errorFallback || "Không lưu được thay đổi",
+  });
+}
+
 export function getThongKeNguonNhap({ signal } = {}) {
   return request("/api/thong-ke-nguon-nhap", {
     signal,

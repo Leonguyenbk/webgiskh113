@@ -36,6 +36,45 @@ def gcn_danh_sach():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/gcn-danh-sach/chi-tiet")
+def gcn_danh_sach_chi_tiet():
+    # Nút "Xem/Sửa" ở trang "Danh sách thửa đã nhập" — lộ dữ liệu cá nhân
+    # (CCCD, ngày sinh, địa chỉ...) nên bắt buộc mã xác thực IMPORT_TOKEN,
+    # giống các endpoint xuất dữ liệu cá nhân khác (/api/gcn-export-nhom3).
+    # ?ma_xa=&so_to=&so_thua=
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    data, error_response = gcn_service.get_du_lieu_gcn_chi_tiet(
+        request.args.get("ma_xa", ""),
+        request.args.get("so_to", ""),
+        request.args.get("so_thua", ""),
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
+@gcn_bp.patch("/api/gcn-danh-sach/chi-tiet/<int:row_id>")
+def gcn_danh_sach_chi_tiet_sua(row_id: int):
+    # Lưu thay đổi 1 dòng (1 chủ sử dụng) ở modal "Xem/Sửa" — CHỈ cho sửa
+    # dòng nguồn "biểu Nhóm 4" (chặn ở service/repository). ?ma_xa=&so_to=&so_thua=
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    body = request.get_json(silent=True) or {}
+    data, error_response = gcn_service.update_du_lieu_gcn_chi_tiet(
+        row_id,
+        request.args.get("ma_xa", ""),
+        request.args.get("so_to", ""),
+        request.args.get("so_thua", ""),
+        body,
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/thong-ke-nguon-nhap")
 def thong_ke_nguon_nhap():
     # Tổng số thửa đã nhập toàn dự án, tách Form (biểu Nhóm 4) / nguồn khác

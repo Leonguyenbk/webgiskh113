@@ -10,7 +10,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import PatternFill
 
 import gcn_sync
-from ..repositories import gcn_repository
+from ..repositories import gcn_repository, nhom4_repository
 
 # Nhóm KH 2959 hợp lệ cho chức năng "Xuất GCN theo nhóm".
 _NHOM_HOP_LE = {"NHÓM 1", "NHÓM 2"}
@@ -205,6 +205,126 @@ def get_danh_sach_da_nhap(
     result.setdefault("total_khac", 0)
     result.setdefault("items", [])
     return result, None
+
+
+# Cột CHO PHÉP sửa qua trang web (nút "Xem/Sửa" ở "Danh sách thửa đã
+# nhập") — CHỈ áp dụng cho dòng nguồn "biểu Nhóm 4" (chặn ở
+# gcn_repository.update_du_lieu_gcn_row bằng điều kiện ma_nguon, đây là lớp
+# whitelist thứ 2 chặn client gửi thừa cột không cho sửa như id/ma_nguon/
+# submission_id/madvhc/soto/sothua — đổi số tờ/số thửa coi như 1 thửa khác,
+# ngoài phạm vi "sửa nếu nhập sai", phải nộp lại từ đầu).
+DU_LIEU_GCN_EDITABLE_FIELDS = (
+    "sophathanhgcn", "ngaycapgcn", "sovaosogcn",
+    "tentochuc", "madinhdanhtochuc",
+    "hovatenchusudung", "ngaythangnamsinh", "gioitinh", "sodinhdanhcanhan",
+    "diachithuongtru", "phapnhantrengcn", "vaitrophapnhan",
+    "tenchusudunghientai", "sodinhdanh_chusudunghientai", "diachi_chusudunghientai",
+    "lydothaydoi",
+    "madinhdanhthuadat", "soto_gcn", "sothua_gcn",
+    "diachi_thuadat", "dientichthuadat",
+    "loaidat1", "dientich1", "nguongoc1", "hinhthucsudung1", "thoihansudung1",
+    "loaidat2", "dientich2", "nguongoc2", "hinhthucsudung2", "thoihansudung2",
+    "loaidat3", "dientich3", "nguongoc3", "hinhthucsudung3", "thoihansudung3",
+    "ghichu",
+)
+
+
+def _to_int_or_error(value, label: str):
+    try:
+        return int(str(value).strip()), None
+    except (TypeError, ValueError):
+        return None, (jsonify({"error": f"{label} không hợp lệ: {value!r}"}), 400)
+
+
+def _make_madvhc_soto_sothua(ma_xa: str, so_to: int, so_thua: int) -> str:
+    # Phải khớp đúng cột generated madvhc_soto_sothua trong du_lieu_gcn
+    # (xem sync_gcn/create_du_lieu_gcn.sql) — so_to/so_thua ở đây luôn là
+    # số nguyên nên normalize_so_text cho kết quả giống str(int).
+    return f"{ma_xa.strip()}_{so_to}_{so_thua}"
+
+
+def get_du_lieu_gcn_chi_tiet(ma_xa_raw: str, so_to_raw: str, so_thua_raw: str):
+    """Trang 'Danh sách thửa đã nhập' — nút 'Xem/Sửa': toàn bộ dòng (1 dòng/
+    chủ sử dụng) đã nhập cho 1 thửa, kèm cờ cho biết sửa được hay chỉ xem
+    (nguồn 'biểu Nhóm 4' mới sửa được — dữ liệu đồng bộ Google Sheet bị ghi
+    đè lại ở lần đồng bộ sau)."""
+    ma_xa = (ma_xa_raw or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+    so_to, error_response = _to_int_or_error(so_to_raw, "Số tờ")
+    if error_response:
+        return None, error_response
+    so_thua, error_response = _to_int_or_error(so_thua_raw, "Số thửa")
+    if error_response:
+        return None, error_response
+
+    key = _make_madvhc_soto_sothua(ma_xa, so_to, so_thua)
+    rows, error_response = gcn_repository.get_du_lieu_gcn_rows(key)
+    if error_response:
+        return None, error_response
+    if not rows:
+        return None, (jsonify({"error": "Thửa này chưa có dữ liệu trong du_lieu_gcn"}), 404)
+
+    sua_duoc = rows[0].get("ma_nguon") == nhom4_repository.NHOM4_MA_NGUON
+    items = [
+        {"id": row.get("id"), **{field: row.get(field) for field in DU_LIEU_GCN_EDITABLE_FIELDS}}
+        for row in rows
+    ]
+    return {
+        "ma_xa": ma_xa,
+        "so_to": so_to,
+        "so_thua": so_thua,
+        "ten_nguon": rows[0].get("ten_nguon"),
+        "sua_duoc": sua_duoc,
+        "items": items,
+    }, None
+
+
+def update_du_lieu_gcn_chi_tiet(row_id_raw, ma_xa_raw: str, so_to_raw: str, so_thua_raw: str, body: dict):
+    """Lưu thay đổi 1 dòng (1 chủ sử dụng) ở modal 'Xem/Sửa'. Chỉ nhận các
+    cột trong DU_LIEU_GCN_EDITABLE_FIELDS — cột khác trong body bị bỏ qua
+    im lặng (không phải lỗi, phòng trường hợp frontend gửi thừa field hiển
+    thị không cần sửa như file_*_ten_file)."""
+    row_id, error_response = _to_int_or_error(row_id_raw, "id")
+    if error_response:
+        return None, error_response
+    ma_xa = (ma_xa_raw or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+    so_to, error_response = _to_int_or_error(so_to_raw, "Số tờ")
+    if error_response:
+        return None, error_response
+    so_thua, error_response = _to_int_or_error(so_thua_raw, "Số thửa")
+    if error_response:
+        return None, error_response
+
+    if not isinstance(body, dict):
+        return None, (jsonify({"error": "Thiếu dữ liệu cần sửa"}), 400)
+    updates = {}
+    for field in DU_LIEU_GCN_EDITABLE_FIELDS:
+        if field in body:
+            value = body[field]
+            updates[field] = value.strip() or None if isinstance(value, str) else value
+    if not updates:
+        return None, (jsonify({"error": "Không có trường nào để sửa"}), 400)
+
+    key = _make_madvhc_soto_sothua(ma_xa, so_to, so_thua)
+    rows, error_response = gcn_repository.update_du_lieu_gcn_row(row_id, key, updates)
+    if error_response:
+        return None, error_response
+    if not rows:
+        return None, (
+            jsonify(
+                {
+                    "error": (
+                        "Không sửa được — có thể dòng này không phải nhập từ biểu Nhóm 4 "
+                        "(đồng bộ từ Google Sheet) hoặc id không khớp thửa đang xem."
+                    )
+                }
+            ),
+            409,
+        )
+    return {"item": rows[0]}, None
 
 
 def get_thong_ke_nguon_nhap():
