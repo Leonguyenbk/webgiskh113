@@ -1793,6 +1793,12 @@ as $$
             or t ~ 'cho thue dat.*tra tien (hang nam|mot lan)'
             or t ~ 'cnq.{0,3}(ktt|ctt)'
             or (t ~ 'cong nhan' and t ~ 'thu tien')
+            -- Đất Nhà nước giao để QUẢN LÝ (đất công ích/đất Nhà nước giao
+            -- UBND xã quản lý) — nguồn gốc có thật, khác hẳn đất hộ gia
+            -- đình/cá nhân ở các mục trên, trước đây không nằm trong danh
+            -- sách nên bị chặn oan (xem backend/scratch_apply_*nguon_goc*).
+            -- "nuo+c" chịu được lỗi gõ thừa nguyên âm (VD "nươớc" -> "nuooc").
+            or t ~ '(nha nuo+c|nn) giao.{0,10}quan ly'
         )
     from v
 $$;
