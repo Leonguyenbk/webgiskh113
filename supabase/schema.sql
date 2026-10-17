@@ -2038,11 +2038,12 @@ create table if not exists public.nhom3_trang_thai_cache (
     ma_dinh_danh text,
     la_nhom_1_2 boolean not null,
     da_thu_thap boolean not null,
-    -- true = đã có ÍT NHẤT 1 dòng du_lieu_gcn cho thửa này (nhưng có thể
-    -- chưa đạt đủ dữ liệu bắt buộc -> da_thu_thap vẫn false) — phân biệt
-    -- "đã nhập nhưng sai form" (co_nhap=true, da_thu_thap=false) với "chưa
-    -- nhập" (co_nhap=false) cho trang chi tiết/export (xem
-    -- nhom3_list_con_thieu bên dưới).
+    -- true = đã có ÍT NHẤT 1 dòng du_lieu_gcn cho thửa này. ĐÃ BỎ yêu cầu
+    -- "đạt chuẩn đủ dữ liệu" (nhom3_du_du_lieu) khỏi da_thu_thap — thửa đã
+    -- nhập là tính đã làm luôn, không siết thêm (yêu cầu người dùng) ->
+    -- co_nhap hiện LUÔN BẰNG da_thu_thap với thửa không thuộc Nhóm 1/2,
+    -- giữ 2 cột riêng để code/API cũ đọc co_nhap (vd phân Nhóm 1 đã/chưa
+    -- nhập biểu) không cần sửa thêm.
     co_nhap boolean not null default false,
     computed_at timestamptz not null default now(),
     constraint nhom3_trang_thai_cache_key primary key (ma_xa, so_to, so_thua)
@@ -2113,18 +2114,13 @@ begin
     -- luôn thấy 1 bộ đầy đủ (cũ hoặc mới), không có khoảng trống rỗng.
     insert into public.nhom3_trang_thai_cache
         (ma_xa, so_to, so_thua, ma_dinh_danh, la_nhom_1_2, da_thu_thap, co_nhap, computed_at)
-    with gcn_du_keys as (
-        -- Đọc thẳng cột lưu sẵn (xem du_lieu_gcn.nhom3_du_du_lieu +
-        -- trigger trg_nhom3_set_du_du_lieu dưới) thay vì gọi
-        -- _nhom3_gcn_du_du_lieu() per-row ở đây — tránh tính lại regex
-        -- trên toàn bộ bảng mỗi lần refresh.
-        select distinct g.madvhc_soto_sothua
-        from public.du_lieu_gcn g
-        where g.nhom3_du_du_lieu
-    ),
-    -- MỌI thửa có ít nhất 1 dòng du_lieu_gcn, bất kể đủ dữ liệu hay không
-    -- — dùng để phân biệt "đã nhập nhưng sai form" với "chưa nhập" (xem
-    -- co_nhap trên cột bảng).
+    with
+    -- MỌI thửa có ít nhất 1 dòng du_lieu_gcn, bất kể đủ dữ liệu hay không.
+    -- da_thu_thap = co_nhap: ĐÃ BỎ yêu cầu "đạt chuẩn đủ dữ liệu"
+    -- (nhom3_du_du_lieu) khỏi việc tính "đã làm" — thửa đã nhập biểu, có
+    -- trong danh sách gửi xã, là tính đã làm luôn, không siết thêm điều
+    -- kiện chất lượng nữa (yêu cầu người dùng). Cột nhom3_du_du_lieu vẫn
+    -- giữ lại trên du_lieu_gcn để dùng cho mục đích khác nếu cần sau này.
     gcn_any_keys as (
         select distinct g.madvhc_soto_sothua
         from public.du_lieu_gcn g
@@ -2137,7 +2133,7 @@ begin
     select
         t.ma_xa, t.so_to, t.so_thua, t.ma_dinh_danh,
         (n12.ma_xa is not null) as la_nhom_1_2,
-        (k.madvhc_soto_sothua is not null) as da_thu_thap,
+        (a.madvhc_soto_sothua is not null) as da_thu_thap,
         (a.madvhc_soto_sothua is not null) as co_nhap,
         v_now
     from public.nhom3_can_thu_thap t
@@ -2154,8 +2150,6 @@ begin
         on gc.ma_xa = t.ma_xa
     left join nhom12_keys n12
         on n12.ma_xa = t.ma_xa and n12.so_to = t.so_to and n12.so_thua = t.so_thua
-    left join gcn_du_keys k
-        on k.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
     left join gcn_any_keys a
         on a.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
     -- Thửa đã đánh dấu thuộc 1 ranh dự án (xem
