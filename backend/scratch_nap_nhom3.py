@@ -23,14 +23,24 @@ import psycopg2.extras
 
 from app.config import Config
 
-# "DANHSACHGUIXA/EA SUP": VPĐK gửi lại file THAY THẾ cho xã Ea Súp (đã nạp
-# trước đó cùng 4 xã khác trong huyện, xem commit 62c91a7) — ma_xa trong
-# file đã kiểm tra khớp đúng 24211. Không cần force_ma_xa. Xã này ĐANG có
-# 785 thửa đánh dấu thuoc_du_an (ranh dự án) — nhớ chạy lại UPDATE từ
-# nhom3_du_an_danh_dau sau khi nạp (xem scratch_apply_easup_restore_thuoc_du_an.py).
-_EASUP = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SUP"
+# "DANHSACHGUIXA/DS GIAO VỀ": VPĐK gửi lại file THAY THẾ cho 10 xã (5 xã
+# Tuy An - Phú Yên + 5 xã Ea Kar - Đắk Lắk) — ma_xa trong mỗi file đã kiểm
+# tra khớp đúng với mã trong tên file. Không cần force_ma_xa. Trong 10 xã
+# này chỉ có 24376 (Ea Knốp) đang có thửa đánh dấu thuoc_du_an (3 thửa, có
+# 6 dòng tracking trong nhom3_du_an_danh_dau) — nhớ chạy lại UPDATE từ
+# nhom3_du_an_danh_dau cho ma_xa='24376' sau khi nạp.
+_GIAOVE = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\DS GIAO VỀ"
 SRC_LIST = [
-    rf"{_EASUP}\24211_Xã Ea Súp.xlsx",
+    rf"{_GIAOVE}\22114_Xã Tuy An Bắc.xlsx",
+    rf"{_GIAOVE}\22120_Xã Tuy An Đông.xlsx",
+    rf"{_GIAOVE}\22132_Xã Tuy An Tây.xlsx",
+    rf"{_GIAOVE}\22147_Xã Ô Loan.xlsx",
+    rf"{_GIAOVE}\22153_Xã Tuy An Nam.xlsx",
+    rf"{_GIAOVE}\24373_Xã Ea Kar.xlsx",
+    rf"{_GIAOVE}\24376_Xã Ea Knốp.xlsx",
+    rf"{_GIAOVE}\24400_Xã Ea Păl.xlsx",
+    rf"{_GIAOVE}\24403_Xã Ea Ô.xlsx",
+    rf"{_GIAOVE}\24406_Xã Cư Yang.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
