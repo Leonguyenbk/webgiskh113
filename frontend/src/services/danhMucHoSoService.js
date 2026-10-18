@@ -12,9 +12,9 @@ export function getDanhMucHoSo(params, { signal } = {}) {
   });
 }
 
-export function kiemTraGcnDanhMuc(soSeriGcn, { signal } = {}) {
+export function kiemTraGcnDanhMuc(soSeriGcn, excludeId, { signal } = {}) {
   return request("/api/danhmuchoso/kiem-tra-gcn", {
-    params: { so_seri_gcn: soSeriGcn },
+    params: { so_seri_gcn: soSeriGcn, exclude_id: excludeId },
     signal,
     errorFallback: "Không kiểm tra được GCN",
   });
@@ -25,6 +25,14 @@ export function themDanhMucHoSo(payload) {
     method: "POST",
     body: payload,
     errorFallback: "Nhập hồ sơ thất bại",
+  });
+}
+
+export function capNhatDanhMucHoSo(id, payload) {
+  return request(`/api/danhmuchoso/${id}`, {
+    method: "PATCH",
+    body: payload,
+    errorFallback: "Cập nhật hồ sơ thất bại",
   });
 }
 

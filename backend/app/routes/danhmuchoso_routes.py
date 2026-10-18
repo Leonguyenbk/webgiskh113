@@ -25,7 +25,9 @@ def danhmuchoso_list():
 
 @danhmuchoso_bp.get("/api/danhmuchoso/kiem-tra-gcn")
 def danhmuchoso_kiem_tra_gcn():
-    data, error_response = danhmuchoso_service.kiem_tra_gcn(request.args.get("so_seri_gcn"))
+    data, error_response = danhmuchoso_service.kiem_tra_gcn(
+        request.args.get("so_seri_gcn"), request.args.get("exclude_id")
+    )
     if error_response:
         return error_response
     return jsonify(data)
@@ -38,6 +40,15 @@ def danhmuchoso_them():
     if error_response:
         return error_response
     return jsonify(data), 201
+
+
+@danhmuchoso_bp.patch("/api/danhmuchoso/<int:row_id>")
+def danhmuchoso_sua(row_id: int):
+    body = request.get_json(silent=True) or {}
+    data, error_response = danhmuchoso_service.cap_nhat_ho_so(row_id, body)
+    if error_response:
+        return error_response
+    return jsonify(data)
 
 
 @danhmuchoso_bp.get("/api/danhmuchoso/export")

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import {
+  capNhatDanhMucHoSo,
   exportDanhMucHoSo,
   getDanhMucHoSo,
   kiemTraGcnDanhMuc,
@@ -55,26 +56,26 @@ const FORM_EMPTY = {
   ghi_chu: "",
 };
 
-// Số sêri GCN: 1-2 chữ cái (kể cả "Đ") + khoảng trắng tuỳ chọn + 6-8 số —
-// khớp đúng quy tắc kiểm tra ở backend (danhmuchoso_service.py).
-const SO_SERI_GCN_RE = /^[A-ZĐ]{1,2}\s?\d{6,8}$/;
-
 function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
 }
 
-const NGUON_LABEL = {
+// 2 nguồn này KHÔNG còn chặn nhập — chỉ hiển thị để biết (đánh dấu "Đã có
+// trên VBDLis" khi lưu). Chỉ "da_co_trong_danh_muc" còn chặn (trùng ngay
+// trong chính danh mục này) — xem backend/app/services/danhmuchoso_service.py.
+const NGUON_VBDLIS_LABEL = {
   da_nhap_form_nhom4: "đã nhập form Nhóm 4",
   da_dong_bo_mplis: "đã đồng bộ từ MPLIS",
-  da_co_trong_danh_muc: "đã có trong danh mục hồ sơ",
 };
 
 // Trang "Danh mục hồ sơ lưu trữ" (theo mẫu DANHMUCHOSO/MAUFILE.xlsx) —
-// nhập + xem danh sách + tải Excel. Chặn nhập hồ sơ nếu Số sêri GCN đã
-// tồn tại trên hệ thống (đã nhập form Nhóm 4, đã đồng bộ MPLIS, hoặc đã
-// có trong chính danh mục này) — xem backend/app/services/danhmuchoso_service.py.
+// nhập + sửa + xem danh sách + tải Excel. GCN đã có dữ liệu điện tử nơi
+// khác (form Nhóm 4/MPLIS) vẫn cho nhập, chỉ đánh dấu cột "Đã có trên
+// VBDLis" — chỉ chặn khi số sêri GCN đã có SẴN TRONG CHÍNH danh mục này
+// (dùng nút Sửa thay vì nhập trùng dòng mới).
 export default function DanhMucHoSoPage({ onNavigateHome }) {
   const [form, setForm] = useState(FORM_EMPTY);
+  const [editingId, setEditingId] = useState(null); // null = đang thêm mới, số = đang sửa id này
   const [gcnCheck, setGcnCheck] = useState(null); // {ton_tai, ...} | null
   const [gcnChecking, setGcnChecking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -128,14 +129,11 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     const soSeriGcn = form.so_seri_gcn.trim().toUpperCase();
     if (!soSeriGcn) return;
     setFormError("");
-    if (!SO_SERI_GCN_RE.test(soSeriGcn)) {
-      setGcnCheck(null);
-      setFormError(`Số sêri GCN "${soSeriGcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").`);
-      return;
-    }
     setGcnChecking(true);
     try {
-      const result = await kiemTraGcnDanhMuc(soSeriGcn);
+      // Đang sửa: loại trừ chính dòng này khỏi kiểm tra "đã có trong danh
+      // mục" (không thì dòng nào cũng tự báo trùng với chính nó).
+      const result = await kiemTraGcnDanhMuc(soSeriGcn, editingId ?? undefined);
       setGcnCheck(result);
     } catch (err) {
       setGcnCheck(null);
@@ -145,11 +143,43 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     }
   };
 
-  const gcnNguon = gcnCheck
-    ? Object.entries(NGUON_LABEL)
+  const gcnNguonVbdlis = gcnCheck
+    ? Object.entries(NGUON_VBDLIS_LABEL)
         .filter(([key]) => gcnCheck[key])
         .map(([, label]) => label)
     : [];
+  const gcnBiChan = Boolean(gcnCheck?.da_co_trong_danh_muc);
+
+  const handleEditRow = (row) => {
+    setEditingId(row.id);
+    setForm({
+      nam: row.nam ?? "",
+      chi_nhanh: row.chi_nhanh || "",
+      cap: row.cap || "",
+      so_tt_ho_so: row.so_tt_ho_so || "",
+      ten_nguoi_su_dung_dat: row.ten_nguoi_su_dung_dat || "",
+      thua_dat_so_moi: row.thua_dat_so_moi || "",
+      ban_do_so_moi: row.ban_do_so_moi || "",
+      thua_dat_so_cu: row.thua_dat_so_cu || "",
+      ban_do_so_cu: row.ban_do_so_cu || "",
+      dia_chi_thua_dat: row.dia_chi_thua_dat || "",
+      so_seri_gcn: row.so_seri_gcn || "",
+      loai_ho_so: row.loai_ho_so || "",
+      ghi_chu: row.ghi_chu || "",
+    });
+    setGcnCheck(null);
+    setFormError("");
+    setFormNotice("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm(FORM_EMPTY);
+    setGcnCheck(null);
+    setFormError("");
+    setFormNotice("");
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -161,10 +191,6 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       setFormError("Thiếu số sêri GCN");
       return;
     }
-    if (!SO_SERI_GCN_RE.test(soSeriGcn)) {
-      setFormError(`Số sêri GCN "${soSeriGcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").`);
-      return;
-    }
     const coThuaMoi = form.thua_dat_so_moi.trim() && form.ban_do_so_moi.trim();
     const coThuaCu = form.thua_dat_so_cu.trim() && form.ban_do_so_cu.trim();
     if (!coThuaMoi && !coThuaCu) {
@@ -173,8 +199,14 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     }
     setSaving(true);
     try {
-      await themDanhMucHoSo({ ...form, so_seri_gcn: soSeriGcn });
-      setFormNotice(`Đã lưu hồ sơ — Số sêri GCN "${soSeriGcn}".`);
+      if (editingId) {
+        await capNhatDanhMucHoSo(editingId, { ...form, so_seri_gcn: soSeriGcn });
+        setFormNotice(`Đã cập nhật hồ sơ — Số sêri GCN "${soSeriGcn}".`);
+        setEditingId(null);
+      } else {
+        await themDanhMucHoSo({ ...form, so_seri_gcn: soSeriGcn });
+        setFormNotice(`Đã lưu hồ sơ — Số sêri GCN "${soSeriGcn}".`);
+      }
       // Giữ nguyên Năm + Chi nhánh cho lần nhập kế tiếp (thường nhập liên
       // tiếp nhiều hồ sơ cùng năm/cùng chi nhánh) — chỉ xóa các ô còn lại.
       setForm((prev) => ({ ...FORM_EMPTY, nam: prev.nam, chi_nhanh: prev.chi_nhanh }));
@@ -228,7 +260,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Danh mục hồ sơ lưu trữ</h1>
-          <p>Nhập &amp; tra cứu danh mục hồ sơ lưu trữ theo mẫu MAUFILE.xlsx — chặn nhập trùng số sêri GCN đã có trên hệ thống.</p>
+          <p>Nhập, sửa &amp; tra cứu danh mục hồ sơ lưu trữ theo mẫu MAUFILE.xlsx.</p>
         </div>
         <a
           className="backLink"
@@ -248,7 +280,9 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
               style={{ width: "80%", maxWidth: "80%", margin: "0 auto 16px" }}
               onSubmit={handleSubmit}
             >
-              <label style={{ fontSize: 16, marginBottom: 10, display: "block" }}>Nhập hồ sơ mới</label>
+              <label style={{ fontSize: 16, marginBottom: 10, display: "block" }}>
+                {editingId ? `Sửa hồ sơ #${editingId}` : "Nhập hồ sơ mới"}
+              </label>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
                 <div style={{ gridColumn: "span 2" }}>
@@ -260,7 +294,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                       className="filterInput"
                       style={fieldStyle}
                       required
-                      placeholder="VD: AL 642898"
+                      placeholder="VD: AL 642898 hoặc 09156461"
                       value={form.so_seri_gcn}
                       onChange={(event) => handleChangeField("so_seri_gcn", event.target.value)}
                       onBlur={handleCheckGcn}
@@ -276,12 +310,16 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   </div>
                   {gcnCheck && (
                     <div style={{ marginTop: 6, fontSize: 13 }}>
-                      {gcnCheck.ton_tai ? (
+                      {gcnBiChan ? (
                         <span style={{ color: "#c0392b" }}>
-                          ⚠ GCN này đã tồn tại ({gcnNguon.join(", ")}) — không thể nhập.
+                          ⚠ Số sêri GCN này đã có ở 1 hồ sơ khác trong danh mục — không thể lưu trùng, dùng nút Sửa ở dòng đó nếu cần cập nhật.
+                        </span>
+                      ) : gcnNguonVbdlis.length > 0 ? (
+                        <span style={{ color: "#b8860b" }}>
+                          ℹ GCN này đã có dữ liệu điện tử trên hệ thống ({gcnNguonVbdlis.join(", ")}) — vẫn lưu được, sẽ đánh dấu "Đã có trên VBDLis".
                         </span>
                       ) : (
-                        <span style={{ color: "#2e7d32" }}>✓ Chưa tồn tại, có thể nhập.</span>
+                        <span style={{ color: "#2e7d32" }}>✓ Chưa có ở đâu, có thể nhập.</span>
                       )}
                     </div>
                   )}
@@ -440,14 +478,21 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="downloadButton"
-                style={{ marginTop: 14, opacity: saving || gcnCheck?.ton_tai ? 0.6 : 1 }}
-                disabled={saving || gcnCheck?.ton_tai}
-              >
-                {saving ? "Đang lưu…" : "💾 Lưu hồ sơ"}
-              </button>
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                <button
+                  type="submit"
+                  className="downloadButton"
+                  style={{ opacity: saving || gcnBiChan ? 0.6 : 1 }}
+                  disabled={saving || gcnBiChan}
+                >
+                  {saving ? "Đang lưu…" : editingId ? "💾 Cập nhật hồ sơ" : "💾 Lưu hồ sơ"}
+                </button>
+                {editingId && (
+                  <button type="button" className="downloadButton" onClick={handleCancelEdit} disabled={saving}>
+                    Hủy sửa
+                  </button>
+                )}
+              </div>
 
               {formNotice && (
                 <div className="notice" style={{ marginTop: 10 }}>
@@ -601,12 +646,14 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                       <th>Số sêri GCN</th>
                       <th>Loại hồ sơ</th>
                       <th>Ghi chú</th>
+                      <th>Đã có trên VBDLis</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {!loading && items.length === 0 ? (
                       <tr>
-                        <td colSpan={13}>
+                        <td colSpan={15}>
                           {hasSearched ? "Không có hồ sơ phù hợp" : "Nhập điều kiện (hoặc để trống) rồi bấm \"Tìm kiếm\" để xem danh sách"}
                         </td>
                       </tr>
@@ -626,6 +673,12 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                           <td>{row.so_seri_gcn}</td>
                           <td>{row.loai_ho_so || ""}</td>
                           <td>{row.ghi_chu || ""}</td>
+                          <td style={{ textAlign: "center" }}>{row.da_co_tren_vbdlis ? "✓" : ""}</td>
+                          <td>
+                            <button type="button" className="nhom4MiniBtn" onClick={() => handleEditRow(row)}>
+                              ✏ Sửa
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}

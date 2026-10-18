@@ -2922,6 +2922,13 @@ create table if not exists public.danhmuchoso (
     so_seri_gcn text not null,
     loai_ho_so text,
     ghi_chu text,
+    -- true = tại thời điểm nhập (hoặc sửa gần nhất), GCN này đã có dữ liệu
+    -- điện tử trên hệ thống rồi (đã nhập form Nhóm 4 hoặc đã đồng bộ
+    -- MPLIS/VBDLis) — KHÔNG còn chặn nhập như trước nữa (yêu cầu người
+    -- dùng: hồ sơ giấy vẫn phải catalog dù dữ liệu đã có sẵn điện tử),
+    -- chỉ đánh dấu để biết. Tính tự động ở backend (xem
+    -- danhmuchoso_service.py), không phải cột người dùng tự tick.
+    da_co_tren_vbdlis boolean not null default false,
     tao_luc timestamptz not null default now(),
     constraint danhmuchoso_so_seri_gcn_key unique (so_seri_gcn)
 );
@@ -2930,7 +2937,13 @@ alter table public.danhmuchoso enable row level security;
 create index if not exists idx_danhmuchoso_nam on public.danhmuchoso (nam);
 create index if not exists idx_danhmuchoso_chi_nhanh on public.danhmuchoso (chi_nhanh);
 
-create or replace function public.danhmuchoso_kiem_tra_gcn(p_so_seri_gcn text)
+-- p_exclude_id: dùng khi KIỂM TRA LÚC SỬA 1 hồ sơ đã có (modal "Cập nhật
+-- hồ sơ") — loại trừ chính dòng đang sửa khỏi điều kiện "đã có trong danh
+-- mục" (nếu không, dòng nào cũng tự báo trùng với chính nó). Để null khi
+-- nhập hồ sơ mới (hành vi cũ, không đổi).
+drop function if exists public.danhmuchoso_kiem_tra_gcn(text);
+
+create or replace function public.danhmuchoso_kiem_tra_gcn(p_so_seri_gcn text, p_exclude_id bigint default null)
 returns jsonb
 language sql
 stable
@@ -2946,22 +2959,31 @@ as $$
             select 1 from public.dong_bo_du_lieu x, gcn where trim(x.so_gcn_mplis) = gcn.g and gcn.g <> ''
         ),
         'da_co_trong_danh_muc', exists (
-            select 1 from public.danhmuchoso x, gcn where trim(x.so_seri_gcn) = gcn.g and gcn.g <> ''
+            select 1 from public.danhmuchoso x, gcn
+            where trim(x.so_seri_gcn) = gcn.g and gcn.g <> ''
+              and (p_exclude_id is null or x.id <> p_exclude_id)
         )
     ) || jsonb_build_object(
         'ton_tai', (
             exists (select 1 from public.du_lieu_gcn x, gcn where trim(x.sophathanhgcn) = gcn.g and gcn.g <> '')
             or exists (select 1 from public.dong_bo_du_lieu x, gcn where trim(x.so_gcn_mplis) = gcn.g and gcn.g <> '')
-            or exists (select 1 from public.danhmuchoso x, gcn where trim(x.so_seri_gcn) = gcn.g and gcn.g <> '')
+            or exists (
+                select 1 from public.danhmuchoso x, gcn
+                where trim(x.so_seri_gcn) = gcn.g and gcn.g <> ''
+                  and (p_exclude_id is null or x.id <> p_exclude_id)
+            )
         )
     );
 $$;
 
-revoke all on function public.danhmuchoso_kiem_tra_gcn(text) from public;
-grant execute on function public.danhmuchoso_kiem_tra_gcn(text) to service_role;
+revoke all on function public.danhmuchoso_kiem_tra_gcn(text, bigint) from public;
+grant execute on function public.danhmuchoso_kiem_tra_gcn(text, bigint) to service_role;
 
 drop function if exists public.danhmuchoso_them(
     integer, text, text, text, text, text, text, text, text, text, text, text
+);
+drop function if exists public.danhmuchoso_them(
+    integer, text, text, text, text, text, text, text, text, text, text, text, text
 );
 
 create or replace function public.danhmuchoso_them(
@@ -2977,7 +2999,8 @@ create or replace function public.danhmuchoso_them(
     p_dia_chi_thua_dat text,
     p_so_seri_gcn text,
     p_loai_ho_so text,
-    p_ghi_chu text
+    p_ghi_chu text,
+    p_da_co_tren_vbdlis boolean default false
 )
 returns public.danhmuchoso
 language sql
@@ -2987,20 +3010,74 @@ as $$
     insert into public.danhmuchoso (
         nam, chi_nhanh, cap, so_tt_ho_so, ten_nguoi_su_dung_dat,
         thua_dat_so_moi, ban_do_so_moi, thua_dat_so_cu, ban_do_so_cu,
-        dia_chi_thua_dat, so_seri_gcn, loai_ho_so, ghi_chu
+        dia_chi_thua_dat, so_seri_gcn, loai_ho_so, ghi_chu, da_co_tren_vbdlis
     ) values (
         p_nam, p_chi_nhanh, p_cap, p_so_tt_ho_so, p_ten_nguoi_su_dung_dat,
         p_thua_dat_so_moi, p_ban_do_so_moi, p_thua_dat_so_cu, p_ban_do_so_cu,
-        p_dia_chi_thua_dat, trim(p_so_seri_gcn), p_loai_ho_so, p_ghi_chu
+        p_dia_chi_thua_dat, trim(p_so_seri_gcn), p_loai_ho_so, p_ghi_chu, coalesce(p_da_co_tren_vbdlis, false)
     )
     returning *;
 $$;
 
 revoke all on function public.danhmuchoso_them(
-    integer, text, text, text, text, text, text, text, text, text, text, text, text
+    integer, text, text, text, text, text, text, text, text, text, text, text, text, boolean
 ) from public;
 grant execute on function public.danhmuchoso_them(
-    integer, text, text, text, text, text, text, text, text, text, text, text, text
+    integer, text, text, text, text, text, text, text, text, text, text, text, text, boolean
+) to service_role;
+
+-- Sửa 1 hồ sơ đã nhập (nút "✏ Sửa" ở bảng danh mục) — nhận đủ các cột
+-- như danhmuchoso_them (FE gửi lại nguyên form đã điền sẵn dữ liệu cũ,
+-- không phải partial update) + p_id để xác định dòng. UNIQUE
+-- (so_seri_gcn) vẫn là lưới an toàn cuối nếu đổi sang số đã có ở dòng
+-- khác (service layer đã kiểm tra trước qua danhmuchoso_kiem_tra_gcn với
+-- p_exclude_id = p_id).
+create or replace function public.danhmuchoso_cap_nhat(
+    p_id bigint,
+    p_nam integer,
+    p_chi_nhanh text,
+    p_cap text,
+    p_so_tt_ho_so text,
+    p_ten_nguoi_su_dung_dat text,
+    p_thua_dat_so_moi text,
+    p_ban_do_so_moi text,
+    p_thua_dat_so_cu text,
+    p_ban_do_so_cu text,
+    p_dia_chi_thua_dat text,
+    p_so_seri_gcn text,
+    p_loai_ho_so text,
+    p_ghi_chu text,
+    p_da_co_tren_vbdlis boolean default false
+)
+returns public.danhmuchoso
+language sql
+security definer
+set search_path = public, extensions
+as $$
+    update public.danhmuchoso set
+        nam = p_nam,
+        chi_nhanh = p_chi_nhanh,
+        cap = p_cap,
+        so_tt_ho_so = p_so_tt_ho_so,
+        ten_nguoi_su_dung_dat = p_ten_nguoi_su_dung_dat,
+        thua_dat_so_moi = p_thua_dat_so_moi,
+        ban_do_so_moi = p_ban_do_so_moi,
+        thua_dat_so_cu = p_thua_dat_so_cu,
+        ban_do_so_cu = p_ban_do_so_cu,
+        dia_chi_thua_dat = p_dia_chi_thua_dat,
+        so_seri_gcn = trim(p_so_seri_gcn),
+        loai_ho_so = p_loai_ho_so,
+        ghi_chu = p_ghi_chu,
+        da_co_tren_vbdlis = coalesce(p_da_co_tren_vbdlis, false)
+    where id = p_id
+    returning *;
+$$;
+
+revoke all on function public.danhmuchoso_cap_nhat(
+    bigint, integer, text, text, text, text, text, text, text, text, text, text, text, text, boolean
+) from public;
+grant execute on function public.danhmuchoso_cap_nhat(
+    bigint, integer, text, text, text, text, text, text, text, text, text, text, text, text, boolean
 ) to service_role;
 
 drop function if exists public.danhmuchoso_list(integer, integer, text, integer);

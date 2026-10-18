@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import os
-import re
 
 from flask import jsonify
 from openpyxl import load_workbook
@@ -12,9 +11,9 @@ from ..repositories import danhmuchoso_repository
 _DEFAULT_LIMIT = 100
 _MAX_LIMIT = 500
 
-# Số sêri GCN: 1-2 chữ cái (kể cả "Đ") + khoảng trắng tuỳ chọn + 6-8 số —
-# ví dụ "AL 642898", "AA 09156461", "G 726997", "BĐ 833644".
-_SO_SERI_GCN_RE = re.compile(r"^[A-ZĐ]{1,2}\s?\d{6,8}$")
+# ĐÃ BỎ regex bắt buộc "1-2 chữ cái + 6-8 số" (yêu cầu người dùng: có GCN
+# số phát hành toàn là số, không có chữ cái đầu) — số sêri GCN giờ nhập tự
+# do, chỉ cần không rỗng.
 
 # Tất cả các trường đều bắt buộc khi nhập 1 hồ sơ (yêu cầu người dùng) —
 # TRỪ "Ghi chú" (không bắt buộc) và cặp "Thửa/Bản đồ (Mới)"/"Thửa/Bản đồ
@@ -51,12 +50,10 @@ _MAU_COLUMNS = [
     "chi_nhanh",
 ]
 _MAU_CHI_NHANH_COL = len(_MAU_COLUMNS)  # cột L
-
-_NGUON_LABEL = {
-    "da_nhap_form_nhom4": "đã nhập form Nhóm 4",
-    "da_dong_bo_mplis": "đã đồng bộ từ MPLIS",
-    "da_co_trong_danh_muc": "đã có trong danh mục hồ sơ",
-}
+# Cột M "Đã có trên VBDLis" — thêm sau cùng, như chi_nhanh, tự ghi thêm
+# header ở dòng 2 (xem export_xlsx), không đụng layout 11 cột gốc.
+_MAU_COLUMNS.append("da_co_tren_vbdlis")
+_MAU_VBDLIS_COL = len(_MAU_COLUMNS)  # cột M
 
 
 def _int_or_none(raw):
@@ -68,35 +65,25 @@ def _int_or_none(raw):
         return None
 
 
-def kiem_tra_gcn(so_seri_gcn_raw: str | None):
+def kiem_tra_gcn(so_seri_gcn_raw: str | None, exclude_id_raw: str | None = None):
     so_seri_gcn = (so_seri_gcn_raw or "").strip().upper()
     if not so_seri_gcn:
         return None, (jsonify({"error": "Thiếu số sêri GCN"}), 400)
-    if not _SO_SERI_GCN_RE.match(so_seri_gcn):
-        return None, (
-            jsonify(
-                {"error": f'Số sêri GCN "{so_seri_gcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").'}
-            ),
-            400,
-        )
 
-    result, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn)
+    exclude_id = _int_or_none(exclude_id_raw)
+    result, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn, exclude_id)
     if error_response:
         return None, error_response
     return result or {"ton_tai": False}, None
 
 
-def them_ho_so(body: dict):
+def _validate_body(body: dict):
+    """Kiểm tra các trường bắt buộc + cặp Thửa/Bản đồ — dùng chung cho
+    them_ho_so và cap_nhat_ho_so. Trả (so_seri_gcn, None) nếu hợp lệ, hoặc
+    (None, error_response)."""
     so_seri_gcn = str(body.get("so_seri_gcn") or "").strip().upper()
     if not so_seri_gcn:
         return None, (jsonify({"error": "Thiếu số sêri GCN"}), 400)
-    if not _SO_SERI_GCN_RE.match(so_seri_gcn):
-        return None, (
-            jsonify(
-                {"error": f'Số sêri GCN "{so_seri_gcn}" không đúng định dạng — phải là 1-2 chữ cái kèm 6-8 số (ví dụ "AL 642898").'}
-            ),
-            400,
-        )
 
     if body.get("nam") in (None, ""):
         return None, (jsonify({"error": "Thiếu Năm"}), 400)
@@ -122,23 +109,11 @@ def them_ho_so(body: dict):
             ),
             400,
         )
+    return so_seri_gcn, None
 
-    kiem_tra, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn)
-    if error_response:
-        return None, error_response
-    if kiem_tra and kiem_tra.get("ton_tai"):
-        nguon = [label for key, label in _NGUON_LABEL.items() if kiem_tra.get(key)]
-        return None, (
-            jsonify(
-                {
-                    "error": f"GCN \"{so_seri_gcn}\" đã tồn tại trên hệ thống ({', '.join(nguon)}) — không thể nhập lại.",
-                    "chi_tiet": kiem_tra,
-                }
-            ),
-            409,
-        )
 
-    payload = {
+def _payload_tu_body(body: dict, so_seri_gcn: str, da_co_tren_vbdlis: bool) -> dict:
+    return {
         "nam": _int_or_none(body.get("nam")),
         "chi_nhanh": body.get("chi_nhanh"),
         "cap": body.get("cap"),
@@ -152,10 +127,75 @@ def them_ho_so(body: dict):
         "so_seri_gcn": so_seri_gcn,
         "loai_ho_so": body.get("loai_ho_so"),
         "ghi_chu": body.get("ghi_chu"),
+        "da_co_tren_vbdlis": da_co_tren_vbdlis,
     }
+
+
+def them_ho_so(body: dict):
+    so_seri_gcn, error_response = _validate_body(body)
+    if error_response:
+        return None, error_response
+
+    # KHÔNG còn chặn nhập khi GCN đã có dữ liệu điện tử ở nơi khác (đã
+    # nhập form Nhóm 4 / đã đồng bộ MPLIS-VBDLis) — yêu cầu người dùng: hồ
+    # sơ giấy vẫn phải catalog dù dữ liệu đã có sẵn, chỉ đánh dấu
+    # da_co_tren_vbdlis để biết. CHỈ chặn khi GCN đã có SẴN TRONG CHÍNH
+    # danh mục này (duplicate catalog thật sự) — dùng tính năng "Sửa" thay
+    # vì tạo dòng mới trùng.
+    kiem_tra, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn)
+    if error_response:
+        return None, error_response
+    kiem_tra = kiem_tra or {}
+    if kiem_tra.get("da_co_trong_danh_muc"):
+        return None, (
+            jsonify(
+                {
+                    "error": f"GCN \"{so_seri_gcn}\" đã có trong danh mục hồ sơ rồi — dùng tính năng Sửa nếu cần cập nhật, không nhập lại dòng mới.",
+                    "chi_tiet": kiem_tra,
+                }
+            ),
+            409,
+        )
+    da_co_tren_vbdlis = bool(kiem_tra.get("da_nhap_form_nhom4")) or bool(kiem_tra.get("da_dong_bo_mplis"))
+
+    payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis)
     result, error_response = danhmuchoso_repository.them(payload)
     if error_response:
         return None, error_response
+    return result, None
+
+
+def cap_nhat_ho_so(row_id_raw, body: dict):
+    row_id = _int_or_none(row_id_raw)
+    if row_id is None:
+        return None, (jsonify({"error": "id không hợp lệ"}), 400)
+
+    so_seri_gcn, error_response = _validate_body(body)
+    if error_response:
+        return None, error_response
+
+    kiem_tra, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn, row_id)
+    if error_response:
+        return None, error_response
+    kiem_tra = kiem_tra or {}
+    if kiem_tra.get("da_co_trong_danh_muc"):
+        return None, (
+            jsonify(
+                {
+                    "error": f"GCN \"{so_seri_gcn}\" đã có ở 1 hồ sơ khác trong danh mục — không thể đổi sang số này.",
+                    "chi_tiet": kiem_tra,
+                }
+            ),
+            409,
+        )
+    da_co_tren_vbdlis = bool(kiem_tra.get("da_nhap_form_nhom4")) or bool(kiem_tra.get("da_dong_bo_mplis"))
+
+    payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis)
+    result, error_response = danhmuchoso_repository.cap_nhat(row_id, payload)
+    if error_response:
+        return None, error_response
+    if not result:
+        return None, (jsonify({"error": f"Không tìm thấy hồ sơ id={row_id}"}), 404)
     return result, None
 
 
@@ -183,6 +223,8 @@ def get_danh_sach(limit_raw, offset_raw, keyword_raw, nam_raw, chi_nhanh_raw=Non
 def _xlsx_cell(value):
     if value is None:
         return ""
+    if isinstance(value, bool):
+        return "x" if value else ""
     return value
 
 
@@ -213,8 +255,10 @@ def export_xlsx(nam_raw: str | None, keyword_raw: str | None, chi_nhanh_raw: str
         return None, (jsonify({"error": "Thiếu file mẫu MAUFILE.xlsx trên server"}), 500)
     ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
 
-    # Cột L "Chi nhánh" — thêm sau cùng, ngoài 11 cột mẫu gốc.
+    # Cột L "Chi nhánh", cột M "Đã có trên VBDLis" — thêm sau cùng, ngoài
+    # 11 cột mẫu gốc.
     ws.cell(row=2, column=_MAU_CHI_NHANH_COL, value="Chi nhánh")
+    ws.cell(row=2, column=_MAU_VBDLIS_COL, value="Đã có trên VBDLis")
 
     if nam:
         # Tiêu đề mẫu: "DANH MỤC HỒ SƠ LƯU TRỮ NĂM ….." — thay phần sau
