@@ -23,16 +23,14 @@ import psycopg2.extras
 
 from app.config import Config
 
-# "DANHSACHGUIXA/SONGHINH": VPĐK gửi lại file THAY THẾ cho 4 xã khu vực
-# Sông Hinh (đã nạp trước đó từ DANHSACHGUIXA/Xa, xem commit 266eca4) —
-# ma_xa trong từng file đã kiểm tra khớp đúng tên: Sông Hinh=22207,
-# Đức Bình=22222, Ea Bá=22225, Ea Ly=22237. Không cần force_ma_xa.
-_SONGHINH = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\SONGHINH"
+# "DANHSACHGUIXA/EA SUP": VPĐK gửi lại file THAY THẾ cho xã Ea Súp (đã nạp
+# trước đó cùng 4 xã khác trong huyện, xem commit 62c91a7) — ma_xa trong
+# file đã kiểm tra khớp đúng 24211. Không cần force_ma_xa. Xã này ĐANG có
+# 785 thửa đánh dấu thuoc_du_an (ranh dự án) — nhớ chạy lại UPDATE từ
+# nhom3_du_an_danh_dau sau khi nạp (xem scratch_apply_easup_restore_thuoc_du_an.py).
+_EASUP = r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SUP"
 SRC_LIST = [
-    rf"{_SONGHINH}\22207_Xã Sông Hinh.xlsx",
-    rf"{_SONGHINH}\22222_Xã Đức Bình.xlsx",
-    rf"{_SONGHINH}\22225_Xã Ea Bá.xlsx",
-    rf"{_SONGHINH}\22237_Xã Ea Ly.xlsx",
+    rf"{_EASUP}\24211_Xã Ea Súp.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
