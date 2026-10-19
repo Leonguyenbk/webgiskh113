@@ -733,6 +733,17 @@ label[for="mplisCookie"] {
 .statsTable tbody tr:hover { background: #f1f7f5; }
 .statsTable tbody tr.active { background: #dbefeb; }
 
+/* Trang /nhom-3-con-thieu: viền kẻ ô + tô màu xen kẽ theo dòng (yêu cầu
+   người dùng: dễ dò theo hàng ngang trên bảng nhiều cột) — chỉ áp riêng
+   bảng này (qua class thêm kèm .statsTable), không đụng các trang khác
+   đang dùng chung .statsTable (Danh mục hồ sơ, GCN Dashboard...). */
+.nhom3TongHopTable th,
+.nhom3TongHopTable td {
+  border: 1px solid #d8e5e2;
+}
+.nhom3TongHopTable tbody tr:nth-child(even) { background: #f3f8f6; }
+.nhom3TongHopTable tbody tr:nth-child(even):hover { background: #e7f1ee; }
+
 .statsTableBar { display: flex; align-items: center; gap: 8px; }
 .statsTableBarTrack {
   position: relative;

@@ -417,7 +417,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         "Nhóm 1 đã nhập biểu (Xã làm)", "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)",
         "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Chưa liên kết không gian",
         "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", "% (trừ cả chưa liên kết KG)",
-        "Tổng theo kế hoạch (đã gồm Loại 1 đã làm)", "% theo kế hoạch",
+        "Tổng theo kế hoạch (đã gồm Loại 1 đã làm)", "Đã thực hiện theo kế hoạch", "% theo kế hoạch",
         "Ghi chú",
     ])
 
@@ -464,6 +464,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
             tong_tru_kg,
             f"{percent_tru_kg}%" if percent_tru_kg is not None else "",
             tong_ke_hoach,
+            da_lam_ke_hoach,
             f"{percent_ke_hoach}%" if percent_ke_hoach is not None else "",
             _xlsx_cell(row.get("ghi_chu")),
         ])
@@ -484,6 +485,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         tong_tru_kg_chung,
         f"{percent_tru_kg_chung}%" if percent_tru_kg_chung is not None else "",
         tong_ke_hoach_chung,
+        da_lam_ke_hoach_chung,
         f"{percent_ke_hoach_chung}%" if percent_ke_hoach_chung is not None else "",
         "",
     ])

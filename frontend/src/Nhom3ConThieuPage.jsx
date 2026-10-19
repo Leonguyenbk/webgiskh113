@@ -43,6 +43,7 @@ const SORT_COLUMNS = [
   { key: "tong_tru_kg", label: "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "percent_tru_kg", label: "% (trừ cả chưa liên kết KG)", type: "number", defaultDir: "asc", group: "loai4" },
   { key: "tong_ke_hoach", label: "Tổng danh sách theo kế hoạch (đã gồm Loại 1 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
+  { key: "da_lam_ke_hoach", label: "Đã thực hiện theo kế hoạch", type: "number", defaultDir: "desc", group: "ke_hoach" },
   { key: "percent_ke_hoach", label: "Tỷ lệ theo kế hoạch", type: "number", defaultDir: "asc", group: "ke_hoach" },
 ];
 
@@ -377,7 +378,7 @@ export default function Nhom3ConThieuPage({
               )}
 
               <div className="statsTableWrap">
-                <table className="statsTable">
+                <table className="statsTable nhom3TongHopTable">
                   <thead>
                     <tr>
                       <th rowSpan={2} style={{ verticalAlign: "bottom" }}>
@@ -471,6 +472,7 @@ export default function Nhom3ConThieuPage({
                             <td style={{ background: KE_HOACH_BG, borderLeft: KE_HOACH_BORDER }}>
                               {formatSo(row.tong_ke_hoach)}
                             </td>
+                            <td style={{ background: KE_HOACH_BG }}>{formatSo(row.da_lam_ke_hoach)}</td>
                             <td style={{ background: KE_HOACH_BG }}>{row.percent_ke_hoach}%</td>
                             <td style={{ textAlign: "center" }}>
                               <button
