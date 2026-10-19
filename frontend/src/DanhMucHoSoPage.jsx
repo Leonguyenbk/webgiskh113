@@ -578,7 +578,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
 
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
                 <div>
-                  <label htmlFor="dmhsImportNam">Năm (chỉ cần nếu file chưa ghi Năm ở tiêu đề)</label>
+                  <label htmlFor="dmhsImportNam">Năm (chỉ cần nếu dòng/tiêu đề chưa có Năm)</label>
                   <input
                     id="dmhsImportNam"
                     type="number"
@@ -644,7 +644,8 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
               {importResult && (
                 <div className="notice" style={{ marginTop: 10 }}>
                   <span>
-                    Năm {importResult.nam} — đọc {formatSo(importResult.tong_dong_doc)} dòng — lưu thành công{" "}
+                    {importResult.cac_nam_da_dung?.length > 0 && `Năm ${importResult.cac_nam_da_dung.join(", ")} — `}
+                    Đọc {formatSo(importResult.tong_dong_doc)} dòng — lưu thành công{" "}
                     {formatSo(importResult.thanh_cong)} dòng
                     {importResult.trung_danh_muc > 0 &&
                       ` (trong đó ${formatSo(importResult.trung_danh_muc)} dòng trùng GCN đã có sẵn trong danh mục, vẫn lưu thêm để ghi nhận lịch sử)`}

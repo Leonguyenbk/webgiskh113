@@ -33,10 +33,13 @@ _REQUIRED_FIELDS = [
 _MAU_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "MAUFILE.xlsx")
 _MAU_SHEET = "Sheet1"
 _MAU_FIRST_DATA_ROW = 4
-# Cột A..K của MAUFILE.xlsx, đúng thứ tự merge header (xem DANHMUCHOSO/MAUFILE.xlsx).
-# Cột L (chi_nhanh) KHÔNG có trong mẫu gốc — thêm sau cùng, tự ghi thêm
-# header ở dòng 2 (xem export_xlsx), không đụng layout 11 cột gốc.
+# Cột A..L của MAUFILE.xlsx, đúng thứ tự merge header (xem DANHMUCHOSO/MAUFILE.xlsx)
+# — bản mẫu mới thêm cột "Năm" riêng ở đầu (cột A, trước là chỉ ghi ở
+# tiêu đề), đẩy các cột còn lại dịch phải 1 cột so với bản cũ.
+# Cột M (chi_nhanh) KHÔNG có trong mẫu gốc — thêm sau cùng, tự ghi thêm
+# header ở dòng 2 (xem export_xlsx), không đụng layout 12 cột gốc.
 _MAU_COLUMNS = [
+    "nam",
     "cap",
     "so_tt_ho_so",
     "ten_nguoi_su_dung_dat",
@@ -50,11 +53,11 @@ _MAU_COLUMNS = [
     "ghi_chu",
     "chi_nhanh",
 ]
-_MAU_CHI_NHANH_COL = len(_MAU_COLUMNS)  # cột L
-# Cột M "Đã có trên VBDLis" — thêm sau cùng, như chi_nhanh, tự ghi thêm
-# header ở dòng 2 (xem export_xlsx), không đụng layout 11 cột gốc.
+_MAU_CHI_NHANH_COL = len(_MAU_COLUMNS)  # cột M
+# Cột N "Đã có trên VBDLis" — thêm sau cùng, như chi_nhanh, tự ghi thêm
+# header ở dòng 2 (xem export_xlsx), không đụng layout 12 cột gốc.
 _MAU_COLUMNS.append("da_co_tren_vbdlis")
-_MAU_VBDLIS_COL = len(_MAU_COLUMNS)  # cột M
+_MAU_VBDLIS_COL = len(_MAU_COLUMNS)  # cột N
 
 
 def _int_or_none(raw):
@@ -327,9 +330,12 @@ def _nam_tu_tieu_de(ws) -> int | None:
 
 def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | None = None):
     """Nhập hàng loạt từ file .xlsx đúng layout mẫu MAUFILE.xlsx (cột
-    A..K, dữ liệu từ dòng 4) — "Năm" ưu tiên tự đọc từ tiêu đề dòng 1
-    (xem _nam_tu_tieu_de), chỉ dùng nam_raw (chọn tay) khi không đọc
-    được. "Chi nhánh" lấy theo cột L nếu dòng đó có giá trị (file xuất
+    A..L, dữ liệu từ dòng 4) — "Năm" đọc theo TỪNG DÒNG ở cột A (bản mẫu
+    mới, 1 file có thể gồm nhiều năm khác nhau). Dòng nào bỏ trống cột
+    Năm thì lấy theo tiêu đề dòng 1 (xem _nam_tu_tieu_de, bản mẫu cũ chỉ
+    có 1 năm/file), rồi mới tới nam_raw (chọn tay cho cả đợt) — dòng nào
+    không có năm từ cả 3 nguồn thì báo lỗi riêng dòng đó, không chặn cả
+    batch. "Chi nhánh" lấy theo cột M nếu dòng đó có giá trị (file xuất
     lại từ hệ thống, xem export_xlsx), ngược lại dùng giá trị chọn chung
     cho cả đợt nhập. GCN đã có sẵn trong danh mục KHÔNG bị chặn — vẫn
     nhập thêm để ghi nhận lịch sử (yêu cầu người dùng), chỉ báo lại số
@@ -342,22 +348,15 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
         return None, (jsonify({"error": "Không đọc được file .xlsx — kiểm tra lại file"}), 400)
     ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
 
-    nam = _nam_tu_tieu_de(ws) or _int_or_none(nam_raw)
-    if nam is None:
-        return None, (
-            jsonify(
-                {
-                    "error": "File chưa ghi Năm ở tiêu đề (dòng 1, VD \"...NĂM 2026\") — chọn Năm thủ công rồi nhập lại."
-                }
-            ),
-            400,
-        )
+    nam_tieu_de = _nam_tu_tieu_de(ws)
+    nam_chon_tay = _int_or_none(nam_raw)
     chi_nhanh_chung = (chi_nhanh_raw or "").strip() or None
 
     thanh_cong = 0
     trung_danh_muc = 0
     loi: list[dict] = []
     so_dong_doc = 0
+    cac_nam_da_dung: set[int] = set()
 
     for offset, row in enumerate(
         ws.iter_rows(min_row=_MAU_FIRST_DATA_ROW, max_col=_MAU_VBDLIS_COL, values_only=True)
@@ -366,27 +365,37 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
             loi.append({"dong": _MAU_FIRST_DATA_ROW + offset, "loi": f"Vượt quá {_IMPORT_MAX_ROWS} dòng, dừng đọc"})
             break
         values = list(row) + [None] * (_MAU_VBDLIS_COL - len(row))
-        core = values[:11]
+        core = values[:12]
         if not any(_xlsx_text(v) for v in core):
             continue  # dòng trống, bỏ qua không tính lỗi
 
         so_dong_doc += 1
         so_dong_file = _MAU_FIRST_DATA_ROW + offset
+
+        nam_dong = _int_or_none(core[0]) or nam_tieu_de or nam_chon_tay
+        if nam_dong is None:
+            loi.append({
+                "dong": so_dong_file,
+                "loi": "Thiếu Năm — không có ở cột Năm, tiêu đề file lẫn ô chọn thủ công.",
+            })
+            continue
+        cac_nam_da_dung.add(nam_dong)
+
         chi_nhanh_dong = _xlsx_text(values[_MAU_CHI_NHANH_COL - 1]) or chi_nhanh_chung
         body = {
-            "nam": nam,
+            "nam": nam_dong,
             "chi_nhanh": chi_nhanh_dong,
-            "cap": _xlsx_text(core[0]),
-            "so_tt_ho_so": _xlsx_text(core[1]),
-            "ten_nguoi_su_dung_dat": _xlsx_text(core[2]),
-            "thua_dat_so_moi": _xlsx_text(core[3]),
-            "ban_do_so_moi": _xlsx_text(core[4]),
-            "thua_dat_so_cu": _xlsx_text(core[5]),
-            "ban_do_so_cu": _xlsx_text(core[6]),
-            "dia_chi_thua_dat": _xlsx_text(core[7]),
-            "so_seri_gcn": _xlsx_text(core[8]),
-            "loai_ho_so": _xlsx_text(core[9]),
-            "ghi_chu": _xlsx_text(core[10]),
+            "cap": _xlsx_text(core[1]),
+            "so_tt_ho_so": _xlsx_text(core[2]),
+            "ten_nguoi_su_dung_dat": _xlsx_text(core[3]),
+            "thua_dat_so_moi": _xlsx_text(core[4]),
+            "ban_do_so_moi": _xlsx_text(core[5]),
+            "thua_dat_so_cu": _xlsx_text(core[6]),
+            "ban_do_so_cu": _xlsx_text(core[7]),
+            "dia_chi_thua_dat": _xlsx_text(core[8]),
+            "so_seri_gcn": _xlsx_text(core[9]),
+            "loai_ho_so": _xlsx_text(core[10]),
+            "ghi_chu": _xlsx_text(core[11]),
         }
 
         _result, error_response, da_trung = _them_mot_dong(body, bo_qua_trung_danh_muc=True)
@@ -402,7 +411,7 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
             trung_danh_muc += 1
 
     return {
-        "nam": nam,
+        "cac_nam_da_dung": sorted(cac_nam_da_dung),
         "tong_dong_doc": so_dong_doc,
         "thanh_cong": thanh_cong,
         "trung_danh_muc": trung_danh_muc,
