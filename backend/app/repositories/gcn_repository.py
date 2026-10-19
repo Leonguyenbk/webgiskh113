@@ -99,6 +99,16 @@ def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int, co_nhap: bo
     )
 
 
+def nhom3_list_tong_gui_xa(ma_xa: str | None, limit: int, offset: int):
+    # Danh sách "tổng gửi xã" (đã trừ Nhóm 1/2 chưa nhập của Chi nhánh KV)
+    # kèm ghi chú trạng thái từng thửa — xem public.nhom3_list_tong_gui_xa.
+    return supabase_client.call_rpc(
+        "nhom3_list_tong_gui_xa",
+        {"p_ma_xa": ma_xa, "p_limit": limit, "p_offset": offset},
+        timeout=25,
+    )
+
+
 def nhom3_list_nhom1_chua_nhap(ma_xa: str | None, limit: int, offset: int):
     # Thửa đã thuộc Nhóm 1 (phan_loai_ke_hoach_2959) nhưng CHƯA có dòng
     # du_lieu_gcn nào (co_nhap=false) — nhóm này do Chi nhánh khu vực làm

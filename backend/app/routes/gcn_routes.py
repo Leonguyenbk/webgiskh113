@@ -166,8 +166,9 @@ def gcn_export_theo_nhom():
 
 @gcn_bp.get("/api/nhom3-con-thieu/export")
 def nhom3_con_thieu_export():
-    # Xuất .xlsx danh sách thửa Nhóm 3 còn thiếu dữ liệu của 1 xã — mã xã,
-    # số tờ, số thửa, mã định danh, ghi chú. ?ma_xa=<mã xã>
+    # Xuất .xlsx danh sách "tổng gửi xã" (đã trừ Nhóm 1/2 Chi nhánh KV
+    # chưa nhập) của 1 xã — mã xã, số tờ, số thửa, mã định danh, ghi chú
+    # trạng thái từng thửa. ?ma_xa=<mã xã>
     result, error_response = gcn_service.export_nhom3_con_thieu_xlsx(
         request.args.get("ma_xa", "")
     )
@@ -195,22 +196,6 @@ def nhom3_con_thieu_danh_sach_nhom1_chua_nhap():
     return jsonify(data)
 
 
-@gcn_bp.get("/api/nhom3-con-thieu/export-nhom1-chua-nhap")
-def nhom3_con_thieu_export_nhom1_chua_nhap():
-    # Xuất .xlsx danh sách thửa Nhóm 1 chưa nhập biểu của 1 xã. ?ma_xa=<mã xã>
-    result, error_response = gcn_service.export_nhom3_nhom1_chua_nhap_xlsx(
-        request.args.get("ma_xa", "")
-    )
-    if error_response:
-        return error_response
-    content, filename = result
-    return Response(
-        content,
-        mimetype=_XLSX_MIME,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @gcn_bp.get("/api/nhom3-con-thieu/danh-sach-nhom1-da-nhap")
 def nhom3_con_thieu_danh_sach_nhom1_da_nhap():
     # Thửa đã thuộc Nhóm 1 ĐÃ nhập biểu (xã làm). ?ma_xa=&limit=&offset=
@@ -222,22 +207,6 @@ def nhom3_con_thieu_danh_sach_nhom1_da_nhap():
     if error_response:
         return error_response
     return jsonify(data)
-
-
-@gcn_bp.get("/api/nhom3-con-thieu/export-nhom1-da-nhap")
-def nhom3_con_thieu_export_nhom1_da_nhap():
-    # Xuất .xlsx danh sách thửa Nhóm 1 đã nhập biểu của 1 xã. ?ma_xa=<mã xã>
-    result, error_response = gcn_service.export_nhom3_nhom1_da_nhap_xlsx(
-        request.args.get("ma_xa", "")
-    )
-    if error_response:
-        return error_response
-    content, filename = result
-    return Response(
-        content,
-        mimetype=_XLSX_MIME,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 @gcn_bp.get("/api/gcn-export-nhom3")

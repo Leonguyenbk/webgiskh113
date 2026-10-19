@@ -380,6 +380,7 @@ def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
     result.setdefault("con_thieu", 0)
     result.setdefault("da_nhap_chua_dat", 0)
     result.setdefault("chua_lien_ket_khong_gian", 0)
+    result.setdefault("tong_tru_kg", 0)
     result.setdefault("theo_xa", [])
     return result, None
 
@@ -387,12 +388,13 @@ def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
 def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     """Xuất .xlsx tổng hợp tiến độ Nhóm 3 theo xã (lọc tuỳ chọn theo Tổ
     kiểm tra, giám sát 1-4) — Y HỆT bảng "Chi tiết theo xã/phường" trên
-    trang /nhom-3-con-thieu (xem SORT_COLUMNS trong Nhom3ConThieuPage.jsx):
-    "tong" đã trừ sẵn Nhóm 1/2 chưa nhập biểu (Chi nhánh KV làm) và chưa
-    liên kết không gian (xem nhom3_tong_hop) — Đã làm = Nhóm 1 đã nhập +
-    đã nhập đủ dữ liệu (KHÔNG cộng phần Chi nhánh KV chưa nhập). Xã "ghi
-    chú" (thuộc dự án tổng thể khác, xem nhom3_xa_ghi_chu) vẫn liệt kê
-    nhưng số liệu = 0, % bỏ trống."""
+    trang /nhom-3-con-thieu (xem SORT_COLUMNS trong Nhom3ConThieuPage.jsx).
+    2 cột "tổng" tách riêng (yêu cầu người dùng): "tong" chỉ trừ Nhóm 1/2
+    Chi nhánh KV chưa nhập; "tong_tru_kg" trừ thêm chưa liên kết không
+    gian — mỗi cột tổng có 1 cột % tương ứng, cùng tử số Đã làm = Nhóm 1
+    đã nhập + đã nhập đủ dữ liệu. Xã "ghi chú" (thuộc dự án tổng thể
+    khác, xem nhom3_xa_ghi_chu) vẫn liệt kê nhưng số liệu = 0, % bỏ
+    trống."""
     to_giam_sat, error_response = _parse_to_giam_sat(to_giam_sat_raw)
     if error_response:
         return None, error_response
@@ -408,37 +410,39 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     ws.title = "Tong hop Nhom 3"[:31]
     ws.append([
         "Tổ giám sát", "Khu vực", "Mã xã", "Xã/Phường",
-        "Tổng xã phải làm (đã trừ Chi nhánh KV + chưa liên kết KG)", "Đã Nhóm 1",
+        "Tổng gửi xã (đã trừ Chi nhánh KV)",
         "Nhóm 1 đã nhập biểu (Xã làm)", "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)",
-        "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Chưa liên kết không gian", "Ghi chú",
+        "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Chưa liên kết không gian",
+        "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", "% (trừ cả chưa liên kết KG)",
+        "Ghi chú",
     ])
 
-    tong_chung = da_nhom12_chung = nhom12_da_nhap_chung = nhom12_chua_nhap_chung = 0
-    da_thu_thap_chung = con_thieu_chung = chua_lien_ket_chung = 0
+    tong_chung = nhom12_da_nhap_chung = nhom12_chua_nhap_chung = 0
+    da_thu_thap_chung = con_thieu_chung = chua_lien_ket_chung = tong_tru_kg_chung = 0
     for row in theo_xa:
         tong = int(row.get("tong") or 0)
-        da_nhom12 = int(row.get("da_nhom_1_2") or 0)
         nhom12_da_nhap = int(row.get("da_nhom_1_2_da_nhap") or 0)
         nhom12_chua_nhap = int(row.get("da_nhom_1_2_chua_nhap") or 0)
         da_thu_thap = int(row.get("da_thu_thap") or 0)
         con_thieu = int(row.get("con_thieu") or 0)
         chua_lien_ket = int(row.get("chua_lien_ket_khong_gian") or 0)
+        tong_tru_kg = int(row.get("tong_tru_kg") or 0)
         da_lam = nhom12_da_nhap + da_thu_thap
         percent = round(da_lam / tong * 1000) / 10 if tong > 0 else None
+        percent_tru_kg = round(da_lam / tong_tru_kg * 1000) / 10 if tong_tru_kg > 0 else None
         tong_chung += tong
-        da_nhom12_chung += da_nhom12
         nhom12_da_nhap_chung += nhom12_da_nhap
         nhom12_chua_nhap_chung += nhom12_chua_nhap
         da_thu_thap_chung += da_thu_thap
         con_thieu_chung += con_thieu
         chua_lien_ket_chung += chua_lien_ket
+        tong_tru_kg_chung += tong_tru_kg
         ws.append([
             _xlsx_cell(row.get("to_giam_sat")),
             _xlsx_cell(row.get("khu_vuc")),
             _xlsx_cell(row.get("ma_xa")),
             _xlsx_cell(row.get("ten_xa")),
             tong,
-            da_nhom12,
             nhom12_da_nhap,
             nhom12_chua_nhap,
             da_thu_thap,
@@ -446,17 +450,23 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
             f"{percent}%" if percent is not None else "",
             con_thieu,
             chua_lien_ket,
+            tong_tru_kg,
+            f"{percent_tru_kg}%" if percent_tru_kg is not None else "",
             _xlsx_cell(row.get("ghi_chu")),
         ])
 
     da_lam_chung = nhom12_da_nhap_chung + da_thu_thap_chung
     percent_chung = round(da_lam_chung / tong_chung * 1000) / 10 if tong_chung > 0 else None
+    percent_tru_kg_chung = round(da_lam_chung / tong_tru_kg_chung * 1000) / 10 if tong_tru_kg_chung > 0 else None
     ws.append([
         "", "", "", "TỔNG CỘNG",
-        tong_chung, da_nhom12_chung, nhom12_da_nhap_chung, nhom12_chua_nhap_chung,
+        tong_chung, nhom12_da_nhap_chung, nhom12_chua_nhap_chung,
         da_thu_thap_chung, da_lam_chung,
         f"{percent_chung}%" if percent_chung is not None else "",
-        con_thieu_chung, chua_lien_ket_chung, "",
+        con_thieu_chung, chua_lien_ket_chung,
+        tong_tru_kg_chung,
+        f"{percent_tru_kg_chung}%" if percent_tru_kg_chung is not None else "",
+        "",
     ])
 
     buf = io.BytesIO()
@@ -681,12 +691,16 @@ _CON_THIEU_FILL_DA_LAM = PatternFill("solid", fgColor="FFF9E79F")  # vàng nhạ
 
 
 def export_nhom3_con_thieu_xlsx(ma_xa: str):
-    """Xuất .xlsx danh sách thửa Nhóm 3 CÒN THIẾU dữ liệu của 1 xã/phường —
-    mã xã, số tờ, số thửa, mã định danh, ghi chú (đã nhập nhưng sai form /
-    chưa nhập). Tô vàng dòng "đã nhập nhưng sai form" (đã có người làm, chỉ
-    cần sửa) để phân biệt trực quan với dòng "chưa nhập" (chưa động tới).
-    Trang '/nhom-3-con-thieu', icon tải Excel cuối mỗi dòng xã. Không chứa
-    thông tin cá nhân (CCCD/tên/địa chỉ) nên không cần IMPORT_TOKEN, giống
+    """Xuất .xlsx danh sách "tổng gửi xã" của 1 xã/phường — mã xã, số tờ,
+    số thửa, mã định danh, ghi chú trạng thái từng thửa (Nhóm 1 - đã nhập
+    biểu / Nhóm 3 - đã nhập biểu / Nhóm 3 - còn thiếu). Thay cho 3 nút
+    Excel riêng trước đây (còn thiếu / Nhóm 1 đã nhập / Nhóm 1 chưa nhập)
+    — giờ gộp làm 1 danh sách duy nhất đúng phạm vi cột "tổng gửi xã" (đã
+    trừ Nhóm 1/2 Chi nhánh KV chưa nhập, xem nhom3_tong_hop.tong) kèm ghi
+    chú để phân biệt (yêu cầu người dùng). Tô vàng dòng "đã nhập biểu" (đã
+    có người làm) để phân biệt trực quan với dòng "còn thiếu". Trang
+    '/nhom-3-con-thieu', icon tải Excel cuối mỗi dòng xã. Không chứa thông
+    tin cá nhân (CCCD/tên/địa chỉ) nên không cần IMPORT_TOKEN, giống
     /api/gcn-danh-sach."""
     ma_xa = (ma_xa or "").strip()
     if not ma_xa:
@@ -695,7 +709,7 @@ def export_nhom3_con_thieu_xlsx(ma_xa: str):
     rows: list = []
     offset = 0
     while True:
-        page, error_response = gcn_repository.nhom3_list_con_thieu(ma_xa, _EXPORT_PAGE, offset)
+        page, error_response = gcn_repository.nhom3_list_tong_gui_xa(ma_xa, _EXPORT_PAGE, offset)
         if error_response:
             return None, error_response
         page = page if isinstance(page, dict) else {}
@@ -707,7 +721,7 @@ def export_nhom3_con_thieu_xlsx(ma_xa: str):
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "Con thieu"[:31]
+    ws.title = "Tong gui xa"[:31]
     ws.append(["Mã xã", "Số tờ", "Số thửa", "Mã định danh", "Ghi chú"])
     for row in rows:
         ws.append([
@@ -717,95 +731,16 @@ def export_nhom3_con_thieu_xlsx(ma_xa: str):
             _xlsx_cell(row.get("ma_dinh_danh")),
             _xlsx_cell(row.get("ghi_chu")),
         ])
-        if row.get("co_nhap"):
+        if "đã nhập" in (row.get("ghi_chu") or ""):
             r = ws.max_row
             for col in range(1, 6):
                 ws.cell(row=r, column=col).fill = _CON_THIEU_FILL_DA_LAM
     if not rows:
-        ws.append(["Không có thửa còn thiếu dữ liệu"])
+        ws.append(["Không có thửa trong danh sách gửi xã"])
 
     buf = io.BytesIO()
     wb.save(buf)
-    return (buf.getvalue(), f"nhom3_con_thieu_{ma_xa}.xlsx"), None
-
-
-def export_nhom3_nhom1_chua_nhap_xlsx(ma_xa: str):
-    """Xuất .xlsx danh sách thửa đã thuộc Nhóm 1 nhưng CHƯA nhập biểu (do
-    Chi nhánh khu vực làm trực tiếp, không qua xã/form Nhóm 4) của 1
-    xã/phường — mã xã, số tờ, số thửa, mã định danh."""
-    ma_xa = (ma_xa or "").strip()
-    if not ma_xa:
-        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
-
-    rows: list = []
-    offset = 0
-    while True:
-        page, error_response = gcn_repository.nhom3_list_nhom1_chua_nhap(ma_xa, _EXPORT_PAGE, offset)
-        if error_response:
-            return None, error_response
-        page = page if isinstance(page, dict) else {}
-        items = page.get("items") if isinstance(page.get("items"), list) else []
-        rows.extend(items)
-        if len(items) < _EXPORT_PAGE or len(rows) >= _EXPORT_MAX:
-            break
-        offset += _EXPORT_PAGE
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Nhom 1 chua nhap"[:31]
-    ws.append(["Mã xã", "Số tờ", "Số thửa", "Mã định danh"])
-    for row in rows:
-        ws.append([
-            _xlsx_cell(row.get("ma_xa")),
-            _xlsx_cell(row.get("so_to")),
-            _xlsx_cell(row.get("so_thua")),
-            _xlsx_cell(row.get("ma_dinh_danh")),
-        ])
-    if not rows:
-        ws.append(["Không có thửa Nhóm 1 chưa nhập biểu"])
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    return (buf.getvalue(), f"nhom3_nhom1_chua_nhap_{ma_xa}.xlsx"), None
-
-
-def export_nhom3_nhom1_da_nhap_xlsx(ma_xa: str):
-    """Đối xứng với export_nhom3_nhom1_chua_nhap_xlsx — thửa Nhóm 1 ĐÃ
-    nhập biểu (do xã làm) của 1 xã/phường."""
-    ma_xa = (ma_xa or "").strip()
-    if not ma_xa:
-        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
-
-    rows: list = []
-    offset = 0
-    while True:
-        page, error_response = gcn_repository.nhom3_list_nhom1_da_nhap(ma_xa, _EXPORT_PAGE, offset)
-        if error_response:
-            return None, error_response
-        page = page if isinstance(page, dict) else {}
-        items = page.get("items") if isinstance(page.get("items"), list) else []
-        rows.extend(items)
-        if len(items) < _EXPORT_PAGE or len(rows) >= _EXPORT_MAX:
-            break
-        offset += _EXPORT_PAGE
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Nhom 1 da nhap"[:31]
-    ws.append(["Mã xã", "Số tờ", "Số thửa", "Mã định danh"])
-    for row in rows:
-        ws.append([
-            _xlsx_cell(row.get("ma_xa")),
-            _xlsx_cell(row.get("so_to")),
-            _xlsx_cell(row.get("so_thua")),
-            _xlsx_cell(row.get("ma_dinh_danh")),
-        ])
-    if not rows:
-        ws.append(["Không có thửa Nhóm 1 đã nhập biểu"])
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    return (buf.getvalue(), f"nhom3_nhom1_da_nhap_{ma_xa}.xlsx"), None
+    return (buf.getvalue(), f"nhom3_tong_gui_xa_{ma_xa}.xlsx"), None
 
 
 def list_sources():

@@ -2261,17 +2261,15 @@ alter table public.nhom3_chua_lien_ket_khong_gian enable row level security;
 -- p_to_giam_sat lọc theo Tổ kiểm tra, giám sát (1-4, xem
 -- nhom3_to_giam_sat) — null = tất cả (mặc định, giữ nguyên hành vi cũ).
 --
--- "tong" (khối lượng thực tế gửi xã) và "con_thieu" KHÔNG còn là số đếm
--- thẳng từ cache nữa — đã trừ thêm 2 khoản không thuộc trách nhiệm trực
--- tiếp của xã (yêu cầu người dùng):
---   - da_nhom_1_2_chua_nhap: Nhóm 1/2 CHƯA nhập biểu, do Chi nhánh khu
---     vực làm trực tiếp, không qua xã.
---   - chua_lien_ket_khong_gian (public.nhom3_chua_lien_ket_khong_gian):
---     số thửa chưa liên kết được dữ liệu không gian, do VPĐK cung cấp thủ
---     công, xã không thể làm được.
--- "tỷ lệ đã làm" ở tầng ứng dụng vì vậy nên tính
--- (da_nhom_1_2_da_nhap + da_thu_thap) / tong — chỉ còn đúng phần việc xã
--- CÓ THỂ và ĐÃ làm, trên phần việc xã THỰC SỰ phải làm.
+-- "tong" (khối lượng thực tế gửi xã) và "con_thieu" đã trừ
+-- da_nhom_1_2_chua_nhap (Nhóm 1/2 CHƯA nhập biểu, do Chi nhánh khu vực
+-- làm trực tiếp, không qua xã) — KHÔNG trừ chua_lien_ket_khong_gian
+-- (yêu cầu người dùng: 2 cột "tổng" tách riêng để dễ phân biệt). Thêm
+-- "tong_tru_kg" = tong đã trừ thêm chua_lien_ket_khong_gian
+-- (public.nhom3_chua_lien_ket_khong_gian, do VPĐK cung cấp thủ công, xã
+-- không thể làm được) — dùng cho cột/tỷ lệ thứ 2 ở tầng ứng dụng. Cả 2
+-- tỷ lệ "đã làm" đều dùng cùng tử số (da_nhom_1_2_da_nhap + da_thu_thap),
+-- chỉ khác mẫu số (tong hoặc tong_tru_kg).
 create or replace function public.nhom3_tong_hop(p_to_giam_sat integer default null)
 returns jsonb
 language sql
@@ -2311,12 +2309,13 @@ as $$
     theo_xa as (
         select
             ma_xa, ten_xa, khu_vuc, to_giam_sat,
-            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian) as tong,
+            (tong_cache - da_nhom_1_2_chua_nhap) as tong,
             da_nhom_1_2, da_nhom_1_2_da_nhap, da_nhom_1_2_chua_nhap,
             da_thu_thap,
-            (con_thieu_cache - chua_lien_ket_khong_gian) as con_thieu,
+            con_thieu_cache as con_thieu,
             da_nhap_chua_dat,
             chua_lien_ket_khong_gian,
+            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian) as tong_tru_kg,
             null::text as ghi_chu
         from raw
 
@@ -2325,7 +2324,7 @@ as $$
         -- Xã có ghi chú riêng (xem nhom3_xa_ghi_chu) VÀ chưa có dữ liệu
         -- trong cache -> hiện 1 dòng ghi chú (0 khắp số liệu, không cộng
         -- dồn gì thêm vào tổng).
-        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, 0, 0, 0, g.ghi_chu
+        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, 0, 0, 0, 0, g.ghi_chu
         from public.nhom3_xa_ghi_chu g
         left join public.danhsachxaphuong xp on xp.ma_xa = g.ma_xa
         left join public.nhom3_to_giam_sat tg on tg.ma_xa = g.ma_xa
@@ -2343,6 +2342,7 @@ as $$
         'con_thieu', coalesce(sum(con_thieu), 0),
         'da_nhap_chua_dat', coalesce(sum(da_nhap_chua_dat), 0),
         'chua_lien_ket_khong_gian', coalesce(sum(chua_lien_ket_khong_gian), 0),
+        'tong_tru_kg', coalesce(sum(tong_tru_kg), 0),
         'theo_xa', coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
     )
     from theo_xa;
@@ -2400,6 +2400,56 @@ $$;
 
 revoke all on function public.nhom3_list_con_thieu(text, integer, integer, boolean) from public;
 grant execute on function public.nhom3_list_con_thieu(text, integer, integer, boolean) to service_role;
+
+-- Danh sách phân trang "tổng gửi xã" (= cột "tong" ở nhom3_tong_hop, đã
+-- trừ Nhóm 1/2 chưa nhập biểu của Chi nhánh KV, CHƯA trừ chưa liên kết
+-- không gian vì cột đó không có tờ/thửa cụ thể) kèm ghi chú trạng thái
+-- từng thửa — dùng cho export_nhom3_tong_gui_xa_xlsx (nút Excel duy nhất
+-- trên trang /nhom-3-con-thieu, thay cho 3 nút Excel/Nhóm 1 đã nhập/Nhóm
+-- 1 chưa nhập cũ — yêu cầu người dùng).
+create or replace function public.nhom3_list_tong_gui_xa(
+    p_ma_xa text default null,
+    p_limit integer default 100,
+    p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+    v_total integer;
+    v_items jsonb;
+begin
+    select count(*) into v_total
+    from public.nhom3_trang_thai_cache c
+    where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+      and not (c.la_nhom_1_2 and not c.co_nhap);
+
+    select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
+    from (
+        select
+            c.ma_xa, xp.ten_xa, c.so_to, c.so_thua, c.ma_dinh_danh,
+            case
+                when c.la_nhom_1_2 then 'Nhóm 1 - đã nhập biểu'
+                when c.da_thu_thap then 'Nhóm 3 - đã nhập biểu'
+                else 'Nhóm 3 - còn thiếu'
+            end as ghi_chu
+        from public.nhom3_trang_thai_cache c
+        left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
+        where (p_ma_xa is null or c.ma_xa = p_ma_xa)
+          and not (c.la_nhom_1_2 and not c.co_nhap)
+        order by c.ma_xa, c.so_to, c.so_thua
+        limit p_limit offset p_offset
+    ) y;
+
+    return jsonb_build_object('total', v_total, 'items', v_items);
+end;
+$$;
+
+revoke all on function public.nhom3_list_tong_gui_xa(text, integer, integer) from public;
+grant execute on function public.nhom3_list_tong_gui_xa(text, integer, integer) to service_role;
 
 -- Danh sách phân trang thửa đã thuộc Nhóm 1 nhưng CHƯA có dòng
 -- du_lieu_gcn nào (co_nhap=false) — nhóm này do Chi nhánh khu vực làm
