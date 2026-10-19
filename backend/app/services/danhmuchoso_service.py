@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 
 from flask import jsonify
 from openpyxl import load_workbook
@@ -312,26 +313,46 @@ def _xlsx_text(value) -> str:
     return str(value).strip()
 
 
+_NAM_TIEU_DE_RE = re.compile(r"NĂM\s*(\d{4})")
+
+
+def _nam_tu_tieu_de(ws) -> int | None:
+    """Tự đọc Năm từ tiêu đề dòng 1 "DANH MỤC HỒ SƠ LƯU TRỮ NĂM 2026" —
+    mẫu gốc chỉ có 1 năm/file, ghi sẵn ở đây (yêu cầu người dùng: file đã
+    đề năm rồi, không cần chọn lại thủ công nếu đọc được)."""
+    title = str(ws.cell(row=1, column=1).value or "")
+    match = _NAM_TIEU_DE_RE.search(title)
+    return int(match.group(1)) if match else None
+
+
 def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | None = None):
     """Nhập hàng loạt từ file .xlsx đúng layout mẫu MAUFILE.xlsx (cột
-    A..K, dữ liệu từ dòng 4) — "Năm" áp dụng chung cho cả file (mẫu gốc
-    chỉ có 1 năm/file, ghi ở tiêu đề, không có cột riêng từng dòng).
-    "Chi nhánh" lấy theo cột L nếu dòng đó có giá trị (file xuất lại từ
-    hệ thống, xem export_xlsx), ngược lại dùng giá trị chọn chung cho cả
-    đợt nhập. GCN đã có sẵn trong danh mục KHÔNG bị chặn — vẫn nhập thêm
-    để ghi nhận lịch sử (yêu cầu người dùng), chỉ báo lại số dòng trùng.
-    Lỗi từng dòng không làm hỏng cả batch — dòng lỗi bị bỏ qua, báo cáo
-    lại chi tiết để người dùng tự sửa file rồi nhập lại dòng đó."""
-    nam = _int_or_none(nam_raw)
-    if nam is None:
-        return None, (jsonify({"error": "Thiếu Năm áp dụng cho cả đợt nhập"}), 400)
-    chi_nhanh_chung = (chi_nhanh_raw or "").strip() or None
-
+    A..K, dữ liệu từ dòng 4) — "Năm" ưu tiên tự đọc từ tiêu đề dòng 1
+    (xem _nam_tu_tieu_de), chỉ dùng nam_raw (chọn tay) khi không đọc
+    được. "Chi nhánh" lấy theo cột L nếu dòng đó có giá trị (file xuất
+    lại từ hệ thống, xem export_xlsx), ngược lại dùng giá trị chọn chung
+    cho cả đợt nhập. GCN đã có sẵn trong danh mục KHÔNG bị chặn — vẫn
+    nhập thêm để ghi nhận lịch sử (yêu cầu người dùng), chỉ báo lại số
+    dòng trùng. Lỗi từng dòng không làm hỏng cả batch — dòng lỗi bị bỏ
+    qua, báo cáo lại chi tiết để người dùng tự sửa file rồi nhập lại
+    dòng đó."""
     try:
         wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
     except Exception:
         return None, (jsonify({"error": "Không đọc được file .xlsx — kiểm tra lại file"}), 400)
     ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
+
+    nam = _nam_tu_tieu_de(ws) or _int_or_none(nam_raw)
+    if nam is None:
+        return None, (
+            jsonify(
+                {
+                    "error": "File chưa ghi Năm ở tiêu đề (dòng 1, VD \"...NĂM 2026\") — chọn Năm thủ công rồi nhập lại."
+                }
+            ),
+            400,
+        )
+    chi_nhanh_chung = (chi_nhanh_raw or "").strip() or None
 
     thanh_cong = 0
     trung_danh_muc = 0
@@ -381,6 +402,7 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
             trung_danh_muc += 1
 
     return {
+        "nam": nam,
         "tong_dong_doc": so_dong_doc,
         "thanh_cong": thanh_cong,
         "trung_danh_muc": trung_danh_muc,

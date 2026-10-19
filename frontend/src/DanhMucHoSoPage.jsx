@@ -98,7 +98,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
   const [exportError, setExportError] = useState("");
 
   const [importFile, setImportFile] = useState(null);
-  const [importNam, setImportNam] = useState(new Date().getFullYear());
+  const [importNam, setImportNam] = useState("");
   const [importChiNhanh, setImportChiNhanh] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
@@ -578,13 +578,13 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
 
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
                 <div>
-                  <label htmlFor="dmhsImportNam">Năm (áp dụng cho cả file) *</label>
+                  <label htmlFor="dmhsImportNam">Năm (chỉ cần nếu file chưa ghi Năm ở tiêu đề)</label>
                   <input
                     id="dmhsImportNam"
                     type="number"
                     className="filterInput"
                     style={{ width: 140 }}
-                    required
+                    placeholder="Tự đọc từ tiêu đề"
                     value={importNam}
                     onChange={(event) => setImportNam(event.target.value)}
                   />
@@ -644,7 +644,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
               {importResult && (
                 <div className="notice" style={{ marginTop: 10 }}>
                   <span>
-                    Đọc {formatSo(importResult.tong_dong_doc)} dòng — lưu thành công{" "}
+                    Năm {importResult.nam} — đọc {formatSo(importResult.tong_dong_doc)} dòng — lưu thành công{" "}
                     {formatSo(importResult.thanh_cong)} dòng
                     {importResult.trung_danh_muc > 0 &&
                       ` (trong đó ${formatSo(importResult.trung_danh_muc)} dòng trùng GCN đã có sẵn trong danh mục, vẫn lưu thêm để ghi nhận lịch sử)`}
