@@ -53,3 +53,38 @@ export async function exportDanhMucHoSo(params) {
   }
   return res.blob();
 }
+
+// File mẫu trống (MAUFILE.xlsx) để điền tay rồi nhập lại.
+export async function taiMauDanhMucHoSo() {
+  const res = await fetch(`${API_URL}/api/danhmuchoso/mau`);
+  if (!res.ok) {
+    let message = `Tải thất bại (HTTP ${res.status})`;
+    try {
+      message = (await res.json())?.error || message;
+    } catch {
+      /* body không phải JSON */
+    }
+    throw new Error(message);
+  }
+  return res.blob();
+}
+
+// Nhập hàng loạt từ file .xlsx đúng mẫu — multipart/form-data, không qua
+// request() (đó gửi JSON). Trả báo cáo kết quả (thanh_cong/so_dong_loi/loi…).
+export async function importDanhMucHoSo({ file, nam, chiNhanh }) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("nam", nam);
+  if (chiNhanh) form.append("chi_nhanh", chiNhanh);
+  const res = await fetch(`${API_URL}/api/danhmuchoso/import`, { method: "POST", body: form });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* body không phải JSON */
+  }
+  if (!res.ok) {
+    throw new Error(data?.error || `Nhập thất bại (HTTP ${res.status})`);
+  }
+  return data;
+}

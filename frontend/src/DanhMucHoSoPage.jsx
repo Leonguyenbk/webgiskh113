@@ -4,7 +4,9 @@ import {
   capNhatDanhMucHoSo,
   exportDanhMucHoSo,
   getDanhMucHoSo,
+  importDanhMucHoSo,
   kiemTraGcnDanhMuc,
+  taiMauDanhMucHoSo,
   themDanhMucHoSo,
 } from "./services/danhMucHoSoService";
 
@@ -94,6 +96,15 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+
+  const [importFile, setImportFile] = useState(null);
+  const [importNam, setImportNam] = useState(new Date().getFullYear());
+  const [importChiNhanh, setImportChiNhanh] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importResult, setImportResult] = useState(null);
+  const [downloadingMau, setDownloadingMau] = useState(false);
+  const [mauError, setMauError] = useState("");
 
   // Danh sách KHÔNG tự tải khi mở trang hoặc khi đổi bộ lọc — chỉ gửi
   // request khi bấm "Tìm kiếm" (hoặc nút Trước/Sau, dùng lại bộ lọc hiện
@@ -244,6 +255,51 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       setExportError(err.message);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleDownloadMau = async () => {
+    if (downloadingMau) return;
+    setDownloadingMau(true);
+    setMauError("");
+    try {
+      const blob = await taiMauDanhMucHoSo();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "MAUFILE.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setMauError(err.message);
+    } finally {
+      setDownloadingMau(false);
+    }
+  };
+
+  const handleImportSubmit = async (event) => {
+    event.preventDefault();
+    if (importing || !importFile) return;
+    setImporting(true);
+    setImportError("");
+    setImportResult(null);
+    try {
+      const result = await importDanhMucHoSo({
+        file: importFile,
+        nam: importNam,
+        chiNhanh: importChiNhanh || undefined,
+      });
+      setImportResult(result);
+      setImportFile(null);
+      const fileInput = document.getElementById("dmhsImportFile");
+      if (fileInput) fileInput.value = "";
+      if (hasSearched) runSearch(0);
+    } catch (err) {
+      setImportError(err.message);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -503,6 +559,107 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                 <div className="notice error" style={{ marginTop: 10 }}>
                   <strong>Lỗi</strong>
                   <span>{formError}</span>
+                </div>
+              )}
+            </form>
+
+            <form
+              className="importCard"
+              style={{ width: "80%", maxWidth: "80%", margin: "0 auto 16px" }}
+              onSubmit={handleImportSubmit}
+            >
+              <label style={{ fontSize: 16, marginBottom: 10, display: "block" }}>
+                Nhập hàng loạt từ Excel (theo mẫu MAUFILE.xlsx)
+              </label>
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6a817e" }}>
+                GCN đã có sẵn trong danh mục vẫn được nhập thêm bình thường (không chặn) — dùng để
+                ghi nhận lịch sử khi hồ sơ xuất hiện nhiều lần theo thời gian.
+              </p>
+
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div>
+                  <label htmlFor="dmhsImportNam">Năm (áp dụng cho cả file) *</label>
+                  <input
+                    id="dmhsImportNam"
+                    type="number"
+                    className="filterInput"
+                    style={{ width: 140 }}
+                    required
+                    value={importNam}
+                    onChange={(event) => setImportNam(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dmhsImportChiNhanh">Chi nhánh (nếu file chưa có cột Chi nhánh)</label>
+                  <select
+                    id="dmhsImportChiNhanh"
+                    className="filterInput"
+                    style={{ width: 280 }}
+                    value={importChiNhanh}
+                    onChange={(event) => setImportChiNhanh(event.target.value)}
+                  >
+                    <option value="">— Để trống (file đã có cột Chi nhánh) —</option>
+                    {CHI_NHANH_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="dmhsImportFile">File .xlsx *</label>
+                  <input
+                    id="dmhsImportFile"
+                    type="file"
+                    accept=".xlsx"
+                    required
+                    onChange={(event) => setImportFile(event.target.files?.[0] || null)}
+                  />
+                </div>
+                <button type="submit" className="downloadButton" disabled={importing || !importFile}>
+                  {importing ? "⏳ Đang nhập…" : "⬆ Nhập từ file"}
+                </button>
+                <button
+                  type="button"
+                  className="downloadButton"
+                  disabled={downloadingMau}
+                  onClick={handleDownloadMau}
+                >
+                  {downloadingMau ? "⏳ Đang tải…" : "⬇ Tải mẫu trống"}
+                </button>
+              </div>
+
+              {mauError && (
+                <div className="notice error" style={{ marginTop: 10 }}>
+                  <strong>Không tải được mẫu</strong>
+                  <span>{mauError}</span>
+                </div>
+              )}
+              {importError && (
+                <div className="notice error" style={{ marginTop: 10 }}>
+                  <strong>Nhập thất bại</strong>
+                  <span>{importError}</span>
+                </div>
+              )}
+              {importResult && (
+                <div className="notice" style={{ marginTop: 10 }}>
+                  <span>
+                    Đọc {formatSo(importResult.tong_dong_doc)} dòng — lưu thành công{" "}
+                    {formatSo(importResult.thanh_cong)} dòng
+                    {importResult.trung_danh_muc > 0 &&
+                      ` (trong đó ${formatSo(importResult.trung_danh_muc)} dòng trùng GCN đã có sẵn trong danh mục, vẫn lưu thêm để ghi nhận lịch sử)`}
+                    {importResult.so_dong_loi > 0 && `, ${formatSo(importResult.so_dong_loi)} dòng lỗi`}
+                    .
+                  </span>
+                  {importResult.loi?.length > 0 && (
+                    <ul style={{ margin: "8px 0 0", paddingLeft: 18, maxHeight: 180, overflowY: "auto" }}>
+                      {importResult.loi.map((item, idx) => (
+                        <li key={idx} style={{ fontSize: 12 }}>
+                          Dòng {item.dong}: {item.loi}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </form>

@@ -131,22 +131,27 @@ def _payload_tu_body(body: dict, so_seri_gcn: str, da_co_tren_vbdlis: bool) -> d
     }
 
 
-def them_ho_so(body: dict):
+def _them_mot_dong(body: dict, bo_qua_trung_danh_muc: bool):
+    """Dùng chung cho them_ho_so (nhập tay, 1 dòng) và import_xlsx (nhập
+    hàng loạt từ file). bo_qua_trung_danh_muc=True: GCN đã có SẴN trong
+    chính danh mục này vẫn cho nhập thêm (không chặn) — dùng khi import,
+    để ghi nhận lịch sử (yêu cầu người dùng: 1 GCN có thể xuất hiện nhiều
+    lần theo thời gian, không phải lúc nào cũng là nhập trùng tay). Trả
+    (result, error_response, da_trung_trong_danh_muc)."""
     so_seri_gcn, error_response = _validate_body(body)
     if error_response:
-        return None, error_response
+        return None, error_response, False
 
-    # KHÔNG còn chặn nhập khi GCN đã có dữ liệu điện tử ở nơi khác (đã
-    # nhập form Nhóm 4 / đã đồng bộ MPLIS-VBDLis) — yêu cầu người dùng: hồ
-    # sơ giấy vẫn phải catalog dù dữ liệu đã có sẵn, chỉ đánh dấu
-    # da_co_tren_vbdlis để biết. CHỈ chặn khi GCN đã có SẴN TRONG CHÍNH
-    # danh mục này (duplicate catalog thật sự) — dùng tính năng "Sửa" thay
-    # vì tạo dòng mới trùng.
+    # KHÔNG chặn nhập khi GCN đã có dữ liệu điện tử ở nơi khác (đã nhập
+    # form Nhóm 4 / đã đồng bộ MPLIS-VBDLis) — yêu cầu người dùng: hồ sơ
+    # giấy vẫn phải catalog dù dữ liệu đã có sẵn, chỉ đánh dấu
+    # da_co_tren_vbdlis để biết.
     kiem_tra, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn)
     if error_response:
-        return None, error_response
+        return None, error_response, False
     kiem_tra = kiem_tra or {}
-    if kiem_tra.get("da_co_trong_danh_muc"):
+    da_trung = bool(kiem_tra.get("da_co_trong_danh_muc"))
+    if da_trung and not bo_qua_trung_danh_muc:
         return None, (
             jsonify(
                 {
@@ -155,11 +160,18 @@ def them_ho_so(body: dict):
                 }
             ),
             409,
-        )
+        ), False
     da_co_tren_vbdlis = bool(kiem_tra.get("da_nhap_form_nhom4")) or bool(kiem_tra.get("da_dong_bo_mplis"))
 
     payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis)
     result, error_response = danhmuchoso_repository.them(payload)
+    if error_response:
+        return None, error_response, False
+    return result, None, da_trung
+
+
+def them_ho_so(body: dict):
+    result, error_response, _da_trung = _them_mot_dong(body, bo_qua_trung_danh_muc=False)
     if error_response:
         return None, error_response
     return result, None
@@ -278,3 +290,100 @@ def export_xlsx(nam_raw: str | None, keyword_raw: str | None, chi_nhanh_raw: str
     wb.save(buf)
     ten_file = f"danh_muc_ho_so_{nam}.xlsx" if nam else "danh_muc_ho_so.xlsx"
     return (buf.getvalue(), ten_file), None
+
+
+def tai_mau_xlsx():
+    """Trả nguyên file mẫu trống DANHMUCHOSO/MAUFILE.xlsx (không dữ liệu)
+    để tải về điền tay rồi nhập lại qua import_xlsx."""
+    try:
+        with open(_MAU_PATH, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        return None, (jsonify({"error": "Thiếu file mẫu MAUFILE.xlsx trên server"}), 500)
+    return (data, "MAUFILE.xlsx"), None
+
+
+_IMPORT_MAX_ROWS = 3000
+
+
+def _xlsx_text(value) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | None = None):
+    """Nhập hàng loạt từ file .xlsx đúng layout mẫu MAUFILE.xlsx (cột
+    A..K, dữ liệu từ dòng 4) — "Năm" áp dụng chung cho cả file (mẫu gốc
+    chỉ có 1 năm/file, ghi ở tiêu đề, không có cột riêng từng dòng).
+    "Chi nhánh" lấy theo cột L nếu dòng đó có giá trị (file xuất lại từ
+    hệ thống, xem export_xlsx), ngược lại dùng giá trị chọn chung cho cả
+    đợt nhập. GCN đã có sẵn trong danh mục KHÔNG bị chặn — vẫn nhập thêm
+    để ghi nhận lịch sử (yêu cầu người dùng), chỉ báo lại số dòng trùng.
+    Lỗi từng dòng không làm hỏng cả batch — dòng lỗi bị bỏ qua, báo cáo
+    lại chi tiết để người dùng tự sửa file rồi nhập lại dòng đó."""
+    nam = _int_or_none(nam_raw)
+    if nam is None:
+        return None, (jsonify({"error": "Thiếu Năm áp dụng cho cả đợt nhập"}), 400)
+    chi_nhanh_chung = (chi_nhanh_raw or "").strip() or None
+
+    try:
+        wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    except Exception:
+        return None, (jsonify({"error": "Không đọc được file .xlsx — kiểm tra lại file"}), 400)
+    ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
+
+    thanh_cong = 0
+    trung_danh_muc = 0
+    loi: list[dict] = []
+    so_dong_doc = 0
+
+    for offset, row in enumerate(
+        ws.iter_rows(min_row=_MAU_FIRST_DATA_ROW, max_col=_MAU_VBDLIS_COL, values_only=True)
+    ):
+        if so_dong_doc >= _IMPORT_MAX_ROWS:
+            loi.append({"dong": _MAU_FIRST_DATA_ROW + offset, "loi": f"Vượt quá {_IMPORT_MAX_ROWS} dòng, dừng đọc"})
+            break
+        values = list(row) + [None] * (_MAU_VBDLIS_COL - len(row))
+        core = values[:11]
+        if not any(_xlsx_text(v) for v in core):
+            continue  # dòng trống, bỏ qua không tính lỗi
+
+        so_dong_doc += 1
+        so_dong_file = _MAU_FIRST_DATA_ROW + offset
+        chi_nhanh_dong = _xlsx_text(values[_MAU_CHI_NHANH_COL - 1]) or chi_nhanh_chung
+        body = {
+            "nam": nam,
+            "chi_nhanh": chi_nhanh_dong,
+            "cap": _xlsx_text(core[0]),
+            "so_tt_ho_so": _xlsx_text(core[1]),
+            "ten_nguoi_su_dung_dat": _xlsx_text(core[2]),
+            "thua_dat_so_moi": _xlsx_text(core[3]),
+            "ban_do_so_moi": _xlsx_text(core[4]),
+            "thua_dat_so_cu": _xlsx_text(core[5]),
+            "ban_do_so_cu": _xlsx_text(core[6]),
+            "dia_chi_thua_dat": _xlsx_text(core[7]),
+            "so_seri_gcn": _xlsx_text(core[8]),
+            "loai_ho_so": _xlsx_text(core[9]),
+            "ghi_chu": _xlsx_text(core[10]),
+        }
+
+        _result, error_response, da_trung = _them_mot_dong(body, bo_qua_trung_danh_muc=True)
+        if error_response:
+            try:
+                thong_bao = error_response[0].get_json().get("error", "Lỗi không rõ")
+            except Exception:
+                thong_bao = "Lỗi không rõ"
+            loi.append({"dong": so_dong_file, "loi": thong_bao})
+            continue
+        thanh_cong += 1
+        if da_trung:
+            trung_danh_muc += 1
+
+    return {
+        "tong_dong_doc": so_dong_doc,
+        "thanh_cong": thanh_cong,
+        "trung_danh_muc": trung_danh_muc,
+        "so_dong_loi": len(loi),
+        "loi": loi[:200],
+    }, None

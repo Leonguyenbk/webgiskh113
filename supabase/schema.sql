@@ -3031,8 +3031,14 @@ create table if not exists public.danhmuchoso (
     -- chỉ đánh dấu để biết. Tính tự động ở backend (xem
     -- danhmuchoso_service.py), không phải cột người dùng tự tick.
     da_co_tren_vbdlis boolean not null default false,
-    tao_luc timestamptz not null default now(),
-    constraint danhmuchoso_so_seri_gcn_key unique (so_seri_gcn)
+    tao_luc timestamptz not null default now()
+    -- ĐÃ BỎ "constraint danhmuchoso_so_seri_gcn_key unique (so_seri_gcn)"
+    -- (yêu cầu người dùng) — khi nhập hàng loạt từ Excel, 1 GCN có thể
+    -- xuất hiện nhiều lần theo thời gian để ghi nhận lịch sử, không phải
+    -- lúc nào cũng là nhập trùng tay. Việc chặn trùng khi THÊM TAY 1 hồ
+    -- sơ (nút "Lưu hồ sơ") vẫn còn, nhưng xử lý ở tầng ứng dụng
+    -- (danhmuchoso_service.them_ho_so, qua danhmuchoso_kiem_tra_gcn), để
+    -- import hàng loạt có thể chủ động bỏ qua chặn này.
 );
 alter table public.danhmuchoso enable row level security;
 

@@ -64,3 +64,34 @@ def danhmuchoso_export():
         mimetype=_XLSX_MIME,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@danhmuchoso_bp.get("/api/danhmuchoso/mau")
+def danhmuchoso_mau():
+    # Tải file mẫu trống (DANHMUCHOSO/MAUFILE.xlsx) để điền tay rồi nhập
+    # lại qua /api/danhmuchoso/import.
+    result, error_response = danhmuchoso_service.tai_mau_xlsx()
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@danhmuchoso_bp.post("/api/danhmuchoso/import")
+def danhmuchoso_import():
+    # Nhập hàng loạt từ file .xlsx đúng mẫu — multipart/form-data: file
+    # (bắt buộc), nam (bắt buộc, áp dụng chung cả file), chi_nhanh (tuỳ
+    # chọn, áp dụng cho dòng không có sẵn cột Chi nhánh).
+    file = request.files.get("file")
+    if file is None or not file.filename:
+        return jsonify({"error": "Thiếu file .xlsx"}), 400
+    data, error_response = danhmuchoso_service.import_xlsx(
+        file.read(), request.form.get("nam"), request.form.get("chi_nhanh")
+    )
+    if error_response:
+        return error_response
+    return jsonify(data), 201
