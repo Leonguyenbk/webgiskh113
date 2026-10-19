@@ -44,6 +44,7 @@ const CHI_NHANH_OPTIONS = [
 
 const FORM_EMPTY = {
   nam: new Date().getFullYear(),
+  ngay: "",
   chi_nhanh: "",
   cap: "",
   so_tt_ho_so: "",
@@ -60,6 +61,15 @@ const FORM_EMPTY = {
 
 function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
+}
+
+// API trả "ngay" dạng ISO (YYYY-MM-DD, từ cột date) — hiển thị DD/MM/YYYY
+// theo đúng yêu cầu người dùng, không phụ thuộc locale trình duyệt.
+function formatNgay(value) {
+  if (!value) return "";
+  const [y, m, d] = String(value).split("-");
+  if (!y || !m || !d) return value;
+  return `${d}/${m}/${y}`;
 }
 
 // 2 nguồn này KHÔNG còn chặn nhập — chỉ hiển thị để biết (đánh dấu "Đã có
@@ -165,6 +175,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     setEditingId(row.id);
     setForm({
       nam: row.nam ?? "",
+      ngay: row.ngay || "",
       chi_nhanh: row.chi_nhanh || "",
       cap: row.cap || "",
       so_tt_ho_so: row.so_tt_ho_so || "",
@@ -393,6 +404,17 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   />
                 </div>
                 <div>
+                  <label htmlFor="dmhsNgay">Ngày (DD/MM/YYYY)</label>
+                  <input
+                    id="dmhsNgay"
+                    type="date"
+                    className="filterInput"
+                    style={fieldStyle}
+                    value={form.ngay}
+                    onChange={(event) => handleChangeField("ngay", event.target.value)}
+                  />
+                </div>
+                <div>
                   <label htmlFor="dmhsChiNhanh">Chi nhánh *</label>
                   <select
                     id="dmhsChiNhanh"
@@ -573,7 +595,8 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
               </label>
               <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6a817e" }}>
                 GCN đã có sẵn trong danh mục vẫn được nhập thêm bình thường (không chặn) — dùng để
-                ghi nhận lịch sử khi hồ sơ xuất hiện nhiều lần theo thời gian.
+                ghi nhận lịch sử khi hồ sơ xuất hiện nhiều lần theo thời gian. Cột "Ngày" nhận ô
+                ngày Excel thật hoặc text dạng DD/MM/YYYY.
               </p>
 
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -792,6 +815,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   <thead>
                     <tr>
                       <th>Năm</th>
+                      <th>Ngày</th>
                       <th>Chi nhánh</th>
                       <th>Cặp</th>
                       <th>Số TT hồ sơ</th>
@@ -811,7 +835,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   <tbody>
                     {!loading && items.length === 0 ? (
                       <tr>
-                        <td colSpan={15}>
+                        <td colSpan={16}>
                           {hasSearched ? "Không có hồ sơ phù hợp" : "Nhập điều kiện (hoặc để trống) rồi bấm \"Tìm kiếm\" để xem danh sách"}
                         </td>
                       </tr>
@@ -819,6 +843,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                       items.map((row) => (
                         <tr key={row.id}>
                           <td>{row.nam ?? ""}</td>
+                          <td>{formatNgay(row.ngay)}</td>
                           <td>{row.chi_nhanh || ""}</td>
                           <td>{row.cap || ""}</td>
                           <td>{row.so_tt_ho_so || ""}</td>

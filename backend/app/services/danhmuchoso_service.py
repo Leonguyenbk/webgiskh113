@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import io
 import os
 import re
@@ -33,13 +34,14 @@ _REQUIRED_FIELDS = [
 _MAU_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "MAUFILE.xlsx")
 _MAU_SHEET = "Sheet1"
 _MAU_FIRST_DATA_ROW = 4
-# Cột A..L của MAUFILE.xlsx, đúng thứ tự merge header (xem DANHMUCHOSO/MAUFILE.xlsx)
-# — bản mẫu mới thêm cột "Năm" riêng ở đầu (cột A, trước là chỉ ghi ở
-# tiêu đề), đẩy các cột còn lại dịch phải 1 cột so với bản cũ.
-# Cột M (chi_nhanh) KHÔNG có trong mẫu gốc — thêm sau cùng, tự ghi thêm
-# header ở dòng 2 (xem export_xlsx), không đụng layout 12 cột gốc.
+# Cột A..M của MAUFILE.xlsx, đúng thứ tự merge header (xem DANHMUCHOSO/MAUFILE.xlsx)
+# — bản mẫu có "Năm" (cột A) và "Ngày" (cột B, kiểu date thật — luôn
+# DD/MM/YYYY khi hiển thị/nhập, xem _parse_ngay) riêng từng dòng.
+# Cột N (chi_nhanh) KHÔNG có trong mẫu gốc — thêm sau cùng, tự ghi thêm
+# header ở dòng 2 (xem export_xlsx), không đụng layout 13 cột gốc.
 _MAU_COLUMNS = [
     "nam",
+    "ngay",
     "cap",
     "so_tt_ho_so",
     "ten_nguoi_su_dung_dat",
@@ -53,11 +55,11 @@ _MAU_COLUMNS = [
     "ghi_chu",
     "chi_nhanh",
 ]
-_MAU_CHI_NHANH_COL = len(_MAU_COLUMNS)  # cột M
-# Cột N "Đã có trên VBDLis" — thêm sau cùng, như chi_nhanh, tự ghi thêm
-# header ở dòng 2 (xem export_xlsx), không đụng layout 12 cột gốc.
+_MAU_CHI_NHANH_COL = len(_MAU_COLUMNS)  # cột N
+# Cột O "Đã có trên VBDLis" — thêm sau cùng, như chi_nhanh, tự ghi thêm
+# header ở dòng 2 (xem export_xlsx), không đụng layout 13 cột gốc.
 _MAU_COLUMNS.append("da_co_tren_vbdlis")
-_MAU_VBDLIS_COL = len(_MAU_COLUMNS)  # cột N
+_MAU_VBDLIS_COL = len(_MAU_COLUMNS)  # cột O
 
 
 def _int_or_none(raw):
@@ -67,6 +69,38 @@ def _int_or_none(raw):
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+_NGAY_DMY_RE = re.compile(r"^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$")
+
+
+def _parse_ngay(raw):
+    """Chuẩn hoá "Ngày" về datetime.date — web gửi ISO (YYYY-MM-DD, từ
+    input type=date), Excel import có thể là ô date thật (openpyxl trả
+    thẳng datetime.date/datetime) hoặc text "DD/MM/YYYY" (ngày-tháng-năm,
+    yêu cầu người dùng: luôn hiểu theo kiểu Việt Nam, không phải
+    MM/DD/YYYY kiểu Mỹ). Trả (date_hoặc_None, loi_hoặc_None)."""
+    if raw is None or raw == "":
+        return None, None
+    if isinstance(raw, datetime.datetime):
+        return raw.date(), None
+    if isinstance(raw, datetime.date):
+        return raw, None
+    text = str(raw).strip()
+    if not text:
+        return None, None
+    try:
+        return datetime.date.fromisoformat(text), None
+    except ValueError:
+        pass
+    match = _NGAY_DMY_RE.match(text)
+    if match:
+        ngay, thang, nam = (int(x) for x in match.groups())
+        try:
+            return datetime.date(nam, thang, ngay), None
+        except ValueError:
+            return None, f"Ngày \"{text}\" không hợp lệ (phải là DD/MM/YYYY)"
+    return None, f"Ngày \"{text}\" không đúng định dạng DD/MM/YYYY"
 
 
 def kiem_tra_gcn(so_seri_gcn_raw: str | None, exclude_id_raw: str | None = None):
@@ -116,9 +150,10 @@ def _validate_body(body: dict):
     return so_seri_gcn, None
 
 
-def _payload_tu_body(body: dict, so_seri_gcn: str, da_co_tren_vbdlis: bool) -> dict:
+def _payload_tu_body(body: dict, so_seri_gcn: str, da_co_tren_vbdlis: bool, ngay=None) -> dict:
     return {
         "nam": _int_or_none(body.get("nam")),
+        "ngay": ngay.isoformat() if ngay else None,
         "chi_nhanh": body.get("chi_nhanh"),
         "cap": body.get("cap"),
         "so_tt_ho_so": body.get("so_tt_ho_so"),
@@ -146,6 +181,10 @@ def _them_mot_dong(body: dict, bo_qua_trung_danh_muc: bool):
     if error_response:
         return None, error_response, False
 
+    ngay, loi_ngay = _parse_ngay(body.get("ngay"))
+    if loi_ngay:
+        return None, (jsonify({"error": loi_ngay}), 400), False
+
     # KHÔNG chặn nhập khi GCN đã có dữ liệu điện tử ở nơi khác (đã nhập
     # form Nhóm 4 / đã đồng bộ MPLIS-VBDLis) — yêu cầu người dùng: hồ sơ
     # giấy vẫn phải catalog dù dữ liệu đã có sẵn, chỉ đánh dấu
@@ -167,7 +206,7 @@ def _them_mot_dong(body: dict, bo_qua_trung_danh_muc: bool):
         ), False
     da_co_tren_vbdlis = bool(kiem_tra.get("da_nhap_form_nhom4")) or bool(kiem_tra.get("da_dong_bo_mplis"))
 
-    payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis)
+    payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis, ngay)
     result, error_response = danhmuchoso_repository.them(payload)
     if error_response:
         return None, error_response, False
@@ -190,6 +229,10 @@ def cap_nhat_ho_so(row_id_raw, body: dict):
     if error_response:
         return None, error_response
 
+    ngay, loi_ngay = _parse_ngay(body.get("ngay"))
+    if loi_ngay:
+        return None, (jsonify({"error": loi_ngay}), 400)
+
     kiem_tra, error_response = danhmuchoso_repository.kiem_tra_gcn(so_seri_gcn, row_id)
     if error_response:
         return None, error_response
@@ -206,7 +249,7 @@ def cap_nhat_ho_so(row_id_raw, body: dict):
         )
     da_co_tren_vbdlis = bool(kiem_tra.get("da_nhap_form_nhom4")) or bool(kiem_tra.get("da_dong_bo_mplis"))
 
-    payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis)
+    payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis, ngay)
     result, error_response = danhmuchoso_repository.cap_nhat(row_id, payload)
     if error_response:
         return None, error_response
@@ -271,8 +314,8 @@ def export_xlsx(nam_raw: str | None, keyword_raw: str | None, chi_nhanh_raw: str
         return None, (jsonify({"error": "Thiếu file mẫu MAUFILE.xlsx trên server"}), 500)
     ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
 
-    # Cột L "Chi nhánh", cột M "Đã có trên VBDLis" — thêm sau cùng, ngoài
-    # 11 cột mẫu gốc.
+    # Cột N "Chi nhánh", cột O "Đã có trên VBDLis" — thêm sau cùng, ngoài
+    # 13 cột mẫu gốc.
     ws.cell(row=2, column=_MAU_CHI_NHANH_COL, value="Chi nhánh")
     ws.cell(row=2, column=_MAU_VBDLIS_COL, value="Đã có trên VBDLis")
 
@@ -288,6 +331,12 @@ def export_xlsx(nam_raw: str | None, keyword_raw: str | None, chi_nhanh_raw: str
     for i, row in enumerate(rows):
         r = _MAU_FIRST_DATA_ROW + i
         for col_idx, field in enumerate(_MAU_COLUMNS, start=1):
+            if field == "ngay":
+                ngay_value, _loi = _parse_ngay(row.get("ngay"))
+                cell = ws.cell(row=r, column=col_idx, value=ngay_value)
+                if ngay_value:
+                    cell.number_format = "dd/mm/yyyy"
+                continue
             ws.cell(row=r, column=col_idx, value=_xlsx_cell(row.get(field)))
 
     buf = io.BytesIO()
@@ -330,18 +379,19 @@ def _nam_tu_tieu_de(ws) -> int | None:
 
 def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | None = None):
     """Nhập hàng loạt từ file .xlsx đúng layout mẫu MAUFILE.xlsx (cột
-    A..L, dữ liệu từ dòng 4) — "Năm" đọc theo TỪNG DÒNG ở cột A (bản mẫu
-    mới, 1 file có thể gồm nhiều năm khác nhau). Dòng nào bỏ trống cột
-    Năm thì lấy theo tiêu đề dòng 1 (xem _nam_tu_tieu_de, bản mẫu cũ chỉ
-    có 1 năm/file), rồi mới tới nam_raw (chọn tay cho cả đợt) — dòng nào
+    A..M, dữ liệu từ dòng 4) — "Năm" đọc theo TỪNG DÒNG ở cột A (1 file
+    có thể gồm nhiều năm khác nhau). Dòng nào bỏ trống cột Năm thì lấy
+    theo tiêu đề dòng 1 (xem _nam_tu_tieu_de, bản mẫu cũ chỉ có 1
+    năm/file), rồi mới tới nam_raw (chọn tay cho cả đợt) — dòng nào
     không có năm từ cả 3 nguồn thì báo lỗi riêng dòng đó, không chặn cả
-    batch. "Chi nhánh" lấy theo cột M nếu dòng đó có giá trị (file xuất
-    lại từ hệ thống, xem export_xlsx), ngược lại dùng giá trị chọn chung
-    cho cả đợt nhập. GCN đã có sẵn trong danh mục KHÔNG bị chặn — vẫn
-    nhập thêm để ghi nhận lịch sử (yêu cầu người dùng), chỉ báo lại số
-    dòng trùng. Lỗi từng dòng không làm hỏng cả batch — dòng lỗi bị bỏ
-    qua, báo cáo lại chi tiết để người dùng tự sửa file rồi nhập lại
-    dòng đó."""
+    batch. "Ngày" (cột B) nhận datetime.date (ô Excel định dạng ngày)
+    hoặc text DD/MM/YYYY, không bắt buộc — xem _parse_ngay. "Chi nhánh"
+    lấy theo cột N nếu dòng đó có giá trị (file xuất lại từ hệ thống,
+    xem export_xlsx), ngược lại dùng giá trị chọn chung cho cả đợt nhập.
+    GCN đã có sẵn trong danh mục KHÔNG bị chặn — vẫn nhập thêm để ghi
+    nhận lịch sử (yêu cầu người dùng), chỉ báo lại số dòng trùng. Lỗi
+    từng dòng không làm hỏng cả batch — dòng lỗi bị bỏ qua, báo cáo lại
+    chi tiết để người dùng tự sửa file rồi nhập lại dòng đó."""
     try:
         wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
     except Exception:
@@ -365,7 +415,7 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
             loi.append({"dong": _MAU_FIRST_DATA_ROW + offset, "loi": f"Vượt quá {_IMPORT_MAX_ROWS} dòng, dừng đọc"})
             break
         values = list(row) + [None] * (_MAU_VBDLIS_COL - len(row))
-        core = values[:12]
+        core = values[:13]
         if not any(_xlsx_text(v) for v in core):
             continue  # dòng trống, bỏ qua không tính lỗi
 
@@ -384,18 +434,19 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
         chi_nhanh_dong = _xlsx_text(values[_MAU_CHI_NHANH_COL - 1]) or chi_nhanh_chung
         body = {
             "nam": nam_dong,
+            "ngay": core[1],  # datetime.date (ô Excel định dạng ngày) hoặc text DD/MM/YYYY — _them_mot_dong tự chuẩn hoá qua _parse_ngay
             "chi_nhanh": chi_nhanh_dong,
-            "cap": _xlsx_text(core[1]),
-            "so_tt_ho_so": _xlsx_text(core[2]),
-            "ten_nguoi_su_dung_dat": _xlsx_text(core[3]),
-            "thua_dat_so_moi": _xlsx_text(core[4]),
-            "ban_do_so_moi": _xlsx_text(core[5]),
-            "thua_dat_so_cu": _xlsx_text(core[6]),
-            "ban_do_so_cu": _xlsx_text(core[7]),
-            "dia_chi_thua_dat": _xlsx_text(core[8]),
-            "so_seri_gcn": _xlsx_text(core[9]),
-            "loai_ho_so": _xlsx_text(core[10]),
-            "ghi_chu": _xlsx_text(core[11]),
+            "cap": _xlsx_text(core[2]),
+            "so_tt_ho_so": _xlsx_text(core[3]),
+            "ten_nguoi_su_dung_dat": _xlsx_text(core[4]),
+            "thua_dat_so_moi": _xlsx_text(core[5]),
+            "ban_do_so_moi": _xlsx_text(core[6]),
+            "thua_dat_so_cu": _xlsx_text(core[7]),
+            "ban_do_so_cu": _xlsx_text(core[8]),
+            "dia_chi_thua_dat": _xlsx_text(core[9]),
+            "so_seri_gcn": _xlsx_text(core[10]),
+            "loai_ho_so": _xlsx_text(core[11]),
+            "ghi_chu": _xlsx_text(core[12]),
         }
 
         _result, error_response, da_trung = _them_mot_dong(body, bo_qua_trung_danh_muc=True)

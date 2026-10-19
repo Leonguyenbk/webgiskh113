@@ -17,6 +17,7 @@ def kiem_tra_gcn(so_seri_gcn: str, exclude_id: int | None = None):
 def _payload_chung(payload: dict) -> dict:
     return {
         "p_nam": payload.get("nam"),
+        "p_ngay": payload.get("ngay"),
         "p_chi_nhanh": payload.get("chi_nhanh"),
         "p_cap": payload.get("cap"),
         "p_so_tt_ho_so": payload.get("so_tt_ho_so"),
