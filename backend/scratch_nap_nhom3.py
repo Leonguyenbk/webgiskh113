@@ -23,12 +23,16 @@ import psycopg2.extras
 
 from app.config import Config
 
-# "DANHSACHGUIXA/24595_Xã Đắk Liêng.xlsx": VPĐK gửi lại file THAY THẾ cho
-# xã Đắk Liêng (24595) — ma_xa trong file đã kiểm tra khớp đúng. Đã kiểm
-# tra trước: xã này hiện không có thửa nào đánh dấu thuoc_du_an (ranh dự
-# án) nên xoá/nạp lại không mất dữ liệu đó.
+# DANHSACHGUIXA/EA SÚP-20261019T073653Z-1-001/EA SÚP: VPĐK gửi cập nhật
+# danh sách gửi xã cho khu vực Ea Súp (5 xã) — yêu cầu người dùng: CHỈ
+# cập nhật thửa CHƯA CÓ, không đụng/không ghi đè thửa đã nạp trước đó
+# (dùng CHI_THEM_MOI, không TRUNCATE/không XOA_THEO_MA_XA_TRUOC).
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24595_Xã Đắk Liêng.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24211_Xã Ea Súp.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24214_Xã Ia Lốp.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24217_Xã Ea Rốk.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24221_Xã Ia Rvê.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24229_Xã Ea Bung.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
@@ -39,12 +43,12 @@ TRUNCATE_TRUOC = False
 
 # True = file SRC có lẫn cả thửa cũ đã nạp lẫn thửa mới bổ sung — chỉ
 # insert thửa CHƯA có trong bảng, không update/đụng tới thửa đã trùng khoá.
-CHI_THEM_MOI = False
+CHI_THEM_MOI = True
 
 # True = xoá hết dòng hiện có của đúng những mã xã xuất hiện trong SRC_LIST
 # rồi nạp lại từ đầu (file SRC là danh sách THAY THẾ cho các xã đó, không
 # phải bổ sung) — các xã khác không nạp trong lần này giữ nguyên.
-XOA_THEO_MA_XA_TRUOC = True
+XOA_THEO_MA_XA_TRUOC = False
 
 
 def chon_sheet_du_lieu(wb):
