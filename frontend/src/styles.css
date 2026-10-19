@@ -704,6 +704,18 @@ label[for="mplisCookie"] {
 
 .statsTableWrap { overflow-x: auto; }
 
+/* Cột thao tác (Sửa) ghim bên phải — bảng danh mục hồ sơ có 15 cột, nút
+   Sửa nằm cuối cùng dễ bị khuất ngoài tầm nhìn khi chưa cuộn ngang, dễ
+   khiến người dùng tưởng không có cách sửa. */
+.statsTable .stickyActionCol {
+  position: sticky;
+  right: 0;
+  background: #fff;
+  box-shadow: -6px 0 6px -4px rgba(16, 42, 43, 0.12);
+}
+.statsTable tbody tr:hover .stickyActionCol { background: #f1f7f5; }
+.statsTable tbody tr.active .stickyActionCol { background: #dbefeb; }
+
 .statsTable { width: 100%; border-collapse: collapse; font-size: 12px; }
 .statsTable th {
   text-align: left; padding: 9px 10px;

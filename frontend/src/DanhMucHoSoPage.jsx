@@ -647,7 +647,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                       <th>Loại hồ sơ</th>
                       <th>Ghi chú</th>
                       <th>Đã có trên VBDLis</th>
-                      <th></th>
+                      <th className="stickyActionCol"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -674,7 +674,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                           <td>{row.loai_ho_so || ""}</td>
                           <td>{row.ghi_chu || ""}</td>
                           <td style={{ textAlign: "center" }}>{row.da_co_tren_vbdlis ? "✓" : ""}</td>
-                          <td>
+                          <td className="stickyActionCol">
                             <button type="button" className="nhom4MiniBtn" onClick={() => handleEditRow(row)}>
                               ✏ Sửa
                             </button>
