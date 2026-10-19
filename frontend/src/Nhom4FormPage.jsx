@@ -129,6 +129,20 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
   const [fileChinh, setFileChinh] = useState(null);
   const [filePhu, setFilePhu] = useState(null);
   const [fileTbxn, setFileTbxn] = useState(null);
+  // "Dùng chung hồ sơ quét" (yêu cầu người dùng: 1 đơn nhiều thửa) — bật
+  // thì "+ Thêm thửa đất" KHÔNG xóa 3 ô file (giữ nguyên để áp cho thửa kế
+  // tiếp, khỏi chọn lại), và lúc nộp chỉ gửi ĐÚNG 1 bộ file dùng chung cho
+  // CẢ danh sách thay vì lặp lại theo từng thửa (xem handleSubmit) — tránh
+  // payload phình to khi nhiều thửa (nguyên nhân nộp 40 thửa thất bại dù
+  // ~10 thửa vẫn được). Bật lên thì xóa luôn file riêng (nếu có) của các
+  // thửa đã có sẵn trong danh sách, để khỏi mập mờ thửa nào dùng file gì.
+  const [dungChungHoSo, setDungChungHoSo] = useState(false);
+  const toggleDungChungHoSo = (checked) => {
+    setDungChungHoSo(checked);
+    if (checked) {
+      setThuaList((prev) => prev.map((item) => ({ ...item, fileChinh: null, filePhu: null, fileTbxn: null })));
+    }
+  };
   // <input type="file"> không có cách nào xóa tên file đang hiện bằng
   // JS/React (trình duyệt chặn set value vì lý do bảo mật) — dù state
   // fileChinh/filePhu/fileTbxn đã null, ô vẫn hiện tên file cũ, khiến
@@ -331,14 +345,23 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     setError("");
     setThuaList((prev) => [
       ...prev,
-      { thua, dat1, dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null, fileChinh, filePhu, fileTbxn },
+      {
+        thua,
+        dat1,
+        dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null,
+        fileChinh: dungChungHoSo ? null : fileChinh,
+        filePhu: dungChungHoSo ? null : filePhu,
+        fileTbxn: dungChungHoSo ? null : fileTbxn,
+      },
     ]);
     setThua(taoThuaRong());
     setDat1(taoDatRong());
     setDat2(taoDatRong());
     setCoDat2(false);
     setTrungThuaStatus("");
-    clearFileInputs();
+    // Dùng chung hồ sơ quét: giữ nguyên 3 ô file để áp cho thửa kế tiếp,
+    // khỏi phải chọn lại cùng 1 file nhiều lần.
+    if (!dungChungHoSo) clearFileInputs();
   };
 
   const xoaThua = (index) => setThuaList((prev) => prev.filter((_, i) => i !== index));
@@ -357,9 +380,14 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     setDat1(item.dat1);
     setCoDat2(Boolean(item.dat2));
     setDat2(item.dat2 || taoDatRong());
-    setFileChinh(item.fileChinh || null);
-    setFilePhu(item.filePhu || null);
-    setFileTbxn(item.fileTbxn || null);
+    // Dùng chung hồ sơ quét: giữ nguyên 3 ô file đang chọn (dùng chung cho
+    // cả danh sách) — không ghi đè bằng item.fileChinh (luôn null khi dùng
+    // chung, xem themThuaVaoDanhSach).
+    if (!dungChungHoSo) {
+      setFileChinh(item.fileChinh || null);
+      setFilePhu(item.filePhu || null);
+      setFileTbxn(item.fileTbxn || null);
+    }
     setThuaList((prev) => prev.filter((_, i) => i !== index));
     setTrungThuaStatus("");
     setError("");
@@ -442,6 +470,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
         ma_dinh_danh_ca_nhan_dai_dien: toChuc.maDinhDanhCaNhanDaiDien,
         dia_chi_thuong_tru_dai_dien: toChuc.diaChiThuongTruDaiDien,
       },
+      dung_chung_ho_so_quet: dungChungHoSo,
       thua_list: parcels.map((p) => ({
         thua: {
           so_to: p.thua.soTo,
@@ -480,12 +509,14 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     submittingRef.current = true;
     setStatus("submitting");
     try {
-      const filesByParcel = parcels.map((p) => ({
-        chinh: p.fileChinh,
-        phu: p.filePhu,
-        tbxn: p.fileTbxn,
-      }));
-      const body = await submitHoSo(payload, filesByParcel);
+      // Dùng chung hồ sơ quét: gửi ĐÚNG 1 bộ file cho cả lô (xem
+      // submitHoSo/nhom4_service.submit_ho_so) thay vì 1 bộ/thửa.
+      const body = dungChungHoSo
+        ? await submitHoSo(payload, null, { chinh: fileChinh, phu: filePhu, tbxn: fileTbxn })
+        : await submitHoSo(
+            payload,
+            parcels.map((p) => ({ chinh: p.fileChinh, phu: p.filePhu, tbxn: p.fileTbxn })),
+          );
       setResult(body);
       setStatus("done");
       setThuaList([]);
@@ -494,6 +525,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setDat2(taoDatRong());
       setCoDat2(false);
       clearFileInputs();
+      setDungChungHoSo(false);
       setNguoiHienTai({ hoTen: "", cccd: "", diaChiThuongTru: "", lyDoThayDoi: "" });
     } catch (err) {
       setError(err.message);
@@ -958,6 +990,19 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               themThuaVaoDanhSach). Nộp trực tiếp không qua danh sách (chỉ
               1 thửa) thì dùng thẳng file đang chọn ở đây. */}
           <h2 className="nhom4SectionTitle">Hồ sơ quét (của thửa đang nhập ở trên)</h2>
+          <label className="nhom4Check">
+            <input
+              type="checkbox"
+              checked={dungChungHoSo}
+              onChange={(e) => toggleDungChungHoSo(e.target.checked)}
+            />
+            Dùng chung hồ sơ quét này cho CẢ danh sách thửa (1 đơn nhiều thửa)
+          </label>
+          {dungChungHoSo && (
+            <p className="importHint">
+              Chọn file 1 lần, áp dụng cho mọi thửa trong danh sách bên dưới — không cần chọn lại ở mỗi thửa.
+            </p>
+          )}
           <label>
             {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận" : "File PDF Đơn đăng ký"} (tùy chọn)
           </label>
@@ -1015,7 +1060,11 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
                     <span>
                       Tờ {p.thua.soTo} / Thửa {p.thua.soThua} — {p.thua.dienTichThuaDat} m²
                       {p.dat1.loaiDat ? ` — ${p.dat1.loaiDat}` : " — ⚠ chưa chọn loại đất"}
-                      {p.fileChinh ? ` — 📎 ${p.fileChinh.name}` : " — (không có file quét)"}
+                      {dungChungHoSo
+                        ? " — 📎 Dùng chung hồ sơ quét"
+                        : p.fileChinh
+                          ? ` — 📎 ${p.fileChinh.name}`
+                          : " — (không có file quét)"}
                     </span>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button type="button" className="nhom4MiniBtn" onClick={() => suaThua(index)}>

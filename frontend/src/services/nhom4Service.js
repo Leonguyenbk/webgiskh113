@@ -27,18 +27,29 @@ export function getLoaiDatOptions({ signal } = {}) {
 }
 
 // filesByParcel: 1 phần tử cho MỖI thửa trong payload.thua_list, CÙNG THỨ
-// TỰ — mỗi thửa có hồ sơ quét riêng (xem Nhom4FormPage.jsx), không còn
-// dùng chung 1 bộ file cho cả lô. Field name đánh số khớp backend
-// (app/routes/nhom4_routes.py): file_chinh_0, file_phu_0, file_tbxn_0 cho
-// thửa đầu, file_chinh_1/... cho thửa kế tiếp, v.v.
-export function submitHoSo(payload, filesByParcel) {
+// TỰ — mỗi thửa có hồ sơ quét riêng (xem Nhom4FormPage.jsx). Field name
+// đánh số khớp backend (app/routes/nhom4_routes.py): file_chinh_0,
+// file_phu_0, file_tbxn_0 cho thửa đầu, file_chinh_1/... cho thửa kế
+// tiếp, v.v. sharedFiles ({chinh, phu, tbxn}): khi payload.dung_chung_ho_so_quet
+// = true (yêu cầu người dùng: 1 đơn nhiều thửa) — gửi ĐÚNG 1 bộ file dưới
+// field cố định file_chinh_shared/file_phu_shared/file_tbxn_shared thay
+// vì lặp lại cùng file cho từng thửa (payload phình to khi nhiều thửa,
+// từng khiến nộp thất bại) — filesByParcel bỏ qua (truyền null) khi dùng
+// sharedFiles.
+export function submitHoSo(payload, filesByParcel, sharedFiles) {
   const formData = new FormData();
   formData.append("payload", JSON.stringify(payload));
-  filesByParcel.forEach(({ chinh, phu, tbxn }, index) => {
-    formData.append(`file_chinh_${index}`, chinh);
-    if (phu) formData.append(`file_phu_${index}`, phu);
-    if (tbxn) formData.append(`file_tbxn_${index}`, tbxn);
-  });
+  if (sharedFiles) {
+    if (sharedFiles.chinh) formData.append("file_chinh_shared", sharedFiles.chinh);
+    if (sharedFiles.phu) formData.append("file_phu_shared", sharedFiles.phu);
+    if (sharedFiles.tbxn) formData.append("file_tbxn_shared", sharedFiles.tbxn);
+  } else {
+    (filesByParcel || []).forEach(({ chinh, phu, tbxn }, index) => {
+      if (chinh) formData.append(`file_chinh_${index}`, chinh);
+      if (phu) formData.append(`file_phu_${index}`, phu);
+      if (tbxn) formData.append(`file_tbxn_${index}`, tbxn);
+    });
+  }
 
   return request("/api/nhom4/ho-so", {
     method: "POST",

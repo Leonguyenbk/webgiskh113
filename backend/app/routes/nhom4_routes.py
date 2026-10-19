@@ -60,20 +60,33 @@ def submit_ho_so():
     except ValueError:
         return jsonify({"error": "Dữ liệu payload không phải JSON hợp lệ"}), 400
 
-    # Mỗi thửa trong payload["thua_list"] có 1 bộ hồ sơ quét riêng — frontend
-    # gửi field name đánh số theo thứ tự: file_chinh_0/file_phu_0/file_tbxn_0
-    # cho thửa đầu, file_chinh_1/... cho thửa kế tiếp, v.v.
-    so_thua = len(payload.get("thua_list") or [])
-    files_by_parcel = [
-        {
-            "chinh": request.files.get(f"file_chinh_{i}"),
-            "phu": request.files.get(f"file_phu_{i}"),
-            "tbxn": request.files.get(f"file_tbxn_{i}"),
+    # "Dùng chung hồ sơ quét" (yêu cầu người dùng: 1 đơn nhiều thửa) — thay
+    # vì gửi N bộ file trùng nhau (1 bộ/thửa, payload phình to khi nhiều
+    # thửa, có thể khiến nộp thất bại), frontend gửi ĐÚNG 1 bộ dưới field
+    # cố định file_chinh_shared/file_phu_shared/file_tbxn_shared, áp dụng
+    # cho MỌI thửa trong payload["thua_list"] — xem nhom4_service.submit_ho_so.
+    if payload.get("dung_chung_ho_so_quet"):
+        shared_files = {
+            "chinh": request.files.get("file_chinh_shared"),
+            "phu": request.files.get("file_phu_shared"),
+            "tbxn": request.files.get("file_tbxn_shared"),
         }
-        for i in range(so_thua)
-    ]
-
-    data, error_response = nhom4_service.submit_ho_so(payload, files_by_parcel)
+        data, error_response = nhom4_service.submit_ho_so(payload, None, shared_files=shared_files)
+    else:
+        # Mỗi thửa trong payload["thua_list"] có 1 bộ hồ sơ quét riêng —
+        # frontend gửi field name đánh số theo thứ tự:
+        # file_chinh_0/file_phu_0/file_tbxn_0 cho thửa đầu,
+        # file_chinh_1/... cho thửa kế tiếp, v.v.
+        so_thua = len(payload.get("thua_list") or [])
+        files_by_parcel = [
+            {
+                "chinh": request.files.get(f"file_chinh_{i}"),
+                "phu": request.files.get(f"file_phu_{i}"),
+                "tbxn": request.files.get(f"file_tbxn_{i}"),
+            }
+            for i in range(so_thua)
+        ]
+        data, error_response = nhom4_service.submit_ho_so(payload, files_by_parcel)
     if error_response:
         return error_response
     return jsonify(data)

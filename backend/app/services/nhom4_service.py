@@ -249,12 +249,17 @@ def _build_rows(payload: dict, submission_id: str, file_info_list: list[dict]) -
     return rows
 
 
-def submit_ho_so(payload: dict, files_by_parcel: list[dict]):
+def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files: dict | None = None):
     """files_by_parcel: 1 phần tử cho MỖI thửa trong payload["thua_list"],
     CÙNG THỨ TỰ — mỗi phần tử là {"chinh": FileStorage, "phu": FileStorage|
     None, "tbxn": FileStorage|None}. Mỗi thửa có hồ sơ quét RIÊNG (kể cả khi
     thông tin chủ sử dụng giống nhau giữa các thửa trong cùng 1 lần nộp) —
-    không còn dùng chung 1 bộ file cho cả lô như bản cũ."""
+    trừ khi payload["dung_chung_ho_so_quet"] = True (yêu cầu người dùng: 1
+    đơn nhiều thửa) — khi đó files_by_parcel = None, dùng shared_files
+    ({"chinh":.., "phu":.., "tbxn":..}) upload ĐÚNG 1 LẦN rồi gán chung cho
+    MỌI thửa — tránh gửi lặp lại cùng 1 file nhiều chục lần (payload phình
+    to theo số thửa, từng khiến nộp 40 thửa thất bại trong khi ~10 thửa
+    vẫn nộp được)."""
     error = validate_payload(payload)
     if error:
         return None, (jsonify({"error": error}), 400)
@@ -263,28 +268,40 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict]):
     parcels = payload.get("thua_list") or []
     che_do = payload.get("che_do") or ""
     da_co_gcn = che_do == "Đã có GCN"
+    dung_chung = bool(payload.get("dung_chung_ho_so_quet"))
 
-    if len(files_by_parcel) != len(parcels):
-        return None, (
-            jsonify({"error": "Số bộ hồ sơ quét gửi lên không khớp số thửa."}),
-            400,
-        )
-
-    # File chính (hồ sơ quét) không còn bắt buộc — nhiều nơi nhập dữ liệu
-    # không có sẵn file quét, buộc có file chặn luôn việc nộp. _validate_pdf
-    # tự bỏ qua khi storage rỗng (không chọn file), giống phu/tbxn vốn đã
-    # tùy chọn từ trước.
-    for parcel, files in zip(parcels, files_by_parcel):
-        thua = parcel.get("thua") or {}
-        nhan_thua = f"thửa {thua.get('so_thua')}, tờ {thua.get('so_to')}"
+    if dung_chung:
+        shared_files = shared_files or {}
         for storage, label in (
-            (files.get("chinh"), "File chính"),
-            (files.get("phu"), "Giấy tờ"),
-            (files.get("tbxn"), "Thông báo xác nhận"),
+            (shared_files.get("chinh"), "File chính"),
+            (shared_files.get("phu"), "Giấy tờ"),
+            (shared_files.get("tbxn"), "Thông báo xác nhận"),
         ):
             pdf_error = _validate_pdf(storage, label)
             if pdf_error:
-                return None, (jsonify({"error": f"{nhan_thua}: {pdf_error}"}), 400)
+                return None, (jsonify({"error": f"Hồ sơ quét dùng chung: {pdf_error}"}), 400)
+    else:
+        if files_by_parcel is None or len(files_by_parcel) != len(parcels):
+            return None, (
+                jsonify({"error": "Số bộ hồ sơ quét gửi lên không khớp số thửa."}),
+                400,
+            )
+
+        # File chính (hồ sơ quét) không còn bắt buộc — nhiều nơi nhập dữ liệu
+        # không có sẵn file quét, buộc có file chặn luôn việc nộp. _validate_pdf
+        # tự bỏ qua khi storage rỗng (không chọn file), giống phu/tbxn vốn đã
+        # tùy chọn từ trước.
+        for parcel, files in zip(parcels, files_by_parcel):
+            thua = parcel.get("thua") or {}
+            nhan_thua = f"thửa {thua.get('so_thua')}, tờ {thua.get('so_to')}"
+            for storage, label in (
+                (files.get("chinh"), "File chính"),
+                (files.get("phu"), "Giấy tờ"),
+                (files.get("tbxn"), "Thông báo xác nhận"),
+            ):
+                pdf_error = _validate_pdf(storage, label)
+                if pdf_error:
+                    return None, (jsonify({"error": f"{nhan_thua}: {pdf_error}"}), 400)
 
     # 1) Chuẩn hóa số tờ/số thửa + tạo khóa madvhc_soto_sothua cho từng
     #    thửa. Chặn trùng ngay trong danh sách nhập.
@@ -411,39 +428,69 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict]):
 
     submission_id = str(uuid.uuid4())
 
-    # Upload PDF lên Drive NGAY (đồng bộ) TRƯỚC khi ghi du_lieu_gcn, MỖI
-    # THỬA 1 BỘ RIÊNG (không dùng chung 1 bộ cho cả lô như bản cũ). File
-    # ≤15MB/thửa nên chỉ vài giây mỗi thửa; đổi lấy việc người nộp biết
-    # CHẮC file đã lên (cơ chế thread nền cũ nuốt lỗi -> file rớt âm thầm,
-    # dòng vẫn "có dữ liệu" nhưng thiếu file quét). Ghi thửa chỉ khi mọi
-    # upload đều OK.
-    file_info_list: list[dict] = []
-    for parcel, files in zip(parcels, files_by_parcel):
-        thua = parcel.get("thua") or {}
-        so_to = _to_int(thua.get("so_to"))
-        so_thua = _to_int(thua.get("so_thua"))
-        base_name = _base_name_cho_thua(so_to, so_thua)
-
-        # Đọc nội dung file NGAY (trong request), vì FileStorage của Flask
-        # không dùng được nữa sau khi request kết thúc. chinh (file chính/
-        # hồ sơ quét) không còn bắt buộc, đọc có điều kiện giống phu/tbxn.
-        chinh_bytes = files["chinh"].read() if (files.get("chinh") and files["chinh"].filename) else None
-        phu_bytes = files["phu"].read() if (files.get("phu") and files["phu"].filename) else None
-        # Thông báo xác nhận (-TBXN) chỉ dùng ở chế độ "Chưa được cấp GCN" và
-        # luôn là tùy chọn — không có thì bỏ qua, không chặn nộp.
-        tbxn_bytes = (
-            files["tbxn"].read()
-            if (files.get("tbxn") and files["tbxn"].filename and not da_co_gcn)
+    # Upload PDF lên Drive NGAY (đồng bộ) TRƯỚC khi ghi du_lieu_gcn. File
+    # ≤20MB nên chỉ vài giây mỗi lượt; đổi lấy việc người nộp biết CHẮC file
+    # đã lên (cơ chế thread nền cũ nuốt lỗi -> file rớt âm thầm, dòng vẫn
+    # "có dữ liệu" nhưng thiếu file quét). Ghi thửa chỉ khi mọi upload đều OK.
+    if dung_chung:
+        # "Dùng chung" (1 đơn nhiều thửa) — upload ĐÚNG 1 LẦN, gán CHUNG 1
+        # file_info cho mọi thửa (mọi dòng du_lieu_gcn trỏ về cùng 1 file
+        # vật lý). Đặt tên theo thửa ĐẦU TIÊN kèm hậu tố _GOPxTHUA cho dễ
+        # nhận biết trên đĩa/Drive khi nhiều thửa cùng dùng 1 hồ sơ quét.
+        first_thua = (parcels[0].get("thua") or {}) if parcels else {}
+        base_name = _sanitize_filename(
+            f"{_base_name_cho_thua(_to_int(first_thua.get('so_to')), _to_int(first_thua.get('so_thua')))}"
+            f"_GOP{len(parcels)}THUA"
+        )
+        shared_files = shared_files or {}
+        chinh_bytes = (
+            shared_files["chinh"].read()
+            if (shared_files.get("chinh") and shared_files["chinh"].filename)
             else None
         )
-
-        file_info, error_response = _upload_files(
+        phu_bytes = (
+            shared_files["phu"].read() if (shared_files.get("phu") and shared_files["phu"].filename) else None
+        )
+        tbxn_bytes = (
+            shared_files["tbxn"].read()
+            if (shared_files.get("tbxn") and shared_files["tbxn"].filename and not da_co_gcn)
+            else None
+        )
+        shared_file_info, error_response = _upload_files(
             ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
             chinh_bytes, phu_bytes, tbxn_bytes,
         )
         if error_response:
             return None, error_response
-        file_info_list.append(file_info)
+        file_info_list = [shared_file_info for _ in parcels]
+    else:
+        file_info_list = []
+        for parcel, files in zip(parcels, files_by_parcel):
+            thua = parcel.get("thua") or {}
+            so_to = _to_int(thua.get("so_to"))
+            so_thua = _to_int(thua.get("so_thua"))
+            base_name = _base_name_cho_thua(so_to, so_thua)
+
+            # Đọc nội dung file NGAY (trong request), vì FileStorage của Flask
+            # không dùng được nữa sau khi request kết thúc. chinh (file chính/
+            # hồ sơ quét) không còn bắt buộc, đọc có điều kiện giống phu/tbxn.
+            chinh_bytes = files["chinh"].read() if (files.get("chinh") and files["chinh"].filename) else None
+            phu_bytes = files["phu"].read() if (files.get("phu") and files["phu"].filename) else None
+            # Thông báo xác nhận (-TBXN) chỉ dùng ở chế độ "Chưa được cấp GCN" và
+            # luôn là tùy chọn — không có thì bỏ qua, không chặn nộp.
+            tbxn_bytes = (
+                files["tbxn"].read()
+                if (files.get("tbxn") and files["tbxn"].filename and not da_co_gcn)
+                else None
+            )
+
+            file_info, error_response = _upload_files(
+                ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
+                chinh_bytes, phu_bytes, tbxn_bytes,
+            )
+            if error_response:
+                return None, error_response
+            file_info_list.append(file_info)
 
     rows = _build_rows(payload, submission_id, file_info_list)
 
