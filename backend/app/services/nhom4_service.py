@@ -256,10 +256,12 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
     thông tin chủ sử dụng giống nhau giữa các thửa trong cùng 1 lần nộp) —
     trừ khi payload["dung_chung_ho_so_quet"] = True (yêu cầu người dùng: 1
     đơn nhiều thửa) — khi đó files_by_parcel = None, dùng shared_files
-    ({"chinh":.., "phu":.., "tbxn":..}) upload ĐÚNG 1 LẦN rồi gán chung cho
-    MỌI thửa — tránh gửi lặp lại cùng 1 file nhiều chục lần (payload phình
+    ({"chinh":.., "phu":.., "tbxn":..}): CHỈ ĐỌC bytes từ request 1 lần
+    (tránh gửi lặp lại cùng 1 file qua mạng nhiều chục lần — payload phình
     to theo số thửa, từng khiến nộp 40 thửa thất bại trong khi ~10 thửa
-    vẫn nộp được)."""
+    vẫn nộp được), nhưng vẫn GHI RA ĐĨA riêng cho từng thửa, đặt tên đúng
+    quy ước cũ (khớp sophathanhgcn của chính thửa đó) — không phải 1 file
+    dùng chung cho tất cả."""
     error = validate_payload(payload)
     if error:
         return None, (jsonify({"error": error}), 400)
@@ -433,15 +435,16 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
     # đã lên (cơ chế thread nền cũ nuốt lỗi -> file rớt âm thầm, dòng vẫn
     # "có dữ liệu" nhưng thiếu file quét). Ghi thửa chỉ khi mọi upload đều OK.
     if dung_chung:
-        # "Dùng chung" (1 đơn nhiều thửa) — upload ĐÚNG 1 LẦN, gán CHUNG 1
-        # file_info cho mọi thửa (mọi dòng du_lieu_gcn trỏ về cùng 1 file
-        # vật lý). Đặt tên theo thửa ĐẦU TIÊN kèm hậu tố _GOPxTHUA cho dễ
-        # nhận biết trên đĩa/Drive khi nhiều thửa cùng dùng 1 hồ sơ quét.
-        first_thua = (parcels[0].get("thua") or {}) if parcels else {}
-        base_name = _sanitize_filename(
-            f"{_base_name_cho_thua(_to_int(first_thua.get('so_to')), _to_int(first_thua.get('so_thua')))}"
-            f"_GOP{len(parcels)}THUA"
-        )
+        # "Dùng chung" (1 đơn nhiều thửa, yêu cầu người dùng) — chỉ ĐỌC bytes
+        # từ request ĐÚNG 1 LẦN (đây mới là chỗ tốn băng thông/dễ lỗi khi
+        # nhiều thửa — N thửa trước đây = N lần gửi cùng file qua mạng, từng
+        # khiến nộp 40 thửa thất bại dù ~10 thửa vẫn được). Việc GHI ra đĩa
+        # vẫn làm RIÊNG cho từng thửa như cũ — mỗi thửa 1 file, đặt tên ĐÚNG
+        # theo quy ước cũ (khớp sophathanhgcn của chính thửa đó, xem
+        # _base_name_cho_thua) — giữ nguyên tra cứu "số phát hành <-> tên
+        # file" cho mọi thửa, không chỉ thửa đầu tiên. Ghi đĩa từ bytes có
+        # sẵn trong bộ nhớ gần như miễn phí (không tốn mạng), nên lặp lại
+        # không phải vấn đề — chỉ vòng gửi lên mới cần tránh lặp.
         shared_files = shared_files or {}
         chinh_bytes = (
             shared_files["chinh"].read()
@@ -456,13 +459,21 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
             if (shared_files.get("tbxn") and shared_files["tbxn"].filename and not da_co_gcn)
             else None
         )
-        shared_file_info, error_response = _upload_files(
-            ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
-            chinh_bytes, phu_bytes, tbxn_bytes,
-        )
-        if error_response:
-            return None, error_response
-        file_info_list = [shared_file_info for _ in parcels]
+
+        file_info_list = []
+        for parcel in parcels:
+            thua = parcel.get("thua") or {}
+            so_to = _to_int(thua.get("so_to"))
+            so_thua = _to_int(thua.get("so_thua"))
+            base_name = _base_name_cho_thua(so_to, so_thua)
+
+            file_info, error_response = _upload_files(
+                ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
+                chinh_bytes, phu_bytes, tbxn_bytes,
+            )
+            if error_response:
+                return None, error_response
+            file_info_list.append(file_info)
     else:
         file_info_list = []
         for parcel, files in zip(parcels, files_by_parcel):
