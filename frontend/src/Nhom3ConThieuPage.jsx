@@ -51,6 +51,12 @@ const GROUP_LABELS = {
   ke_hoach: "Tiến độ thực hiện kế hoạch",
 };
 
+// Tô nền nhạt + viền trái đậm để tách bạch 2 nhóm cột trong bảng (yêu
+// cầu người dùng: dễ phân biệt số liệu "Loại 4" và số liệu "theo kế
+// hoạch" khi nhìn lướt bảng).
+const KE_HOACH_BG = "#eef7f0";
+const KE_HOACH_BORDER = "2px solid #2e7d32";
+
 export default function Nhom3ConThieuPage({
   onNavigateHome,
   onNavigateNhom3Dashboard,
@@ -393,7 +399,12 @@ export default function Nhom3ConThieuPage({
                         <th
                           key={groupKey}
                           colSpan={SORT_COLUMNS.filter((c) => c.group === groupKey).length}
-                          style={{ textAlign: "center" }}
+                          style={{
+                            textAlign: "center",
+                            ...(groupKey === "ke_hoach"
+                              ? { background: KE_HOACH_BG, borderLeft: KE_HOACH_BORDER }
+                              : {}),
+                          }}
                         >
                           {GROUP_LABELS[groupKey]}
                         </th>
@@ -406,11 +417,20 @@ export default function Nhom3ConThieuPage({
                       </th>
                     </tr>
                     <tr>
-                      {SORT_COLUMNS.filter((c) => c.group).map((column) => (
+                      {SORT_COLUMNS.filter((c) => c.group).map((column, index, arr) => (
                         <th
                           key={column.key}
                           onClick={() => handleSort(column.key)}
-                          style={{ cursor: "pointer", userSelect: "none", whiteSpace: "normal", maxWidth: 110 }}
+                          style={{
+                            cursor: "pointer",
+                            userSelect: "none",
+                            whiteSpace: "normal",
+                            maxWidth: 110,
+                            ...(column.group === "ke_hoach" ? { background: KE_HOACH_BG } : {}),
+                            ...(column.group === "ke_hoach" && arr[index - 1]?.group !== "ke_hoach"
+                              ? { borderLeft: KE_HOACH_BORDER }
+                              : {}),
+                          }}
                           title="Bấm để sắp xếp"
                         >
                           {column.label}
@@ -448,8 +468,10 @@ export default function Nhom3ConThieuPage({
                             <td>{formatSo(row.chua_lien_ket_khong_gian)}</td>
                             <td>{formatSo(row.tong_tru_kg)}</td>
                             <td>{row.percent_tru_kg}%</td>
-                            <td>{formatSo(row.tong_ke_hoach)}</td>
-                            <td>{row.percent_ke_hoach}%</td>
+                            <td style={{ background: KE_HOACH_BG, borderLeft: KE_HOACH_BORDER }}>
+                              {formatSo(row.tong_ke_hoach)}
+                            </td>
+                            <td style={{ background: KE_HOACH_BG }}>{row.percent_ke_hoach}%</td>
                             <td style={{ textAlign: "center" }}>
                               <button
                                 type="button"
