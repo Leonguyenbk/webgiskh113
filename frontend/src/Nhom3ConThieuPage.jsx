@@ -405,7 +405,7 @@ export default function Nhom3ConThieuPage({
                         <th
                           key={column.key}
                           onClick={() => handleSort(column.key)}
-                          style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                          style={{ cursor: "pointer", userSelect: "none", whiteSpace: "normal", maxWidth: 110 }}
                           title="Bấm để sắp xếp"
                         >
                           {column.label}
@@ -414,10 +414,10 @@ export default function Nhom3ConThieuPage({
                           </span>
                         </th>
                       ))}
-                      <th style={{ whiteSpace: "nowrap" }}>Danh sách</th>
-                      <th style={{ whiteSpace: "nowrap" }}>Excel</th>
-                      <th style={{ whiteSpace: "nowrap" }}>Excel (Nhóm 1 đã nhập)</th>
-                      <th style={{ whiteSpace: "nowrap" }}>Excel (Nhóm 1 chưa nhập)</th>
+                      <th style={{ whiteSpace: "normal", maxWidth: 90 }}>Danh sách</th>
+                      <th style={{ whiteSpace: "normal", maxWidth: 90 }}>Excel</th>
+                      <th style={{ whiteSpace: "normal", maxWidth: 90 }}>Excel (Nhóm 1 đã nhập)</th>
+                      <th style={{ whiteSpace: "normal", maxWidth: 90 }}>Excel (Nhóm 1 chưa nhập)</th>
                     </tr>
                   </thead>
                   <tbody>
