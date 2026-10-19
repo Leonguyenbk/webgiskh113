@@ -744,6 +744,13 @@ label[for="mplisCookie"] {
 .nhom3TongHopTable tbody tr:nth-child(even) { background: #f3f8f6; }
 .nhom3TongHopTable tbody tr:nth-child(even):hover { background: #e7f1ee; }
 
+/* Yêu cầu người dùng: tiêu đề canh giữa cả ngang lẫn dọc, số liệu canh
+   phải cho dễ so sánh theo cột — cột tên xã/phường (đầu dòng) vẫn canh
+   trái vì là chữ, không phải số. */
+.nhom3TongHopTable th { text-align: center; vertical-align: middle; }
+.nhom3TongHopTable td { text-align: right; }
+.nhom3TongHopTable td:first-child { text-align: left; }
+
 .statsTableBar { display: flex; align-items: center; gap: 8px; }
 .statsTableBarTrack {
   position: relative;

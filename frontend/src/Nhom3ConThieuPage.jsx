@@ -381,7 +381,7 @@ export default function Nhom3ConThieuPage({
                 <table className="statsTable nhom3TongHopTable">
                   <thead>
                     <tr>
-                      <th rowSpan={2} style={{ verticalAlign: "bottom" }}>
+                      <th rowSpan={2} style={{ verticalAlign: "middle" }}>
                         {SORT_COLUMNS.filter((c) => !c.group).map((column) => (
                           <span
                             key={column.key}
@@ -410,10 +410,10 @@ export default function Nhom3ConThieuPage({
                           {GROUP_LABELS[groupKey]}
                         </th>
                       ))}
-                      <th rowSpan={2} style={{ whiteSpace: "normal", maxWidth: 90, verticalAlign: "bottom" }}>
+                      <th rowSpan={2} style={{ whiteSpace: "normal", maxWidth: 90, verticalAlign: "middle" }}>
                         Danh sách
                       </th>
-                      <th rowSpan={2} style={{ whiteSpace: "normal", maxWidth: 90, verticalAlign: "bottom" }}>
+                      <th rowSpan={2} style={{ whiteSpace: "normal", maxWidth: 90, verticalAlign: "middle" }}>
                         Excel
                       </th>
                     </tr>
@@ -453,8 +453,10 @@ export default function Nhom3ConThieuPage({
                       filteredRows.map((row) =>
                         row.ghi_chu ? (
                           <tr key={row.ma_xa} style={{ color: "#6b7280", fontStyle: "italic" }}>
-                            <td>{row.ten_xa}</td>
-                            <td colSpan={SORT_COLUMNS.length - 1 + 2}>{row.ghi_chu}</td>
+                            <td style={{ textAlign: "left" }}>{row.ten_xa}</td>
+                            <td colSpan={SORT_COLUMNS.length - 1 + 2} style={{ textAlign: "left" }}>
+                              {row.ghi_chu}
+                            </td>
                           </tr>
                         ) : (
                           <tr key={row.ma_xa}>
