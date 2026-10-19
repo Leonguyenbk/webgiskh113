@@ -26,19 +26,30 @@ const TO_GIAM_SAT_OPTIONS = [
 // Cấu hình cột cho phép bấm tiêu đề để sắp xếp bảng "Chi tiết theo
 // xã/phường" — cùng pattern với GcnDashboardPage.jsx (SORT_COLUMNS/handleSort).
 // defaultDir: hướng áp dụng khi bấm lần đầu vào 1 cột khác.
+// group: để gộp tiêu đề nhóm ở hàng trên (yêu cầu người dùng) — "loai4" =
+// phần hệ thống tự theo dõi (tổng gửi xã nội bộ), "ke_hoach" = phần cộng
+// thêm Loại 1 đã làm (VPĐK gửi song song, xem nhom3_tong_hop.tong_ke_hoach).
+// Không có group (ten_xa) = cột rowSpan 2, đứng ngoài 2 nhóm.
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
-  { key: "tong", label: "Tổng gửi xã (đã trừ Chi nhánh KV)", type: "number", defaultDir: "desc" },
-  { key: "da_nhom_1_2_da_nhap", label: "Nhóm 1 đã nhập biểu (Xã làm)", type: "number", defaultDir: "desc" },
-  { key: "da_nhom_1_2_chua_nhap", label: "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)", type: "number", defaultDir: "desc" },
-  { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", type: "number", defaultDir: "desc" },
-  { key: "da_lam", label: "Đã làm (Nhóm 1 đã nhập + đã nhập biểu)", type: "number", defaultDir: "desc" },
-  { key: "percent", label: "%", type: "number", defaultDir: "asc" },
-  { key: "con_thieu", label: "Còn thiếu", type: "number", defaultDir: "desc" },
-  { key: "chua_lien_ket_khong_gian", label: "Chưa liên kết không gian", type: "number", defaultDir: "desc" },
-  { key: "tong_tru_kg", label: "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", type: "number", defaultDir: "desc" },
-  { key: "percent_tru_kg", label: "% (trừ cả chưa liên kết KG)", type: "number", defaultDir: "asc" },
+  { key: "tong", label: "Tổng gửi xã (đã trừ Chi nhánh KV)", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "da_nhom_1_2_da_nhap", label: "Nhóm 1 đã nhập biểu (Xã làm)", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "da_nhom_1_2_chua_nhap", label: "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "da_lam", label: "Đã làm (Nhóm 1 đã nhập + đã nhập biểu)", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "percent", label: "%", type: "number", defaultDir: "asc", group: "loai4" },
+  { key: "con_thieu", label: "Còn thiếu", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "chua_lien_ket_khong_gian", label: "Chưa liên kết không gian", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "tong_tru_kg", label: "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "percent_tru_kg", label: "% (trừ cả chưa liên kết KG)", type: "number", defaultDir: "asc", group: "loai4" },
+  { key: "tong_ke_hoach", label: "Tổng danh sách theo kế hoạch (đã gồm Loại 1 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
+  { key: "percent_ke_hoach", label: "Tỷ lệ theo kế hoạch", type: "number", defaultDir: "asc", group: "ke_hoach" },
 ];
+
+const GROUP_LABELS = {
+  loai4: "Tiến độ thực hiện Loại 4",
+  ke_hoach: "Tiến độ thực hiện kế hoạch",
+};
 
 export default function Nhom3ConThieuPage({
   onNavigateHome,
@@ -148,12 +159,17 @@ export default function Nhom3ConThieuPage({
       // biểu (không tính phần Chi nhánh KV làm trực tiếp, chưa nhập) +
       // Nhóm 3 đã nhập biểu (yêu cầu người dùng).
       const daLam = (row.da_nhom_1_2_da_nhap || 0) + (row.da_thu_thap || 0);
+      // Đã làm theo kế hoạch = Đã làm (Loại 4) + Loại 1 đã làm (VPĐK gửi
+      // song song, chưa từng nằm trong tổng gửi xã — yêu cầu người dùng).
+      const daLamKeHoach = daLam + (row.loai_1_da_lam || 0);
       return {
         ...row,
         ten_xa: row.ten_xa || row.ma_xa,
         da_lam: daLam,
         percent: formatPercent(daLam, row.tong),
         percent_tru_kg: formatPercent(daLam, row.tong_tru_kg),
+        da_lam_ke_hoach: daLamKeHoach,
+        percent_ke_hoach: formatPercent(daLamKeHoach, row.tong_ke_hoach),
       };
     });
   }, [tongHop]);
@@ -187,6 +203,8 @@ export default function Nhom3ConThieuPage({
   const daLam = (tongHop?.da_nhom_1_2_da_nhap || 0) + (tongHop?.da_thu_thap || 0);
   const tyLeDaLam = formatPercent(daLam, tongHop?.tong || 0);
   const tyLeDaLamTruKg = formatPercent(daLam, tongHop?.tong_tru_kg || 0);
+  const daLamKeHoach = daLam + (tongHop?.loai_1_da_lam || 0);
+  const tyLeKeHoach = formatPercent(daLamKeHoach, tongHop?.tong_ke_hoach || 0);
 
   return (
     <main className="toolsShell">
@@ -311,6 +329,20 @@ export default function Nhom3ConThieuPage({
                   {formatSo(daLam)} <span style={{ fontWeight: 400, fontSize: 14 }}>({tyLeDaLamTruKg}%)</span>
                 </strong>
               </div>
+              <div className="statTile">
+                <span>Trong đó: Loại 1 đã làm (VPĐK gửi song song)</span>
+                <strong style={{ color: "#6a817e" }}>{formatSo(tongHop.loai_1_da_lam)}</strong>
+              </div>
+              <div className="statTile">
+                <span>Tổng danh sách theo kế hoạch (đã gồm Loại 1 đã làm)</span>
+                <strong>{formatSo(tongHop.tong_ke_hoach)}</strong>
+              </div>
+              <div className="statTile">
+                <span>Tỷ lệ theo kế hoạch</span>
+                <strong style={{ color: "#2e7d32" }}>
+                  {formatSo(daLamKeHoach)} <span style={{ fontWeight: 400, fontSize: 14 }}>({tyLeKeHoach}%)</span>
+                </strong>
+              </div>
             </div>
 
             <div
@@ -342,7 +374,39 @@ export default function Nhom3ConThieuPage({
                 <table className="statsTable">
                   <thead>
                     <tr>
-                      {SORT_COLUMNS.map((column) => (
+                      <th rowSpan={2} style={{ verticalAlign: "bottom" }}>
+                        {SORT_COLUMNS.filter((c) => !c.group).map((column) => (
+                          <span
+                            key={column.key}
+                            onClick={() => handleSort(column.key)}
+                            style={{ cursor: "pointer", userSelect: "none" }}
+                            title="Bấm để sắp xếp"
+                          >
+                            {column.label}
+                            <span style={{ marginLeft: 4, opacity: sort.key === column.key ? 1 : 0.25 }}>
+                              {sort.key === column.key ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
+                            </span>
+                          </span>
+                        ))}
+                      </th>
+                      {["loai4", "ke_hoach"].map((groupKey) => (
+                        <th
+                          key={groupKey}
+                          colSpan={SORT_COLUMNS.filter((c) => c.group === groupKey).length}
+                          style={{ textAlign: "center" }}
+                        >
+                          {GROUP_LABELS[groupKey]}
+                        </th>
+                      ))}
+                      <th rowSpan={2} style={{ whiteSpace: "normal", maxWidth: 90, verticalAlign: "bottom" }}>
+                        Danh sách
+                      </th>
+                      <th rowSpan={2} style={{ whiteSpace: "normal", maxWidth: 90, verticalAlign: "bottom" }}>
+                        Excel
+                      </th>
+                    </tr>
+                    <tr>
+                      {SORT_COLUMNS.filter((c) => c.group).map((column) => (
                         <th
                           key={column.key}
                           onClick={() => handleSort(column.key)}
@@ -355,8 +419,6 @@ export default function Nhom3ConThieuPage({
                           </span>
                         </th>
                       ))}
-                      <th style={{ whiteSpace: "normal", maxWidth: 90 }}>Danh sách</th>
-                      <th style={{ whiteSpace: "normal", maxWidth: 90 }}>Excel</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -386,6 +448,8 @@ export default function Nhom3ConThieuPage({
                             <td>{formatSo(row.chua_lien_ket_khong_gian)}</td>
                             <td>{formatSo(row.tong_tru_kg)}</td>
                             <td>{row.percent_tru_kg}%</td>
+                            <td>{formatSo(row.tong_ke_hoach)}</td>
+                            <td>{row.percent_ke_hoach}%</td>
                             <td style={{ textAlign: "center" }}>
                               <button
                                 type="button"
