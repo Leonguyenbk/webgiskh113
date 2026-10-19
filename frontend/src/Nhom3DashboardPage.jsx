@@ -105,7 +105,10 @@ export default function Nhom3DashboardPage({ onNavigateHome, onNavigateNhom3ConT
   const ratioRows = useMemo(() => {
     return theoXa
       .map((row) => {
-        const daLam = (row.da_nhom_1_2 || 0) + (row.da_thu_thap || 0);
+        // Chỉ tính phần xã thực sự phải làm và đã làm — Nhóm 1 ĐÃ nhập +
+        // Nhóm 3 đã nhập, trên tổng đã trừ Chi nhánh KV + chưa liên kết
+        // không gian (yêu cầu người dùng, xem nhom3_tong_hop).
+        const daLam = (row.da_nhom_1_2_da_nhap || 0) + (row.da_thu_thap || 0);
         const value = row.tong ? (daLam / row.tong) * 100 : 0;
         return { ma_xa: row.ma_xa, ten_xa: row.ten_xa || row.ma_xa, value, color: colorForMaXa(row.ma_xa) };
       })
@@ -125,10 +128,10 @@ export default function Nhom3DashboardPage({ onNavigateHome, onNavigateNhom3ConT
   // hiện trạng, không phụ thuộc khoảng ngày đang lọc cho trend.)
   const pieSource = useMemo(() => {
     if (!filterMaXa) {
-      return { daNhom12: tongHop?.da_nhom_1_2 || 0, daThuThap: tongHop?.da_thu_thap || 0, conThieu: tongHop?.con_thieu || 0 };
+      return { daNhom12: tongHop?.da_nhom_1_2_da_nhap || 0, daThuThap: tongHop?.da_thu_thap || 0, conThieu: tongHop?.con_thieu || 0 };
     }
     const row = theoXa.find((r) => r.ma_xa === filterMaXa);
-    return { daNhom12: row?.da_nhom_1_2 || 0, daThuThap: row?.da_thu_thap || 0, conThieu: row?.con_thieu || 0 };
+    return { daNhom12: row?.da_nhom_1_2_da_nhap || 0, daThuThap: row?.da_thu_thap || 0, conThieu: row?.con_thieu || 0 };
   }, [filterMaXa, tongHop, theoXa]);
 
   const pieTitle = filterMaXa

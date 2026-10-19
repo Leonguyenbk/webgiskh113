@@ -2137,7 +2137,11 @@ begin
         (a.madvhc_soto_sothua is not null) as co_nhap,
         v_now
     from public.nhom3_can_thu_thap t
-    join public.thua_dat p
+    -- LEFT JOIN (trước là INNER) — thửa thuộc ranh dự án hoặc chưa có
+    -- hình học (p.ma_xa is null) vẫn cần xét tới, vì có thể xã ĐÃ LỠ nhập
+    -- biểu cho thửa đó (xem điều kiện where bên dưới) -> không bỏ thẳng
+    -- khỏi cache nữa, chỉ bỏ khi KHÔNG có dữ liệu nhập (yêu cầu người dùng).
+    left join public.thua_dat p
         on p.ma_xa = t.ma_xa and p.so_to = t.so_to and p.so_thua = t.so_thua
     -- Xã thuộc 1 dự án tổng thể khác (ghi chú ở nhom3_xa_ghi_chu, ví dụ
     -- Ea Ning/Ea Ktur/Dray Bhăng — Cư Kuin) KHÔNG đánh giá Nhóm 3 ở xã đó
@@ -2153,16 +2157,22 @@ begin
     left join gcn_any_keys a
         on a.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
     -- Thửa đã đánh dấu thuộc 1 ranh dự án (xem
-    -- luu_ranh_du_an_va_danh_dau_nhom3) không còn tính vào khối lượng
-    -- Nhóm 3 cần gửi xã nữa -> loại khỏi cache ngay từ đây, mọi hàm đọc
-    -- cache (nhom3_tong_hop, nhom3_list_con_thieu, lịch sử tiến độ) tự
-    -- động không thấy các thửa này nữa, không cần sửa thêm nơi khác.
+    -- luu_ranh_du_an_va_danh_dau_nhom3) hoặc chưa có hình học trên bản đồ
+    -- (p.ma_xa is null, chưa nhập GML) bình thường KHÔNG tính vào khối
+    -- lượng Nhóm 3 cần gửi xã nữa -> loại khỏi cache. NGOẠI LỆ: nếu xã ĐÃ
+    -- LỠ nhập biểu cho đúng thửa đó (a.madvhc_soto_sothua is not null) thì
+    -- vẫn tính vào tổng + tính luôn cho xã (co_nhap/da_thu_thap ở trên tự
+    -- động = true cho các dòng này) — ghi nhận công sức xã đã làm thay vì
+    -- bỏ hẳn (yêu cầu người dùng, xem thêm nhom3_tong_hop bên dưới).
     -- ĐÃ REVERT loại đất tổ chức (p.ten_chu, _nhom3_la_dat_to_chuc) khỏi
     -- đây — đất tổ chức/đất công ích do UBND xã quản lý vẫn phải nhập biểu
     -- bình thường, chỉ nên phân biệt trên bản đồ (nếu cần), không loại
     -- khỏi đếm/danh sách "còn thiếu" (yêu cầu người dùng).
-    where not t.thuoc_du_an
-      and gc.ma_xa is null
+    where gc.ma_xa is null
+      and (
+            (not t.thuoc_du_an and p.ma_xa is not null)
+            or a.madvhc_soto_sothua is not null
+          )
     on conflict (ma_xa, so_to, so_thua) do update set
         ma_dinh_danh = excluded.ma_dinh_danh,
         la_nhom_1_2  = excluded.la_nhom_1_2,
@@ -2229,11 +2239,39 @@ create table if not exists public.nhom3_to_giam_sat (
 );
 alter table public.nhom3_to_giam_sat enable row level security;
 
+-- Số thửa "chưa liên kết không gian" theo xã — do VPĐK cung cấp thủ công
+-- sau (không có số tờ/số thửa cụ thể, chỉ 1 con số/xã, khác với "chưa có
+-- trên bản đồ" mà hệ thống tự dò qua thua_dat) -> trừ khỏi "tổng danh
+-- sách gửi xuống" của xã ở nhom3_tong_hop, vì xã không thể làm được những
+-- thửa này (yêu cầu người dùng). Mặc định 0 (chưa có số liệu thật, không
+-- ảnh hưởng gì cho tới khi được cập nhật) — không ràng buộc so_luong phải
+-- nhỏ hơn phần còn lại thực tế của xã, cần tự đối chiếu hợp lý trước khi
+-- cập nhật số liệu thật vào đây.
+create table if not exists public.nhom3_chua_lien_ket_khong_gian (
+    ma_xa text primary key,
+    so_luong integer not null default 0 check (so_luong >= 0),
+    ghi_chu text,
+    cap_nhat_luc timestamptz not null default now()
+);
+alter table public.nhom3_chua_lien_ket_khong_gian enable row level security;
+
 -- Tổng hợp toàn dự án — trang tổng quan. CHỈ đọc cache (vài chục mili
 -- giây bất kể bảng gốc bao nhiêu triệu dòng) — xem refresh_nhom3_trang_thai_cache
 -- ở trên để biết cache được tính thế nào và khi nào cần gọi lại.
 -- p_to_giam_sat lọc theo Tổ kiểm tra, giám sát (1-4, xem
 -- nhom3_to_giam_sat) — null = tất cả (mặc định, giữ nguyên hành vi cũ).
+--
+-- "tong" (khối lượng thực tế gửi xã) và "con_thieu" KHÔNG còn là số đếm
+-- thẳng từ cache nữa — đã trừ thêm 2 khoản không thuộc trách nhiệm trực
+-- tiếp của xã (yêu cầu người dùng):
+--   - da_nhom_1_2_chua_nhap: Nhóm 1/2 CHƯA nhập biểu, do Chi nhánh khu
+--     vực làm trực tiếp, không qua xã.
+--   - chua_lien_ket_khong_gian (public.nhom3_chua_lien_ket_khong_gian):
+--     số thửa chưa liên kết được dữ liệu không gian, do VPĐK cung cấp thủ
+--     công, xã không thể làm được.
+-- "tỷ lệ đã làm" ở tầng ứng dụng vì vậy nên tính
+-- (da_nhom_1_2_da_nhap + da_thu_thap) / tong — chỉ còn đúng phần việc xã
+-- CÓ THỂ và ĐÃ làm, trên phần việc xã THỰC SỰ phải làm.
 create or replace function public.nhom3_tong_hop(p_to_giam_sat integer default null)
 returns jsonb
 language sql
@@ -2241,13 +2279,13 @@ stable
 security definer
 set search_path = public, extensions
 as $$
-    with theo_xa as (
+    with raw as (
         select
             c.ma_xa,
             xp.ten_xa,
             tg.khu_vuc,
             tg.to_giam_sat,
-            count(*) as tong,
+            count(*) as tong_cache,
             count(*) filter (where c.la_nhom_1_2) as da_nhom_1_2,
             -- Nhóm 1 TÁCH theo đã/chưa nhập biểu qua xã (co_nhap) — thửa
             -- Nhóm 1 chưa nhập là thửa do Chi nhánh khu vực làm trực
@@ -2256,31 +2294,44 @@ as $$
             count(*) filter (where c.la_nhom_1_2 and c.co_nhap) as da_nhom_1_2_da_nhap,
             count(*) filter (where c.la_nhom_1_2 and not c.co_nhap) as da_nhom_1_2_chua_nhap,
             count(*) filter (where not c.la_nhom_1_2 and c.da_thu_thap) as da_thu_thap,
-            count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu,
+            count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu_cache,
             -- Đã nhập (co_nhap) nhưng CHƯA đạt chuẩn đủ dữ liệu (da_thu_thap
             -- false) — "đã nhập biểu" (dùng cho xuất Excel tổng hợp, xem
             -- export_nhom3_tong_hop_xlsx) khác với "còn thiếu" (gồm cả
             -- thửa chưa đụng tới lẫn thửa này).
             count(*) filter (where not c.la_nhom_1_2 and c.co_nhap and not c.da_thu_thap) as da_nhap_chua_dat,
-            null::text as ghi_chu
+            coalesce(kg.so_luong, 0) as chua_lien_ket_khong_gian
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         left join public.nhom3_to_giam_sat tg on tg.ma_xa = c.ma_xa
+        left join public.nhom3_chua_lien_ket_khong_gian kg on kg.ma_xa = c.ma_xa
         where p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat
-        group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat
+        group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, kg.so_luong
+    ),
+    theo_xa as (
+        select
+            ma_xa, ten_xa, khu_vuc, to_giam_sat,
+            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian) as tong,
+            da_nhom_1_2, da_nhom_1_2_da_nhap, da_nhom_1_2_chua_nhap,
+            da_thu_thap,
+            (con_thieu_cache - chua_lien_ket_khong_gian) as con_thieu,
+            da_nhap_chua_dat,
+            chua_lien_ket_khong_gian,
+            null::text as ghi_chu
+        from raw
 
         union all
 
         -- Xã có ghi chú riêng (xem nhom3_xa_ghi_chu) VÀ chưa có dữ liệu
         -- trong cache -> hiện 1 dòng ghi chú (0 khắp số liệu, không cộng
         -- dồn gì thêm vào tổng).
-        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, 0, 0, g.ghi_chu
+        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, 0, 0, 0, g.ghi_chu
         from public.nhom3_xa_ghi_chu g
         left join public.danhsachxaphuong xp on xp.ma_xa = g.ma_xa
         left join public.nhom3_to_giam_sat tg on tg.ma_xa = g.ma_xa
         where (p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat)
           and not exists (
-              select 1 from public.nhom3_trang_thai_cache c where c.ma_xa = g.ma_xa
+              select 1 from raw r where r.ma_xa = g.ma_xa
           )
     )
     select jsonb_build_object(
@@ -2291,6 +2342,7 @@ as $$
         'da_thu_thap', coalesce(sum(da_thu_thap), 0),
         'con_thieu', coalesce(sum(con_thieu), 0),
         'da_nhap_chua_dat', coalesce(sum(da_nhap_chua_dat), 0),
+        'chua_lien_ket_khong_gian', coalesce(sum(chua_lien_ket_khong_gian), 0),
         'theo_xa', coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
     )
     from theo_xa;

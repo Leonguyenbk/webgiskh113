@@ -28,14 +28,15 @@ const TO_GIAM_SAT_OPTIONS = [
 // defaultDir: hướng áp dụng khi bấm lần đầu vào 1 cột khác.
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
-  { key: "tong", label: "Khối lượng thực tế gửi xã", type: "number", defaultDir: "desc" },
+  { key: "tong", label: "Tổng xã phải làm (đã trừ Chi nhánh KV + chưa liên kết KG)", type: "number", defaultDir: "desc" },
   { key: "da_nhom_1_2", label: "Đã Nhóm 1", type: "number", defaultDir: "desc" },
   { key: "da_nhom_1_2_da_nhap", label: "Nhóm 1 đã nhập biểu (Xã làm)", type: "number", defaultDir: "desc" },
   { key: "da_nhom_1_2_chua_nhap", label: "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)", type: "number", defaultDir: "desc" },
   { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", type: "number", defaultDir: "desc" },
-  { key: "da_lam", label: "Đã làm", type: "number", defaultDir: "desc" },
+  { key: "da_lam", label: "Đã làm (Nhóm 1 đã nhập + đã nhập biểu)", type: "number", defaultDir: "desc" },
   { key: "percent", label: "%", type: "number", defaultDir: "asc" },
   { key: "con_thieu", label: "Còn thiếu", type: "number", defaultDir: "desc" },
+  { key: "chua_lien_ket_khong_gian", label: "Chưa liên kết không gian", type: "number", defaultDir: "desc" },
 ];
 
 export default function Nhom3ConThieuPage({
@@ -210,7 +211,10 @@ export default function Nhom3ConThieuPage({
 
   const theoXaRows = useMemo(() => {
     return (tongHop?.theo_xa || []).map((row) => {
-      const daLam = (row.da_nhom_1_2 || 0) + (row.da_thu_thap || 0);
+      // Chỉ tính phần xã THỰC SỰ phải làm và đã làm được — Nhóm 1 ĐÃ nhập
+      // biểu (không tính phần Chi nhánh KV làm trực tiếp, chưa nhập) +
+      // Nhóm 3 đã nhập biểu (yêu cầu người dùng).
+      const daLam = (row.da_nhom_1_2_da_nhap || 0) + (row.da_thu_thap || 0);
       return {
         ...row,
         ten_xa: row.ten_xa || row.ma_xa,
@@ -246,7 +250,7 @@ export default function Nhom3ConThieuPage({
     );
   }, [sortedRows, tableFilter]);
 
-  const daLam = (tongHop?.da_nhom_1_2 || 0) + (tongHop?.da_thu_thap || 0);
+  const daLam = (tongHop?.da_nhom_1_2_da_nhap || 0) + (tongHop?.da_thu_thap || 0);
   const tyLeDaLam = formatPercent(daLam, tongHop?.tong || 0);
 
   return (
@@ -333,7 +337,7 @@ export default function Nhom3ConThieuPage({
           <>
             <div className="statTiles">
               <div className="statTile">
-                <span>Khối lượng thực tế gửi xã</span>
+                <span>Tổng xã phải làm (đã trừ Chi nhánh KV + chưa liên kết không gian)</span>
                 <strong>{formatSo(tongHop.tong)}</strong>
               </div>
               <div className="statTile">
@@ -345,7 +349,7 @@ export default function Nhom3ConThieuPage({
                 <strong style={{ color: "#2e7d32" }}>{formatSo(tongHop.da_nhom_1_2_da_nhap)}</strong>
               </div>
               <div className="statTile">
-                <span>Trong đó: Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)</span>
+                <span>Trong đó: Nhóm 1 chưa nhập biểu (Chi nhánh KV làm — đã trừ khỏi tổng)</span>
                 <strong style={{ color: "#8e5c00" }}>{formatSo(tongHop.da_nhom_1_2_chua_nhap)}</strong>
               </div>
               <div className="statTile">
@@ -353,7 +357,7 @@ export default function Nhom3ConThieuPage({
                 <strong>{formatSo(tongHop.da_thu_thap)}</strong>
               </div>
               <div className="statTile">
-                <span>Số thửa đã làm (Nhóm 1 + đã nhập biểu)</span>
+                <span>Số thửa đã làm (Nhóm 1 đã nhập + đã nhập biểu)</span>
                 <strong style={{ color: "#2e7d32" }}>
                   {formatSo(daLam)} <span style={{ fontWeight: 400, fontSize: 14 }}>({tyLeDaLam}%)</span>
                 </strong>
@@ -361,6 +365,10 @@ export default function Nhom3ConThieuPage({
               <div className="statTile">
                 <span>Còn thiếu dữ liệu</span>
                 <strong style={{ color: "#c0392b" }}>{formatSo(tongHop.con_thieu)}</strong>
+              </div>
+              <div className="statTile">
+                <span>Chưa liên kết không gian (đã trừ khỏi tổng)</span>
+                <strong style={{ color: "#6a817e" }}>{formatSo(tongHop.chua_lien_ket_khong_gian)}</strong>
               </div>
             </div>
 
@@ -437,6 +445,7 @@ export default function Nhom3ConThieuPage({
                             <td>{formatSo(row.da_lam)}</td>
                             <td>{row.percent}%</td>
                             <td>{formatSo(row.con_thieu)}</td>
+                            <td>{formatSo(row.chua_lien_ket_khong_gian)}</td>
                             <td style={{ textAlign: "center" }}>
                               <button
                                 type="button"

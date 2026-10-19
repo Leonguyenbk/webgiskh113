@@ -379,6 +379,7 @@ def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
     result.setdefault("da_thu_thap", 0)
     result.setdefault("con_thieu", 0)
     result.setdefault("da_nhap_chua_dat", 0)
+    result.setdefault("chua_lien_ket_khong_gian", 0)
     result.setdefault("theo_xa", [])
     return result, None
 
@@ -387,10 +388,11 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     """Xuất .xlsx tổng hợp tiến độ Nhóm 3 theo xã (lọc tuỳ chọn theo Tổ
     kiểm tra, giám sát 1-4) — Y HỆT bảng "Chi tiết theo xã/phường" trên
     trang /nhom-3-con-thieu (xem SORT_COLUMNS trong Nhom3ConThieuPage.jsx):
-    Khối lượng thực tế gửi xã (= tong, CHƯA trừ Nhóm 1/2), Đã Nhóm 1/2,
-    Đã nhập đủ dữ liệu, Đã làm (= Nhóm 1/2 + đã nhập đủ dữ liệu), %, Còn
-    thiếu. Xã "ghi chú" (thuộc dự án tổng thể khác, xem nhom3_xa_ghi_chu)
-    vẫn liệt kê nhưng số liệu = 0, % bỏ trống."""
+    "tong" đã trừ sẵn Nhóm 1/2 chưa nhập biểu (Chi nhánh KV làm) và chưa
+    liên kết không gian (xem nhom3_tong_hop) — Đã làm = Nhóm 1 đã nhập +
+    đã nhập đủ dữ liệu (KHÔNG cộng phần Chi nhánh KV chưa nhập). Xã "ghi
+    chú" (thuộc dự án tổng thể khác, xem nhom3_xa_ghi_chu) vẫn liệt kê
+    nhưng số liệu = 0, % bỏ trống."""
     to_giam_sat, error_response = _parse_to_giam_sat(to_giam_sat_raw)
     if error_response:
         return None, error_response
@@ -406,13 +408,13 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     ws.title = "Tong hop Nhom 3"[:31]
     ws.append([
         "Tổ giám sát", "Khu vực", "Mã xã", "Xã/Phường",
-        "Khối lượng thực tế gửi xã", "Đã Nhóm 1",
+        "Tổng xã phải làm (đã trừ Chi nhánh KV + chưa liên kết KG)", "Đã Nhóm 1",
         "Nhóm 1 đã nhập biểu (Xã làm)", "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)",
-        "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Ghi chú",
+        "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Chưa liên kết không gian", "Ghi chú",
     ])
 
     tong_chung = da_nhom12_chung = nhom12_da_nhap_chung = nhom12_chua_nhap_chung = 0
-    da_thu_thap_chung = con_thieu_chung = 0
+    da_thu_thap_chung = con_thieu_chung = chua_lien_ket_chung = 0
     for row in theo_xa:
         tong = int(row.get("tong") or 0)
         da_nhom12 = int(row.get("da_nhom_1_2") or 0)
@@ -420,7 +422,8 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         nhom12_chua_nhap = int(row.get("da_nhom_1_2_chua_nhap") or 0)
         da_thu_thap = int(row.get("da_thu_thap") or 0)
         con_thieu = int(row.get("con_thieu") or 0)
-        da_lam = da_nhom12 + da_thu_thap
+        chua_lien_ket = int(row.get("chua_lien_ket_khong_gian") or 0)
+        da_lam = nhom12_da_nhap + da_thu_thap
         percent = round(da_lam / tong * 1000) / 10 if tong > 0 else None
         tong_chung += tong
         da_nhom12_chung += da_nhom12
@@ -428,6 +431,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         nhom12_chua_nhap_chung += nhom12_chua_nhap
         da_thu_thap_chung += da_thu_thap
         con_thieu_chung += con_thieu
+        chua_lien_ket_chung += chua_lien_ket
         ws.append([
             _xlsx_cell(row.get("to_giam_sat")),
             _xlsx_cell(row.get("khu_vuc")),
@@ -441,17 +445,18 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
             da_lam,
             f"{percent}%" if percent is not None else "",
             con_thieu,
+            chua_lien_ket,
             _xlsx_cell(row.get("ghi_chu")),
         ])
 
-    da_lam_chung = da_nhom12_chung + da_thu_thap_chung
+    da_lam_chung = nhom12_da_nhap_chung + da_thu_thap_chung
     percent_chung = round(da_lam_chung / tong_chung * 1000) / 10 if tong_chung > 0 else None
     ws.append([
         "", "", "", "TỔNG CỘNG",
         tong_chung, da_nhom12_chung, nhom12_da_nhap_chung, nhom12_chua_nhap_chung,
         da_thu_thap_chung, da_lam_chung,
         f"{percent_chung}%" if percent_chung is not None else "",
-        con_thieu_chung, "",
+        con_thieu_chung, chua_lien_ket_chung, "",
     ])
 
     buf = io.BytesIO()

@@ -3,7 +3,7 @@
 // nhau (cùng kỹ thuật DonutChart ở GcnDashboardPage.jsx, mở rộng cho 3
 // phần thay vì 2).
 const SEGMENTS = [
-  { key: "da_nhom_1_2", label: "Đã Nhóm 1", color: "#16a34a" },
+  { key: "da_nhom_1_2", label: "Nhóm 1 đã nhập biểu", color: "#16a34a" },
   { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", color: "#2563eb" },
   { key: "con_thieu", label: "Còn thiếu", color: "#dc2626" },
 ];
