@@ -327,6 +327,47 @@ def update_du_lieu_gcn_chi_tiet(row_id_raw, ma_xa_raw: str, so_to_raw: str, so_t
     return {"item": rows[0]}, None
 
 
+def delete_du_lieu_gcn_thua(ma_xa_raw: str, so_to_raw: str, so_thua_raw: str):
+    """Trang 'Danh sách thửa đã nhập' — nút 'Xóa để nhập lại': xóa TOÀN BỘ
+    dòng (mọi chủ sử dụng) đã nhập cho 1 thửa để nộp lại từ đầu qua biểu
+    Nhóm 4. CHỈ áp dụng cho thửa nguồn 'biểu Nhóm 4' — chặn xóa dữ liệu
+    đồng bộ Google Sheet (giống update_du_lieu_gcn_chi_tiet, dữ liệu đó bị
+    nạp lại ở lần đồng bộ sau nên xóa tay vô nghĩa)."""
+    ma_xa = (ma_xa_raw or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+    so_to, error_response = _to_int_or_error(so_to_raw, "Số tờ")
+    if error_response:
+        return None, error_response
+    so_thua, error_response = _to_int_or_error(so_thua_raw, "Số thửa")
+    if error_response:
+        return None, error_response
+
+    key = _make_madvhc_soto_sothua(ma_xa, so_to, so_thua)
+    rows, error_response = gcn_repository.get_du_lieu_gcn_rows(key)
+    if error_response:
+        return None, error_response
+    if not rows:
+        return None, (jsonify({"error": "Thửa này chưa có dữ liệu trong du_lieu_gcn"}), 404)
+    if rows[0].get("ma_nguon") != nhom4_repository.NHOM4_MA_NGUON:
+        return None, (
+            jsonify(
+                {
+                    "error": (
+                        "Không xóa được — dữ liệu thửa này đồng bộ từ Google Sheet, "
+                        "không phải nhập từ biểu Nhóm 4."
+                    )
+                }
+            ),
+            409,
+        )
+
+    deleted, error_response = gcn_repository.delete_du_lieu_gcn_rows(key)
+    if error_response:
+        return None, error_response
+    return {"ok": True, "deleted": len(deleted or [])}, None
+
+
 def get_thong_ke_nguon_nhap():
     """Trang '/thong-ke-nguon-nhap' — tổng số thửa đã nhập toàn dự án, tách
     Form (biểu Nhóm 4) / nguồn khác (đồng bộ Google Sheet)."""

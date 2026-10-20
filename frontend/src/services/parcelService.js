@@ -58,6 +58,16 @@ export function updateGcnChiTiet(rowId, params, body, { errorFallback } = {}) {
   });
 }
 
+// Nút "Xóa để nhập lại" ở trang "Danh sách thửa đã nhập" — xóa toàn bộ
+// dòng (mọi chủ sử dụng) của 1 thửa, chỉ áp dụng nguồn "biểu Nhóm 4".
+export function deleteGcnChiTiet(params, { errorFallback } = {}) {
+  return request("/api/gcn-danh-sach/chi-tiet", {
+    method: "DELETE",
+    params,
+    errorFallback: errorFallback || "Không xóa được dữ liệu",
+  });
+}
+
 export function getThongKeNguonNhap({ signal } = {}) {
   return request("/api/thong-ke-nguon-nhap", {
     signal,

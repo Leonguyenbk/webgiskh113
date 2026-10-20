@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getGcnChiTiet, getGcnDanhSach, getXaList, updateGcnChiTiet } from "./services/parcelService";
+import {
+  deleteGcnChiTiet,
+  getGcnChiTiet,
+  getGcnDanhSach,
+  getXaList,
+  updateGcnChiTiet,
+} from "./services/parcelService";
 
 const PAGE_SIZE = 100;
 
@@ -113,6 +119,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   // trong từng nhóm.
   const [sortDesc, setSortDesc] = useState(true);
   const [offset, setOffset] = useState(0);
+  const [reloadTick, setReloadTick] = useState(0);
 
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -129,6 +136,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const [chiTietEdits, setChiTietEdits] = useState({});
   const [chiTietSavingId, setChiTietSavingId] = useState(null);
   const [chiTietSavedAt, setChiTietSavedAt] = useState({});
+  const [chiTietDeleting, setChiTietDeleting] = useState(false);
 
   useEffect(() => {
     setXaLoading(true);
@@ -175,7 +183,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [maXa, sortDesc, offset, soToFilter, soThuaFilter]);
+  }, [maXa, sortDesc, offset, soToFilter, soThuaFilter, reloadTick]);
 
   const filteredXaOptions = useMemo(() => {
     const keyword = xaQuery.trim().toLocaleLowerCase("vi");
@@ -269,6 +277,30 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
       })
       .catch((err) => setChiTietError(err.message))
       .finally(() => setChiTietSavingId(null));
+  };
+
+  const handleDeleteChiTiet = () => {
+    if (!chiTietTarget || !chiTietData?.sua_duoc) return;
+    const xacNhan = window.confirm(
+      `Xóa TOÀN BỘ dữ liệu đã nhập cho Tờ ${chiTietTarget.so_to}, Thửa ${chiTietTarget.so_thua} ` +
+        `(${chiTietTarget.ten_xa || chiTietTarget.ma_xa}) để nhập lại từ đầu?\n\n` +
+        "Hành động này không thể hoàn tác.",
+    );
+    if (!xacNhan) return;
+
+    setChiTietDeleting(true);
+    setChiTietError("");
+    deleteGcnChiTiet({
+      ma_xa: chiTietTarget.ma_xa,
+      so_to: chiTietTarget.so_to,
+      so_thua: chiTietTarget.so_thua,
+    })
+      .then(() => {
+        handleCloseChiTiet();
+        setReloadTick((prev) => prev + 1);
+      })
+      .catch((err) => setChiTietError(err.message))
+      .finally(() => setChiTietDeleting(false));
   };
 
   return (
@@ -518,12 +550,32 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
 
               {chiTietData && (
                 <>
-                  <span
-                    className={`chiTietNguonBadge ${chiTietData.sua_duoc ? "suaDuoc" : "chiXem"}`}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 8,
+                    }}
                   >
-                    Nguồn: {chiTietData.ten_nguon}
-                    {chiTietData.sua_duoc ? " — sửa được" : " — chỉ xem"}
-                  </span>
+                    <span
+                      className={`chiTietNguonBadge ${chiTietData.sua_duoc ? "suaDuoc" : "chiXem"}`}
+                    >
+                      Nguồn: {chiTietData.ten_nguon}
+                      {chiTietData.sua_duoc ? " — sửa được" : " — chỉ xem"}
+                    </span>
+                    {chiTietData.sua_duoc && (
+                      <button
+                        type="button"
+                        className="downloadButton"
+                        disabled={chiTietDeleting}
+                        onClick={handleDeleteChiTiet}
+                      >
+                        {chiTietDeleting ? "Đang xóa…" : "🗑 Xóa để nhập lại"}
+                      </button>
+                    )}
+                  </div>
                   {!chiTietData.sua_duoc && (
                     <p style={{ fontSize: 12, color: "#9a6b0a", marginTop: -4 }}>
                       Dữ liệu đồng bộ từ Google Sheet — sửa trực tiếp trên Sheet nguồn, hệ thống sẽ tự

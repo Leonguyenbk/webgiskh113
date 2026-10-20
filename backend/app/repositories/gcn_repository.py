@@ -221,6 +221,24 @@ def get_du_lieu_gcn_rows(madvhc_soto_sothua: str):
     return _json_or_error(response, error_response)
 
 
+def delete_du_lieu_gcn_rows(madvhc_soto_sothua: str):
+    # Xóa TOÀN BỘ dòng (mọi chủ sử dụng) của 1 thửa để nhập lại — nút "Xóa
+    # để nhập lại" ở trang "Danh sách thửa đã nhập". CHỈ xóa được dòng
+    # nguồn "biểu Nhóm 4" (NHOM4_MA_NGUON), giống update_du_lieu_gcn_row —
+    # dữ liệu đồng bộ Google Sheet bị nạp lại ở lần đồng bộ sau nên xóa tay
+    # ở đây vô nghĩa (chặn luôn ở điều kiện lọc, không chỉ ở UI).
+    response, error_response = supabase_client.rest_request(
+        "DELETE",
+        DU_LIEU_GCN_TABLE,
+        params={
+            "madvhc_soto_sothua": f"eq.{madvhc_soto_sothua}",
+            "ma_nguon": f"eq.{NHOM4_MA_NGUON}",
+        },
+        extra_headers={"Prefer": "return=representation"},
+    )
+    return _json_or_error(response, error_response)
+
+
 def update_du_lieu_gcn_row(row_id: int, madvhc_soto_sothua: str, updates: dict):
     # CHỈ sửa được dòng nguồn "biểu Nhóm 4" (NHOM4_MA_NGUON) — dữ liệu đồng
     # bộ Google Sheet bị ghi đè lại ở lần đồng bộ sau nên sửa tay ở đây vô

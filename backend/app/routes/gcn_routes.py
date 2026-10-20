@@ -66,6 +66,21 @@ def gcn_danh_sach_chi_tiet_sua(row_id: int):
     return jsonify(data)
 
 
+@gcn_bp.delete("/api/gcn-danh-sach/chi-tiet")
+def gcn_danh_sach_chi_tiet_xoa():
+    # Nút "Xóa để nhập lại" ở trang "Danh sách thửa đã nhập" — xóa toàn bộ
+    # dòng (mọi chủ sử dụng) của 1 thửa, CHỈ áp dụng nguồn "biểu Nhóm 4"
+    # (chặn ở service/repository). ?ma_xa=&so_to=&so_thua=
+    data, error_response = gcn_service.delete_du_lieu_gcn_thua(
+        request.args.get("ma_xa", ""),
+        request.args.get("so_to", ""),
+        request.args.get("so_thua", ""),
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/thong-ke-nguon-nhap")
 def thong_ke_nguon_nhap():
     # Tổng số thửa đã nhập toàn dự án, tách Form (biểu Nhóm 4) / nguồn khác
