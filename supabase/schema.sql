@@ -2025,10 +2025,12 @@ for each row execute function public._nhom3_set_du_du_lieu();
 -- luôn) — nhom3_tong_hop/nhom3_list_con_thieu dưới đây chỉ còn GROUP BY/
 -- filter trên cache, không JOIN bảng lớn nữa.
 --
--- Refresh CHẠY TAY (gọi public.refresh_nhom3_trang_thai_cache() hoặc POST
--- /api/nhom3-con-thieu/refresh) sau mỗi lần nạp thêm danh sách Nhóm 3 mới
--- — không đặt pg_cron, số liệu không cần tươi theo giờ, chỉ cần tươi theo
--- mỗi lần nạp.
+-- Refresh tự động mỗi 2 giờ qua Windows Task Scheduler
+-- "WebGIS-RefreshNhom3Stats" (không dùng pg_cron — xem backend/scripts/
+-- refresh_nhom3_stats.ps1 + register_refresh_nhom3_stats_task.ps1). Vừa
+-- nạp thêm danh sách Nhóm 3 mới mà cần tươi NGAY thì gọi tay
+-- public.refresh_nhom3_trang_thai_cache() hoặc POST
+-- /api/nhom3-con-thieu/refresh, không cần chờ tới lượt chạy theo lịch.
 -- =========================================================
 
 create table if not exists public.nhom3_trang_thai_cache (
@@ -2188,7 +2190,7 @@ begin
 
     -- Ghi 1 lát cắt lịch sử theo xã (KHÔNG đè, mỗi lần refresh thêm 1 bộ
     -- dòng mới) — dùng để vẽ trend tốc độ xử lý theo thời gian. Tận dụng
-    -- đúng lịch 3 giờ/lần đang chạy (WebGIS-RefreshNhom3Stats), không cần
+    -- đúng lịch 2 giờ/lần đang chạy (WebGIS-RefreshNhom3Stats), không cần
     -- lịch/hạ tầng riêng cho việc ghi lịch sử.
     insert into public.nhom3_tien_do_lich_su (ma_xa, tong, da_nhom_1_2, da_thu_thap, con_thieu, ghi_nhan_luc)
     select

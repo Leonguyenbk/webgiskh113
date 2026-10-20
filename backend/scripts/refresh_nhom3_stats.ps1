@@ -3,7 +3,7 @@
 # tính trực tiếp mỗi lần load vì quét toàn bộ nhom3_can_thu_thap rất nặng
 # khi bảng lên tới hàng triệu dòng — xem supabase/schema.sql).
 #
-# Đăng ký chạy mỗi 3 giờ bằng Windows Task Scheduler (xem
+# Đăng ký chạy mỗi 2 giờ bằng Windows Task Scheduler (xem
 # register_refresh_nhom3_stats_task.ps1 cùng thư mục). Gọi gấp ngay khi
 # cần (vừa nạp danh sách mới) thì gọi tay script này hoặc POST thẳng
 # endpoint, không cần chờ tới lượt chạy theo lịch.
