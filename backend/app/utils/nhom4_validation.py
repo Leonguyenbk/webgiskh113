@@ -6,7 +6,7 @@ import re
 # (parseNumberVN_, validatePayload_) — tách riêng khỏi utils/validators.py
 # vì file đó chỉ parse Flask request, không chứa validation nghiệp vụ.
 
-_SO_PHAT_HANH_10_SO = re.compile(r"^\d{10}$")
+_SO_PHAT_HANH_TOAN_SO = re.compile(r"^\d+$")
 _SO_PHAT_HANH_CHU_SO = re.compile(r"^[A-ZĐ]{1,2} \d+$")
 _SO_NAM = re.compile(r"^(\d{1,3})\s*(?:năm)?$", re.IGNORECASE)
 
@@ -36,13 +36,14 @@ def normalize_thoi_han_su_dung(loai_dat: str, thoi_han: str) -> str:
 
 
 def validate_so_phat_hanh_gcn(value: str) -> bool:
-    """Số phát hành GCN: đúng 10 chữ số, hoặc 1-2 chữ cái + 1 dấu cách +
-    8/9 số (1 chữ cái) hay 9/11 số (2 chữ cái)."""
+    """Số phát hành GCN: toàn chữ số (không giới hạn độ dài — một số GCN
+    cũ có số phát hành ngắn/dài hơn 10 số), hoặc 1-2 chữ cái + 1 dấu
+    cách + 8/9 số (1 chữ cái) hay 9/11 số (2 chữ cái)."""
     s = str(value or "").strip().upper()
     if not s:
         return False
 
-    if _SO_PHAT_HANH_10_SO.match(s):
+    if _SO_PHAT_HANH_TOAN_SO.match(s):
         return True
 
     if not _SO_PHAT_HANH_CHU_SO.match(s):

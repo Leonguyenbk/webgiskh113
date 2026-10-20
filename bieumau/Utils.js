@@ -94,8 +94,9 @@ function validateSoPhatHanhGCN_(value) {
   var s = String(value || "").trim().toUpperCase();
   if (!s) return false;
 
-  // Chỉ gồm số: đúng 10 số, không dấu cách
-  if (/^\d{10}$/.test(s)) return true;
+  // Chỉ gồm số: không giới hạn độ dài (một số GCN cũ có số phát hành
+  // ngắn/dài hơn 10 số), không dấu cách
+  if (/^\d+$/.test(s)) return true;
 
   // Có chữ + số: bắt buộc có đúng 1 khoảng trắng giữa phần chữ và phần số
   if (!/^[A-ZĐ]{1,2} \d+$/.test(s)) return false;
