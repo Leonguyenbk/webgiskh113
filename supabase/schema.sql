@@ -2438,45 +2438,89 @@ grant execute on function public.nhom3_list_con_thieu(text, integer, integer, bo
 -- từng thửa — dùng cho export_nhom3_tong_gui_xa_xlsx (nút Excel duy nhất
 -- trên trang /nhom-3-con-thieu, thay cho 3 nút Excel/Nhóm 1 đã nhập/Nhóm
 -- 1 chưa nhập cũ — yêu cầu người dùng).
+--
+-- THÊM (yêu cầu người dùng, phát hiện khi tra Ea Păl): nhom3_trang_thai_cache
+-- CHỈ chứa thửa có trong nhom3_can_thu_thap (danh sách kế hoạch gửi xã) —
+-- thửa đã nhập du_lieu_gcn nhưng KHÔNG nằm trong danh sách đó (ngoài kế
+-- hoạch, hoặc danh sách gửi xuống thiếu) hoàn toàn vô hình với số liệu
+-- Nhóm 3. Giờ liệt kê thêm các thửa này (chỉ khi có p_ma_xa cụ thể, tránh
+-- quét toàn bộ 2 bảng triệu dòng khi gọi không lọc xã), ghi chú riêng theo
+-- phân loại Nhóm 1/2 (dong_bo_du_lieu.phan_loai_ke_hoach_2959) nếu có.
 create or replace function public.nhom3_list_tong_gui_xa(
     p_ma_xa text default null,
     p_limit integer default 100,
     p_offset integer default 0
 )
 returns jsonb
-language plpgsql
+language sql
 stable
 security definer
 set search_path = public, extensions
 as $$
-declare
-    v_total integer;
-    v_items jsonb;
-begin
-    select count(*) into v_total
-    from public.nhom3_trang_thai_cache c
-    where (p_ma_xa is null or c.ma_xa = p_ma_xa)
-      and not (c.la_nhom_1_2 and not c.co_nhap);
-
-    select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
-    from (
+    with trong_ds as (
         select
-            c.ma_xa, xp.ten_xa, c.so_to, c.so_thua, c.ma_dinh_danh,
+            c.ma_xa, c.so_to, c.so_thua, c.ma_dinh_danh,
             case
                 when c.la_nhom_1_2 then 'Nhóm 1 - đã nhập biểu'
                 when c.da_thu_thap then 'Nhóm 3 - đã nhập biểu'
                 else 'Nhóm 3 - còn thiếu'
             end as ghi_chu
         from public.nhom3_trang_thai_cache c
-        left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         where (p_ma_xa is null or c.ma_xa = p_ma_xa)
           and not (c.la_nhom_1_2 and not c.co_nhap)
-        order by c.ma_xa, c.so_to, c.so_thua
-        limit p_limit offset p_offset
-    ) y;
-
-    return jsonb_build_object('total', v_total, 'items', v_items);
-end;
+    ),
+    ngoai_ds_raw as (
+        select
+            g.madvhc as ma_xa,
+            public.normalize_so_text(g.soto) as so_to_txt,
+            public.normalize_so_text(g.sothua) as so_thua_txt,
+            max(g.madinhdanhthuadat) as ma_dinh_danh,
+            max(d.phan_loai_ke_hoach_2959) as phan_loai
+        from public.du_lieu_gcn g
+        left join public.dong_bo_du_lieu d
+            on d.ma_xa = g.madvhc
+           and d.so_to::text = public.normalize_so_text(g.soto)
+           and d.so_thua::text = public.normalize_so_text(g.sothua)
+        where p_ma_xa is not null and g.madvhc = p_ma_xa
+          and not exists (
+              select 1 from public.nhom3_can_thu_thap t
+              where t.ma_xa = g.madvhc
+                and t.so_to::text = public.normalize_so_text(g.soto)
+                and t.so_thua::text = public.normalize_so_text(g.sothua)
+          )
+        group by g.madvhc, public.normalize_so_text(g.soto), public.normalize_so_text(g.sothua)
+    ),
+    ngoai_ds as (
+        select
+            ma_xa,
+            (case when so_to_txt ~ '^[0-9]+$' then so_to_txt::integer end) as so_to,
+            (case when so_thua_txt ~ '^[0-9]+$' then so_thua_txt::integer end) as so_thua,
+            ma_dinh_danh,
+            case
+                when upper(trim(coalesce(phan_loai, ''))) in ('NHÓM 1', 'NHÓM 2')
+                    then initcap(lower(trim(phan_loai))) || ' - đã nhập nhưng không có trong danh sách gửi xã'
+                else 'Đã nhập nhưng không có trong danh sách gửi xã'
+            end as ghi_chu
+        from ngoai_ds_raw
+    ),
+    toan_bo as (
+        select * from trong_ds
+        union all
+        select * from ngoai_ds
+    )
+    select jsonb_build_object(
+        'total', (select count(*) from toan_bo),
+        'items', coalesce((
+            select jsonb_agg(row_to_json(y))
+            from (
+                select a.ma_xa, xp.ten_xa, a.so_to, a.so_thua, a.ma_dinh_danh, a.ghi_chu
+                from toan_bo a
+                left join public.danhsachxaphuong xp on xp.ma_xa = a.ma_xa
+                order by a.ma_xa, a.so_to nulls last, a.so_thua nulls last
+                limit p_limit offset p_offset
+            ) y
+        ), '[]'::jsonb)
+    );
 $$;
 
 revoke all on function public.nhom3_list_tong_gui_xa(text, integer, integer) from public;

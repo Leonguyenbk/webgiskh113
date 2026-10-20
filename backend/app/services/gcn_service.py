@@ -753,14 +753,24 @@ _CON_THIEU_FILL_DA_LAM = PatternFill("solid", fgColor="FFF9E79F")  # vàng nhạ
 
 
 def export_nhom3_con_thieu_xlsx(ma_xa: str):
-    """Xuất .xlsx danh sách "tổng gửi xã" của 1 xã/phường — mã xã, số tờ,
-    số thửa, mã định danh, ghi chú trạng thái từng thửa (Nhóm 1 - đã nhập
-    biểu / Nhóm 3 - đã nhập biểu / Nhóm 3 - còn thiếu). Thay cho 3 nút
-    Excel riêng trước đây (còn thiếu / Nhóm 1 đã nhập / Nhóm 1 chưa nhập)
-    — giờ gộp làm 1 danh sách duy nhất đúng phạm vi cột "tổng gửi xã" (đã
-    trừ Nhóm 1/2 Chi nhánh KV chưa nhập, xem nhom3_tong_hop.tong) kèm ghi
-    chú để phân biệt (yêu cầu người dùng). Tô vàng dòng "đã nhập biểu" (đã
-    có người làm) để phân biệt trực quan với dòng "còn thiếu". Trang
+    """Xuất .xlsx TOÀN BỘ danh sách "tổng gửi xã" của 1 xã/phường — mã xã,
+    số tờ, số thửa, mã định danh, ghi chú trạng thái từng thửa (Nhóm 1 -
+    đã nhập biểu / Nhóm 3 - đã nhập biểu / Nhóm 3 - còn thiếu). Thay cho 3
+    nút Excel riêng trước đây (còn thiếu / Nhóm 1 đã nhập / Nhóm 1 chưa
+    nhập) — giờ gộp làm 1 danh sách duy nhất đúng phạm vi cột "tổng gửi
+    xã" (đã trừ Nhóm 1/2 Chi nhánh KV chưa nhập, xem nhom3_tong_hop.tong)
+    kèm ghi chú để phân biệt (yêu cầu người dùng).
+
+    THÊM (yêu cầu người dùng, phát hiện khi tra Ea Păl): còn liệt kê thêm
+    thửa ĐÃ nhập (có dòng du_lieu_gcn) nhưng KHÔNG nằm trong danh sách kế
+    hoạch gửi xã (nhom3_can_thu_thap) — vốn vô hình hoàn toàn với số liệu
+    Nhóm 3 trước đây. Ghi chú riêng theo phân loại Nhóm 1/2 nếu có ("Nhóm 1
+    - đã nhập nhưng không có trong danh sách gửi xã"...), còn lại ghi
+    "Đã nhập nhưng không có trong danh sách gửi xã" — xem
+    public.nhom3_list_tong_gui_xa (supabase/schema.sql).
+
+    Tô vàng dòng "đã nhập" (đã có người làm, kể cả 2 loại ghi chú mới ở
+    trên) để phân biệt trực quan với dòng "còn thiếu". Trang
     '/nhom-3-con-thieu', icon tải Excel cuối mỗi dòng xã. Không chứa thông
     tin cá nhân (CCCD/tên/địa chỉ) nên không cần IMPORT_TOKEN, giống
     /api/gcn-danh-sach."""
