@@ -186,6 +186,95 @@ def iter_rows(source: BinaryIO) -> Iterator[dict]:
         yield {**feature["properties"], "geom": feature["geometry"]}
 
 
+# --- Ranh giới thôn (GML) -----------------------------------------------
+# Chưa có file mẫu GML ranh thôn thật để soi đúng tên thẻ (khác ThuaDat.gml
+# — đây là lớp ranh giới thôn/buôn, không phải thửa đất) nên đọc theo kiểu
+# "khoan dò" thay vì khớp cứng 1 tên:
+#   - Tên phần tử bọc 1 thôn trong <member> KHÔNG đoán tên — GML wfs:member
+#     luôn bọc ĐÚNG 1 feature, nên lấy thẳng con trực tiếp duy nhất của
+#     <member>, bất kể tên thẻ là gì.
+#   - Tên thôn/mã xã: thử lần lượt vài tên thường gặp (giống cách
+#     mucDichSuDung/maLoaiDat ở trên đã làm với thửa đất).
+#   - Hình học: ranh thôn thường rời nhiều phần (MultiPolygon, cột geom
+#     trong ranh_gioi_thon cũng khai kiểu MultiPolygon, khác Polygon đơn của
+#     thua_dat) — gom TẤT CẢ thẻ "Polygon" nằm trong "Geometry" (dù lồng
+#     trực tiếp hay qua 1 lớp bọc MultiPolygon/polygonMember nào đó), không
+#     khớp cứng theo tên thẻ bọc multi-part.
+# Nếu sai tên thẻ thực tế thì sẽa lại _TEN_THON_TAGS/_MA_XA_TAGS theo lỗi
+# "thiếu tên thôn/mã xã" khi người dùng thử nhập file thật.
+_TEN_THON_TAGS = ("tenThon", "tenThonBuon", "tenBuonThon", "tenDonVi", "ten")
+_MA_XA_TAGS = ("maXa", "maDVHC", "ma_xa")
+
+
+def _first_text(node: ET.Element, names: tuple[str, ...]) -> str:
+    for name in names:
+        value = _text(node, name)
+        if value:
+            return value
+    return ""
+
+
+def _only_child(node: ET.Element) -> ET.Element | None:
+    for child in node:
+        return child
+    return None
+
+
+def _multipolygon_rings_from_geometry(
+    geometry: ET.Element, transformer: Transformer
+) -> list[list[list[float]]] | None:
+    parts = []
+    for elem in geometry.iter():
+        if elem is geometry or _local_name(elem.tag) != "Polygon":
+            continue
+        rings = _rings_from_polygon(elem, transformer)
+        if rings is not None:
+            parts.append(rings)
+    return parts or None
+
+
+def _feature_ranh_thon_from_member(member: ET.Element, transformer: Transformer) -> dict | None:
+    thon = _only_child(member)
+    if thon is None:
+        return None
+
+    geometry = _child(thon, "Geometry")
+    if geometry is None:
+        return None
+
+    parts = _multipolygon_rings_from_geometry(geometry, transformer)
+    if parts is None:
+        return None
+
+    ma_xa = _first_text(thon, _MA_XA_TAGS)
+    ten_thon = _first_text(thon, _TEN_THON_TAGS)
+    if not ma_xa or not ten_thon:
+        return None
+
+    return {
+        "ma_xa": ma_xa,
+        "ten_thon": ten_thon,
+        "geom": {"type": "MultiPolygon", "coordinates": parts},
+    }
+
+
+def iter_rows_ranh_thon(source: BinaryIO) -> Iterator[dict]:
+    """Đọc GML ranh giới thôn theo kiểu streaming (giống iter_rows ở trên),
+    trả generator dict {"ma_xa", "ten_thon", "geom"} sẵn sàng ghi vào
+    public.ranh_gioi_thon (geom kiểu MultiPolygon)."""
+    transformer = Transformer.from_crs("EPSG:9218", "EPSG:4326", always_xy=True)
+    context = ET.iterparse(source, events=("start", "end"))
+    _, root = next(context)
+    for event, elem in context:
+        if event != "end" or _local_name(elem.tag) != "member":
+            continue
+        feature = _feature_ranh_thon_from_member(elem, transformer)
+        if feature is not None:
+            yield feature
+        elem.clear()
+        root.clear()
+
+
 def write_geojson(data: dict, path: str | Path) -> None:
     Path(path).write_text(
         json.dumps(data, ensure_ascii=False, separators=(",", ":")),

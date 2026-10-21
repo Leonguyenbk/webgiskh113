@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { importGml } from "./services/adminService";
+import { importGml, importRanhThon } from "./services/adminService";
 
 export default function ImportGmlPage({ onNavigateHome }) {
   const [file, setFile] = useState(null);
@@ -8,6 +8,14 @@ export default function ImportGmlPage({ onNavigateHome }) {
   const [status, setStatus] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+
+  // Ranh giới thôn — gộp chung trang này (trước đây chỉ có ở trang riêng
+  // "Nhập ranh giới thôn") để nhập 1 chỗ cùng thửa đất, chấp nhận cả GML
+  // (.gml/.xml) lẫn Shapefile (.zip) như trang gốc.
+  const [thonFile, setThonFile] = useState(null);
+  const [thonStatus, setThonStatus] = useState("idle");
+  const [thonResult, setThonResult] = useState(null);
+  const [thonError, setThonError] = useState("");
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -27,13 +35,31 @@ export default function ImportGmlPage({ onNavigateHome }) {
     }
   };
 
+  const handleSubmitThon = async (event) => {
+    event.preventDefault();
+    if (!thonFile) return;
+
+    setThonStatus("uploading");
+    setThonError("");
+    setThonResult(null);
+
+    try {
+      const body = await importRanhThon(thonFile, token);
+      setThonResult(body);
+      setThonStatus("done");
+    } catch (err) {
+      setThonError(err.message);
+      setThonStatus("error");
+    }
+  };
+
   return (
     <main className="toolsShell">
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
           <h1>Nhập dữ liệu GML</h1>
-          <p>Đẩy file thửa đất (.gml) vào cơ sở dữ liệu</p>
+          <p>Đẩy file thửa đất và ranh giới thôn vào cơ sở dữ liệu</p>
         </div>
         <a
           className="backLink"
@@ -49,6 +75,7 @@ export default function ImportGmlPage({ onNavigateHome }) {
 
       <section className="importWrap">
         <form className="importCard" onSubmit={handleSubmit}>
+          <h2 className="nhom4SectionTitle">Thửa đất</h2>
           <label htmlFor="gmlFile">File GML</label>
           <input
             id="gmlFile"
@@ -93,6 +120,60 @@ export default function ImportGmlPage({ onNavigateHome }) {
             <div className="notice error">
               <strong>Có lỗi xảy ra</strong>
               <span>{error}</span>
+            </div>
+          )}
+        </form>
+
+        <form className="importCard" onSubmit={handleSubmitThon}>
+          <h2 className="nhom4SectionTitle">Ranh giới thôn</h2>
+          <label htmlFor="thonFile">File GML hoặc Shapefile (.zip)</label>
+          <input
+            id="thonFile"
+            type="file"
+            accept=".gml,.xml,.zip"
+            onChange={(event) => setThonFile(event.target.files?.[0] || null)}
+          />
+          <p className="importHint">
+            Nhận file .gml/.xml (đọc trực tiếp), hoặc .zip nén cả .shp/.shx/.dbf (+ .prj nếu có) — thuộc tính mỗi
+            vùng phải có mã xã và tên thôn.
+          </p>
+
+          <label htmlFor="importTokenThon">Mã xác thực</label>
+          <input
+            id="importTokenThon"
+            type="password"
+            value={token}
+            onChange={(event) => setToken(event.target.value)}
+            placeholder="Nhập mã do quản trị viên cấp (nếu có)"
+          />
+
+          <button
+            type="submit"
+            className="importButton"
+            disabled={!thonFile || thonStatus === "uploading"}
+          >
+            {thonStatus === "uploading" ? "Đang tải lên…" : "Đẩy vào cơ sở dữ liệu"}
+          </button>
+
+          {thonStatus === "done" && thonResult && (
+            <div className="notice">
+              <strong>Hoàn tất</strong>
+              <span>
+                Đã nhập {thonResult.imported}/{thonResult.total} thôn vào cơ sở dữ liệu.
+                {thonResult.deleted > 0 && (
+                  <>
+                    {" "}
+                    Đã xóa {thonResult.deleted} thôn không còn trong file (xã: {(thonResult.xa || []).join(", ")}).
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
+          {thonStatus === "error" && (
+            <div className="notice error">
+              <strong>Có lỗi xảy ra</strong>
+              <span>{thonError}</span>
             </div>
           )}
         </form>

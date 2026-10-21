@@ -95,18 +95,27 @@ def import_gml(file_stream):
     }, None
 
 
-def import_ranh_thon(file_stream):
+def import_ranh_thon(file_stream, filename: str = ""):
     base_url = supabase_client.get_base_url()
     if not base_url:
         return None, supabase_client.missing_base_url_response()
 
+    # Nhận cả Shapefile (.zip) như trước lẫn GML (.gml/.xml) — 2 định dạng
+    # cho ra cùng hình dạng dòng {"ma_xa","ten_thon","geom"} nên phần đồng
+    # bộ/upsert phía dưới dùng chung, chỉ khác bước đọc file.
+    la_gml = filename.lower().endswith((".gml", ".xml"))
     try:
-        rows = list(shapefile_reader.iter_rows(file_stream))
+        if la_gml:
+            rows = list(gml_reader.iter_rows_ranh_thon(file_stream))
+        else:
+            rows = list(shapefile_reader.iter_rows(file_stream))
     except Exception as exc:  # noqa: BLE001 - lỗi parse file người dùng tải lên, phải báo rõ nguyên nhân
-        return None, (jsonify({"error": f"Không đọc được file Shapefile: {exc}"}), 400)
+        nguon = "GML" if la_gml else "Shapefile"
+        return None, (jsonify({"error": f"Không đọc được file {nguon}: {exc}"}), 400)
 
     if not rows:
-        return None, (jsonify({"error": "File Shapefile không có ranh thôn hợp lệ"}), 400)
+        nguon = "GML" if la_gml else "Shapefile"
+        return None, (jsonify({"error": f"File {nguon} không có ranh thôn hợp lệ"}), 400)
 
     # Đồng bộ theo xã giống import_gml: thôn không còn trong file mới (đổi
     # tên/vẽ lại/gộp) bị xóa, thôn còn lại thì thêm mới/cập nhật hình học.

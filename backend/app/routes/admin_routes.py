@@ -30,9 +30,9 @@ def import_ranh_thon():
 
     uploaded = request.files.get("file")
     if not uploaded or not uploaded.filename:
-        return jsonify({"error": "Thiếu file Shapefile (.zip)"}), 400
+        return jsonify({"error": "Thiếu file Shapefile (.zip) hoặc GML (.gml)"}), 400
 
-    data, error_response = import_service.import_ranh_thon(uploaded.stream)
+    data, error_response = import_service.import_ranh_thon(uploaded.stream, uploaded.filename)
     if error_response:
         return error_response
     return jsonify(data)
