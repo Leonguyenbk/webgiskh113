@@ -403,21 +403,27 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     if (submittingRef.current) return;
     setError("");
 
-    const parcels =
-      thuaList.length > 0
-        ? thuaList
-        : thua.soTo && thua.soThua
-          ? [
-              {
-                thua,
-                dat1,
-                dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null,
-                fileChinh,
-                filePhu,
-                fileTbxn,
-              },
-            ]
-          : [];
+    // Thửa đang gõ ở các ô trên nhưng CHƯA bấm "+ Thêm thửa đất" (quên bấm
+    // trước khi Lưu hồ sơ) — trước đây bị BỎ HẲN khi thuaList đã có sẵn thửa
+    // khác (chỉ dùng thuaList, không gộp thửa đang gõ), khiến nộp nhiều thửa
+    // nhưng chỉ ghi nhận đúng số thửa đã bấm "+ Thêm thửa đất", thửa cuối
+    // đang gõ mất luôn. Gộp thêm thửa đang gõ (nếu đã điền đủ số tờ/số
+    // thửa/diện tích/loại đất 1, giống điều kiện themThuaVaoDanhSach) vào
+    // danh sách gửi đi, không để mất dữ liệu đang gõ.
+    const thuaDangGoHopLe = thua.soTo && thua.soThua && thua.dienTichThuaDat && dat1.loaiDat;
+    const parcels = thuaDangGoHopLe
+      ? [
+          ...thuaList,
+          {
+            thua,
+            dat1,
+            dat2: coDat2 ? { ...dat2, dienTich: dat2DienTichTinh } : null,
+            fileChinh: dungChungHoSo ? null : fileChinh,
+            filePhu: dungChungHoSo ? null : filePhu,
+            fileTbxn: dungChungHoSo ? null : fileTbxn,
+          },
+        ]
+      : thuaList;
 
     if (!maXa) return setError("Vui lòng chọn xã/phường.");
     if (!parcels.length) return setError("Chưa có thông tin thửa đất.");
@@ -556,7 +562,22 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       </header>
 
       <section className="dashboardWrap">
-        <form className="importCard nhom4Card" onSubmit={handleSubmit}>
+        <form
+          className="importCard nhom4Card"
+          onSubmit={handleSubmit}
+          // Form nhiều ô input text: Enter trong bất kỳ ô nào theo mặc định
+          // HTML sẽ submit cả form ngay (dù chưa bấm "+ Thêm thửa đất" xong
+          // hết các thửa) -> chỉ thửa đang gõ được lưu, các thửa định thêm
+          // sau đó mất luôn (nguyên nhân thực tế: nộp hồ sơ nhiều thửa chỉ
+          // ghi nhận 1 thửa). Chặn Enter submit sớm ở mọi ô trừ textarea
+          // (không có trong form này) — bấm nút "Lưu hồ sơ" vẫn submit bình
+          // thường vì đó là click, không qua nhánh này.
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+              e.preventDefault();
+            }
+          }}
+        >
           <h2 className="nhom4SectionTitle">Đơn vị hành chính</h2>
           <label htmlFor="nhom4Xa">Chọn xã/phường *</label>
           <select id="nhom4Xa" value={maXa} onChange={(e) => setMaXa(e.target.value)} required>
