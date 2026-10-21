@@ -23,16 +23,19 @@ import psycopg2.extras
 
 from app.config import Config
 
-# DANHSACHGUIXA/EA SÚP-20261019T073653Z-1-001/EA SÚP: VPĐK gửi cập nhật
-# danh sách gửi xã cho khu vực Ea Súp (5 xã) — yêu cầu người dùng: CHỈ
-# cập nhật thửa CHƯA CÓ, không đụng/không ghi đè thửa đã nạp trước đó
-# (dùng CHI_THEM_MOI, không TRUNCATE/không XOA_THEO_MA_XA_TRUOC).
+# DANHSACHGUIXA/ (20261021): VPĐK gửi lại danh sách THAY THẾ cho 3 xã khu
+# vực Ea Súp (24211, 24217, 24229) — yêu cầu người dùng: XOÁ HẾT dòng cũ
+# của đúng 3 xã này rồi nạp lại từ đầu (dùng XOA_THEO_MA_XA_TRUOC, không
+# phải bổ sung). Cả 3 xã đều có thửa đã đánh dấu thuoc_du_an (xem
+# public.nhom3_du_an_danh_dau) — PHẢI khôi phục lại cờ này sau khi nạp
+# (scratch_apply_3xa_20261021_restore_thuoc_du_an.py), xã 24211 còn có 785
+# thửa đánh dấu TRƯỚC khi có bảng tracking (xem
+# scratch_apply_easup_restore_thuoc_du_an_tu_backup.py/scratch_easup_thuoc_du_an_keys.tsv)
+# nên phải khôi phục thêm từ file backup đó.
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24211_Xã Ea Súp.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24214_Xã Ia Lốp.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24217_Xã Ea Rốk.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24221_Xã Ia Rvê.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\EA SÚP-20261019T073653Z-1-001\EA SÚP\24229_Xã Ea Bung.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24217_Xã Ea Rốk.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24229_Xã Ea Bung.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24211_Xã Ea Súp.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
@@ -43,12 +46,12 @@ TRUNCATE_TRUOC = False
 
 # True = file SRC có lẫn cả thửa cũ đã nạp lẫn thửa mới bổ sung — chỉ
 # insert thửa CHƯA có trong bảng, không update/đụng tới thửa đã trùng khoá.
-CHI_THEM_MOI = True
+CHI_THEM_MOI = False
 
 # True = xoá hết dòng hiện có của đúng những mã xã xuất hiện trong SRC_LIST
 # rồi nạp lại từ đầu (file SRC là danh sách THAY THẾ cho các xã đó, không
 # phải bổ sung) — các xã khác không nạp trong lần này giữ nguyên.
-XOA_THEO_MA_XA_TRUOC = False
+XOA_THEO_MA_XA_TRUOC = True
 
 
 def chon_sheet_du_lieu(wb):
