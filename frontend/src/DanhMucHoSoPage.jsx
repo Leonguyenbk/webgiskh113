@@ -73,8 +73,8 @@ function formatNgay(value) {
 }
 
 // 2 nguồn này KHÔNG còn chặn nhập — chỉ hiển thị để biết (đánh dấu "Đã có
-// trên VBDLis" khi lưu). Chỉ "da_co_trong_danh_muc" còn chặn (trùng ngay
-// trong chính danh mục này) — xem backend/app/services/danhmuchoso_service.py.
+// trên VBDLis" khi lưu). "da_co_trong_danh_muc" cũng chỉ là cảnh báo (1 GCN
+// có thể có nhiều dòng hồ sơ) — xem backend/app/services/danhmuchoso_service.py.
 const NGUON_VBDLIS_LABEL = {
   da_nhap_form_nhom4: "đã nhập form Nhóm 4",
   da_dong_bo_mplis: "đã đồng bộ từ MPLIS",
@@ -83,8 +83,8 @@ const NGUON_VBDLIS_LABEL = {
 // Trang "Danh mục hồ sơ lưu trữ" (theo mẫu DANHMUCHOSO/MAUFILE.xlsx) —
 // nhập + sửa + xem danh sách + tải Excel. GCN đã có dữ liệu điện tử nơi
 // khác (form Nhóm 4/MPLIS) vẫn cho nhập, chỉ đánh dấu cột "Đã có trên
-// VBDLis" — chỉ chặn khi số sêri GCN đã có SẴN TRONG CHÍNH danh mục này
-// (dùng nút Sửa thay vì nhập trùng dòng mới).
+// VBDLis". GCN đã có SẴN TRONG CHÍNH danh mục này cũng vẫn cho nhập thêm
+// dòng mới, chỉ hiển thị cảnh báo.
 export default function DanhMucHoSoPage({ onNavigateHome }) {
   const [form, setForm] = useState(FORM_EMPTY);
   const [editingId, setEditingId] = useState(null); // null = đang thêm mới, số = đang sửa id này
@@ -169,7 +169,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
         .filter(([key]) => gcnCheck[key])
         .map(([, label]) => label)
     : [];
-  const gcnBiChan = Boolean(gcnCheck?.da_co_trong_danh_muc);
+  const gcnDaCoTrongDanhMuc = Boolean(gcnCheck?.da_co_trong_danh_muc);
 
   const handleEditRow = (row) => {
     setEditingId(row.id);
@@ -377,15 +377,17 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                   </div>
                   {gcnCheck && (
                     <div style={{ marginTop: 6, fontSize: 13 }}>
-                      {gcnBiChan ? (
-                        <span style={{ color: "#c0392b" }}>
-                          ⚠ Số sêri GCN này đã có ở 1 hồ sơ khác trong danh mục — không thể lưu trùng, dùng nút Sửa ở dòng đó nếu cần cập nhật.
-                        </span>
-                      ) : gcnNguonVbdlis.length > 0 ? (
-                        <span style={{ color: "#b8860b" }}>
+                      {gcnDaCoTrongDanhMuc && (
+                        <div style={{ color: "#b8860b" }}>
+                          ⚠ GCN này đã có trong danh mục hồ sơ. Bạn vẫn có thể thêm hồ sơ mới.
+                        </div>
+                      )}
+                      {gcnNguonVbdlis.length > 0 && (
+                        <div style={{ color: "#b8860b" }}>
                           ℹ GCN này đã có dữ liệu điện tử trên hệ thống ({gcnNguonVbdlis.join(", ")}) — vẫn lưu được, sẽ đánh dấu "Đã có trên VBDLis".
-                        </span>
-                      ) : (
+                        </div>
+                      )}
+                      {!gcnDaCoTrongDanhMuc && gcnNguonVbdlis.length === 0 && (
                         <span style={{ color: "#2e7d32" }}>✓ Chưa có ở đâu, có thể nhập.</span>
                       )}
                     </div>
@@ -560,8 +562,8 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                 <button
                   type="submit"
                   className="downloadButton"
-                  style={{ opacity: saving || gcnBiChan ? 0.6 : 1 }}
-                  disabled={saving || gcnBiChan}
+                  style={{ opacity: saving ? 0.6 : 1 }}
+                  disabled={saving}
                 >
                   {saving ? "Đang lưu…" : editingId ? "💾 Cập nhật hồ sơ" : "💾 Lưu hồ sơ"}
                 </button>

@@ -3071,11 +3071,10 @@ grant execute on function public.thua_dat_ung_thua_cu(text) to service_role;
 -- =========================================================
 -- DANH MỤC HỒ SƠ LƯU TRỮ — trang "/danh-muc-ho-so". Catalog các hồ sơ
 -- (cặp/tập) lưu trữ giấy, theo đúng cột mẫu DANHMUCHOSO/MAUFILE.xlsx.
--- Chặn nhập trùng GCN: 1 số sêri GCN chỉ được catalog 1 lần — kiểm tra ở
--- cả 3 nguồn (đã nhập form Nhóm 4, đã đồng bộ MPLIS, đã có trong chính
--- danh mục này) qua danhmuchoso_kiem_tra_gcn(), gọi TRƯỚC khi insert (xem
--- danhmuchoso_service.py) — UNIQUE (so_seri_gcn) là lưới an toàn cuối
--- (race condition hiếm, 2 người lưu cùng lúc).
+-- KHÔNG chặn trùng GCN: 1 số sêri GCN có thể có nhiều dòng hồ sơ — kiểm
+-- tra 3 nguồn (đã nhập form Nhóm 4, đã đồng bộ MPLIS, đã có trong chính
+-- danh mục này) qua danhmuchoso_kiem_tra_gcn() chỉ để cảnh báo/đánh dấu
+-- da_co_tren_vbdlis (xem danhmuchoso_service.py).
 -- =========================================================
 
 create table if not exists public.danhmuchoso (
@@ -3115,10 +3114,8 @@ create table if not exists public.danhmuchoso (
     -- ĐÃ BỎ "constraint danhmuchoso_so_seri_gcn_key unique (so_seri_gcn)"
     -- (yêu cầu người dùng) — khi nhập hàng loạt từ Excel, 1 GCN có thể
     -- xuất hiện nhiều lần theo thời gian để ghi nhận lịch sử, không phải
-    -- lúc nào cũng là nhập trùng tay. Việc chặn trùng khi THÊM TAY 1 hồ
-    -- sơ (nút "Lưu hồ sơ") vẫn còn, nhưng xử lý ở tầng ứng dụng
-    -- (danhmuchoso_service.them_ho_so, qua danhmuchoso_kiem_tra_gcn), để
-    -- import hàng loạt có thể chủ động bỏ qua chặn này.
+    -- lúc nào cũng là nhập trùng tay. Thêm tay/sửa hồ sơ cũng không còn
+    -- chặn trùng (chỉ cảnh báo ở FE).
 );
 alter table public.danhmuchoso enable row level security;
 
@@ -3220,10 +3217,8 @@ grant execute on function public.danhmuchoso_them(
 
 -- Sửa 1 hồ sơ đã nhập (nút "✏ Sửa" ở bảng danh mục) — nhận đủ các cột
 -- như danhmuchoso_them (FE gửi lại nguyên form đã điền sẵn dữ liệu cũ,
--- không phải partial update) + p_id để xác định dòng. UNIQUE
--- (so_seri_gcn) vẫn là lưới an toàn cuối nếu đổi sang số đã có ở dòng
--- khác (service layer đã kiểm tra trước qua danhmuchoso_kiem_tra_gcn với
--- p_exclude_id = p_id).
+-- không phải partial update) + p_id để xác định dòng. Cho phép đổi sang
+-- số GCN đã có ở dòng khác (không còn UNIQUE so_seri_gcn).
 drop function if exists public.danhmuchoso_cap_nhat(
     bigint, integer, text, text, text, text, text, text, text, text, text, text, text, text, boolean
 );

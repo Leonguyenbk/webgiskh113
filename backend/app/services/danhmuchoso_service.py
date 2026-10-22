@@ -170,13 +170,13 @@ def _payload_tu_body(body: dict, so_seri_gcn: str, da_co_tren_vbdlis: bool, ngay
     }
 
 
-def _them_mot_dong(body: dict, bo_qua_trung_danh_muc: bool):
+def _them_mot_dong(body: dict):
     """Dùng chung cho them_ho_so (nhập tay, 1 dòng) và import_xlsx (nhập
-    hàng loạt từ file). bo_qua_trung_danh_muc=True: GCN đã có SẴN trong
-    chính danh mục này vẫn cho nhập thêm (không chặn) — dùng khi import,
-    để ghi nhận lịch sử (yêu cầu người dùng: 1 GCN có thể xuất hiện nhiều
-    lần theo thời gian, không phải lúc nào cũng là nhập trùng tay). Trả
-    (result, error_response, da_trung_trong_danh_muc)."""
+    hàng loạt từ file). GCN đã có SẴN trong chính danh mục này vẫn cho
+    nhập thêm (không chặn, cả nhập tay lẫn import) — yêu cầu người dùng: 1
+    số sêri GCN có thể có nhiều dòng hồ sơ khác nhau. Trả (result,
+    error_response, da_trung_trong_danh_muc) — cờ da_trung chỉ để thống
+    kê/cảnh báo."""
     so_seri_gcn, error_response = _validate_body(body)
     if error_response:
         return None, error_response, False
@@ -194,16 +194,6 @@ def _them_mot_dong(body: dict, bo_qua_trung_danh_muc: bool):
         return None, error_response, False
     kiem_tra = kiem_tra or {}
     da_trung = bool(kiem_tra.get("da_co_trong_danh_muc"))
-    if da_trung and not bo_qua_trung_danh_muc:
-        return None, (
-            jsonify(
-                {
-                    "error": f"GCN \"{so_seri_gcn}\" đã có trong danh mục hồ sơ rồi — dùng tính năng Sửa nếu cần cập nhật, không nhập lại dòng mới.",
-                    "chi_tiet": kiem_tra,
-                }
-            ),
-            409,
-        ), False
     da_co_tren_vbdlis = bool(kiem_tra.get("da_nhap_form_nhom4")) or bool(kiem_tra.get("da_dong_bo_mplis"))
 
     payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis, ngay)
@@ -214,7 +204,7 @@ def _them_mot_dong(body: dict, bo_qua_trung_danh_muc: bool):
 
 
 def them_ho_so(body: dict):
-    result, error_response, _da_trung = _them_mot_dong(body, bo_qua_trung_danh_muc=False)
+    result, error_response, _da_trung = _them_mot_dong(body)
     if error_response:
         return None, error_response
     return result, None
@@ -237,16 +227,8 @@ def cap_nhat_ho_so(row_id_raw, body: dict):
     if error_response:
         return None, error_response
     kiem_tra = kiem_tra or {}
-    if kiem_tra.get("da_co_trong_danh_muc"):
-        return None, (
-            jsonify(
-                {
-                    "error": f"GCN \"{so_seri_gcn}\" đã có ở 1 hồ sơ khác trong danh mục — không thể đổi sang số này.",
-                    "chi_tiet": kiem_tra,
-                }
-            ),
-            409,
-        )
+    # GCN đã có ở hồ sơ khác trong danh mục KHÔNG chặn đổi số (1 GCN có thể
+    # có nhiều dòng hồ sơ) — chỉ tính lại da_co_tren_vbdlis.
     da_co_tren_vbdlis = bool(kiem_tra.get("da_nhap_form_nhom4")) or bool(kiem_tra.get("da_dong_bo_mplis"))
 
     payload = _payload_tu_body(body, so_seri_gcn, da_co_tren_vbdlis, ngay)
@@ -449,7 +431,7 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
             "ghi_chu": _xlsx_text(core[12]),
         }
 
-        _result, error_response, da_trung = _them_mot_dong(body, bo_qua_trung_danh_muc=True)
+        _result, error_response, da_trung = _them_mot_dong(body)
         if error_response:
             try:
                 thong_bao = error_response[0].get_json().get("error", "Lỗi không rõ")
