@@ -42,9 +42,10 @@ export function updateBanDoNen(id, updates, token) {
   });
 }
 
-export function getBanDoNenInView({ west, south, east, north }, { signal } = {}) {
+// loai: bỏ trống = "Bản đồ địa chính", "dang_ky" = "Bản đồ đăng ký".
+export function getBanDoNenInView({ west, south, east, north, loai }, { signal } = {}) {
   return request("/api/ban-do-nen/in-view", {
-    params: { west, south, east, north },
+    params: { west, south, east, north, loai },
     signal,
     errorFallback: "Không tải được bản đồ nền trong khung nhìn",
   });

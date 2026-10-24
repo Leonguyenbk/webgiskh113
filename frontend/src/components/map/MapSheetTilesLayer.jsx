@@ -34,7 +34,7 @@ function sheetBounds(feature) {
 // giữa tilePane=200 và overlayPane=400) — không dùng "tilePane" mặc định
 // vì lớp nền (OSM/vệ tinh) cũng nằm đó, thứ tự chồng lớp giữa 2 bên không
 // ổn định (đã thấy thực tế bị lớp nền đè lên).
-export default function MapSheetTilesLayer({ sheets, opacity }) {
+export default function MapSheetTilesLayer({ sheets, opacity, pane = "banDoNenPane" }) {
   return sheets
     .filter((feature) => feature.properties?.tile_url)
     .map((feature) => {
@@ -50,7 +50,7 @@ export default function MapSheetTilesLayer({ sheets, opacity }) {
           key={`${id}-${tileVersion}`}
           url={tileUrl}
           opacity={opacity}
-          pane="banDoNenPane"
+          pane={pane}
           bounds={sheetBounds(feature)}
           minZoom={minZoom ?? undefined}
           maxNativeZoom={maxZoom ?? undefined}

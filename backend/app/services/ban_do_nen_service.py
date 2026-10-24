@@ -18,6 +18,31 @@ LIST_FILTER_FIELDS = ("ma_xa", "so_to", "trang_thai")
 # đổi domain/gốc đường dẫn trong tile_url, không đổi gì khác.
 TILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "ban_do_nen_tiles"
 
+# 2 loại lớp raster cùng bảng ban_do_nen (cột loai) — "Bản đồ địa chính"
+# (mặc định, mọi tờ cũ) và "Bản đồ đăng ký" (thông tin người đăng ký lúc đo
+# đạc, ảnh nền trong suốt). Tile mỗi loại 1 thư mục gốc riêng để 2 loại
+# cùng (ma_xa, so_to) không ghi đè nhau.
+LOAI_DIA_CHINH = "dia_chinh"
+LOAI_DANG_KY = "dang_ky"
+TILES_DIRS = {
+    LOAI_DIA_CHINH: TILES_DIR,
+    LOAI_DANG_KY: TILES_DIR.parent / "ban_do_dang_ky_tiles",
+}
+# Tool Windows chỉ cho đổi "URL server" rồi tự nối đường dẫn cố định
+# /api/ban-do-nen/..., /tiles/ban-do-nen/... — đặt URL server có tiền tố
+# này (VD https://www.kh2959bmt.net/ban-do-dang-ky) là mọi request + tile_url
+# Tool đăng ký đều thuộc loại "dang_ky" (xem _register_blueprints).
+DANG_KY_URL_PREFIX = "/ban-do-dang-ky"
+
+
+def current_loai() -> str:
+    """Loại lớp của request hiện tại: tiền tố URL /ban-do-dang-ky (Tool) ưu
+    tiên, rồi tới ?loai= / form loai (web), mặc định "dia_chinh"."""
+    if request.path.startswith(DANG_KY_URL_PREFIX + "/"):
+        return LOAI_DANG_KY
+    raw = (request.args.get("loai") or request.form.get("loai") or "").strip()
+    return LOAI_DANG_KY if raw == LOAI_DANG_KY else LOAI_DIA_CHINH
+
 # Tên entry hợp lệ trong file zip tile: "{z}/{x}/{y}.png" (chỉ số nguyên) —
 # chặn zip-slip (đường dẫn "../", tuyệt đối, ký tự lạ).
 _TILE_ENTRY_RE = re.compile(r"^(\d{1,2})/(\d{1,10})/(\d{1,10})\.png$")
@@ -39,7 +64,7 @@ def list_sheets():
     if not ma_xa and not so_to:
         return {"items": []}, None
 
-    params: dict = {"limit": MAX_LIST_RESULTS}
+    params: dict = {"limit": MAX_LIST_RESULTS, "loai": f"eq.{current_loai()}"}
     if ma_xa:
         params["ma_xa"] = f"substr.{ma_xa}"
     if so_to:
@@ -118,6 +143,7 @@ def register(body: dict):
         "p_min_zoom": min_zoom,
         "p_max_zoom": max_zoom,
         "p_ghi_chu": (body.get("ghi_chu") or "").strip() or None,
+        "p_loai": current_loai(),
     }
 
     result, error_response = ban_do_nen_repository.register(payload)
@@ -154,7 +180,9 @@ def delete_sheet(id_: int):
 
 
 def get_in_view(west, south, east, north):
-    result, error_response = ban_do_nen_repository.get_in_view(west, south, east, north)
+    result, error_response = ban_do_nen_repository.get_in_view(
+        west, south, east, north, loai=current_loai()
+    )
     if error_response:
         return None, error_response
     return result, None
@@ -163,7 +191,7 @@ def get_in_view(west, south, east, north):
 def search(ma_xa: str, so_to=None):
     if not ma_xa:
         return None, (jsonify({"error": "Thiếu mã xã"}), 400)
-    result, error_response = ban_do_nen_repository.search(ma_xa, so_to)
+    result, error_response = ban_do_nen_repository.search(ma_xa, so_to, loai=current_loai())
     if error_response:
         return None, error_response
     return result, None
@@ -175,8 +203,8 @@ def search(ma_xa: str, so_to=None):
 _PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
-def tile_dir(ma_xa: str, so_to: str, version: int, z: int, x: int) -> Path:
-    return TILES_DIR / ma_xa / so_to / f"v{version}" / str(z) / str(x)
+def tile_dir(ma_xa: str, so_to: str, version: int, z: int, x: int, loai: str = LOAI_DIA_CHINH) -> Path:
+    return TILES_DIRS[loai] / ma_xa / so_to / f"v{version}" / str(z) / str(x)
 
 
 def save_tiles_zip(ma_xa: str, so_to: str, tile_version_raw: str, tiles_zip):
@@ -203,7 +231,7 @@ def save_tiles_zip(ma_xa: str, so_to: str, tile_version_raw: str, tiles_zip):
     except zipfile.BadZipFile:
         return None, (jsonify({"error": "tiles_zip không phải file .zip hợp lệ"}), 400)
 
-    target_dir = TILES_DIR / ma_xa / so_to / f"v{tile_version}"
+    target_dir = TILES_DIRS[current_loai()] / ma_xa / so_to / f"v{tile_version}"
     saved = 0
     skipped = 0
     with archive:

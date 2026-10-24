@@ -54,7 +54,7 @@ def delete(id_: int):
     return True, None
 
 
-def get_in_view(west, south, east, north, include_all: bool = False):
+def get_in_view(west, south, east, north, include_all: bool = False, loai: str = "dia_chinh"):
     return supabase_client.call_rpc(
         "get_ban_do_nen_in_view",
         {
@@ -63,14 +63,17 @@ def get_in_view(west, south, east, north, include_all: bool = False):
             "p_east": east,
             "p_north": north,
             "p_include_all": include_all,
+            "p_loai": loai,
         },
         timeout=20,
     )
 
 
-def search(ma_xa: str, so_to=None):
+def search(ma_xa: str, so_to=None, loai: str = "dia_chinh"):
     return supabase_client.call_rpc(
-        "get_ban_do_nen_by_ma_xa_so_to", {"p_ma_xa": ma_xa, "p_so_to": so_to}, timeout=15
+        "get_ban_do_nen_by_ma_xa_so_to",
+        {"p_ma_xa": ma_xa, "p_so_to": so_to, "p_loai": loai},
+        timeout=15,
     )
 
 

@@ -36,6 +36,13 @@ def _register_blueprints(app: Flask) -> None:
     ):
         app.register_blueprint(blueprint)
 
+    # Lớp "Bản đồ đăng ký": cùng mọi route bản đồ nền dưới tiền tố
+    # /ban-do-dang-ky — Tool Windows chỉ cần đổi "URL server" sang
+    # https://<domain>/ban-do-dang-ky (xem ban_do_nen_service.current_loai).
+    from .services.ban_do_nen_service import DANG_KY_URL_PREFIX
+
+    app.register_blueprint(ban_do_nen_bp, url_prefix=DANG_KY_URL_PREFIX, name="ban_do_dang_ky")
+
 
 def _register_error_handlers(app: Flask) -> None:
     # Lưới an toàn cho lỗi KHÔNG được route/service nào tự bắt và trả JSON

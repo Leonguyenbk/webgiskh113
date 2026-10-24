@@ -10,7 +10,9 @@ ban_do_nen_bp = Blueprint("ban_do_nen", __name__)
 
 @ban_do_nen_bp.get("/tiles/ban-do-nen/<ma_xa>/<so_to>/v<int:version>/<int:z>/<int:x>/<int:y>.png")
 def get_ban_do_nen_tile(ma_xa: str, so_to: str, version: int, z: int, x: int, y: int):
-    directory = ban_do_nen_service.tile_dir(ma_xa, so_to, version, z, x)
+    directory = ban_do_nen_service.tile_dir(
+        ma_xa, so_to, version, z, x, ban_do_nen_service.current_loai()
+    )
     return send_from_directory(directory, f"{y}.png")
 
 

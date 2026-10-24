@@ -1174,8 +1174,8 @@ create table if not exists public.ban_do_nen (
     trang_thai text not null default 'ready',
     kich_hoat boolean not null default true,
     created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now(),
-    constraint ban_do_nen_ma_xa_so_to_key unique (ma_xa, so_to)
+    updated_at timestamptz not null default now()
+    -- khoá duy nhất (loai, ma_xa, so_to): xem alter table ... loai bên dưới
 );
 
 -- ĐÍNH CHÍNH: bảng đã tồn tại từ trước với so_to integer — ép về text để
@@ -1183,6 +1183,20 @@ create table if not exists public.ban_do_nen (
 -- giữ nguyên dữ liệu số cũ (chỉ đổi cách biểu diễn), an toàn chạy lại.
 alter table public.ban_do_nen
     alter column so_to type text using so_to::text;
+
+-- Loại lớp raster: 'dia_chinh' = "Bản đồ địa chính" (mọi tờ cũ), 'dang_ky'
+-- = "Bản đồ đăng ký" (thông tin người đăng ký lúc đo đạc, ảnh nền trong
+-- suốt, nằm trên lớp địa chính, dưới lớp thửa). 1 tờ (ma_xa, so_to) có thể
+-- có cả 2 loại => khoá duy nhất gồm cả loai.
+alter table public.ban_do_nen
+    add column if not exists loai text not null default 'dia_chinh';
+alter table public.ban_do_nen drop constraint if exists ban_do_nen_loai_check;
+alter table public.ban_do_nen
+    add constraint ban_do_nen_loai_check check (loai in ('dia_chinh', 'dang_ky'));
+alter table public.ban_do_nen drop constraint if exists ban_do_nen_ma_xa_so_to_key;
+alter table public.ban_do_nen drop constraint if exists ban_do_nen_loai_ma_xa_so_to_key;
+alter table public.ban_do_nen
+    add constraint ban_do_nen_loai_ma_xa_so_to_key unique (loai, ma_xa, so_to);
 
 create index if not exists ban_do_nen_geom_idx
     on public.ban_do_nen using gist (geom);
@@ -1219,15 +1233,17 @@ create trigger trg_ban_do_nen_set_bbox_from_geom
     for each row execute function public.ban_do_nen_set_bbox_from_geom();
 
 -- API duy nhất mà Tool Windows gọi để hoàn tất đăng ký 1 tờ — CHỈ gọi sau
--- khi Tool đã upload xong 100% tile lên Storage (WebGIS không tự biết
--- tiến độ upload, tin tưởng Tool chỉ gọi khi đã xong). Upsert theo
--- (ma_xa, so_to): tờ đã có thì cập nhật geom/tile_url/tile_version mới
--- (đúng chiều tăng tile_version mỗi lần Tool xử lý lại — cache-busting).
--- ĐÍNH CHÍNH: đổi p_so_to sang text (số tờ có thể kèm tên địa phương cũ,
--- VD "ttmdrak12") — drop chữ ký integer cũ vì Postgres không cho
--- create or replace đổi kiểu tham số.
+-- khi Tool đã upload xong 100% tile (WebGIS không tự biết tiến độ upload,
+-- tin tưởng Tool chỉ gọi khi đã xong). Upsert theo (loai, ma_xa, so_to):
+-- tờ đã có thì cập nhật geom/tile_url/tile_version mới (đúng chiều tăng
+-- tile_version mỗi lần Tool xử lý lại — cache-busting). p_loai: 'dia_chinh'
+-- (mặc định, Tool gửi lên /api/...) hoặc 'dang_ky' (Tool đặt URL server có
+-- tiền tố /ban-do-dang-ky — xem ban_do_nen_routes.py).
 drop function if exists public.register_ban_do_nen(
     text, integer, jsonb, text, integer, integer, integer, text
+);
+drop function if exists public.register_ban_do_nen(
+    text, text, jsonb, text, integer, integer, integer, text
 );
 create or replace function public.register_ban_do_nen(
     p_ma_xa text,
@@ -1237,7 +1253,8 @@ create or replace function public.register_ban_do_nen(
     p_tile_version integer,
     p_min_zoom integer default null,
     p_max_zoom integer default null,
-    p_ghi_chu text default null
+    p_ghi_chu text default null,
+    p_loai text default 'dia_chinh'
 )
 returns bigint
 language plpgsql
@@ -1248,13 +1265,13 @@ declare
     result_id bigint;
 begin
     insert into public.ban_do_nen (
-        ma_xa, so_to, geom, tile_url, tile_version, min_zoom, max_zoom, ghi_chu, trang_thai
+        loai, ma_xa, so_to, geom, tile_url, tile_version, min_zoom, max_zoom, ghi_chu, trang_thai
     ) values (
-        p_ma_xa, p_so_to,
+        coalesce(p_loai, 'dia_chinh'), p_ma_xa, p_so_to,
         ST_SetSRID(ST_GeomFromGeoJSON(p_geom_geojson::text), 4326),
         p_tile_url, p_tile_version, p_min_zoom, p_max_zoom, p_ghi_chu, 'ready'
     )
-    on conflict (ma_xa, so_to) do update set
+    on conflict (loai, ma_xa, so_to) do update set
         geom = excluded.geom,
         tile_url = excluded.tile_url,
         tile_version = excluded.tile_version,
@@ -1268,18 +1285,23 @@ begin
 end;
 $$;
 
-revoke all on function public.register_ban_do_nen(text, text, jsonb, text, integer, integer, integer, text) from public;
-grant execute on function public.register_ban_do_nen(text, text, jsonb, text, integer, integer, integer, text) to service_role;
+revoke all on function public.register_ban_do_nen(text, text, jsonb, text, integer, integer, integer, text, text) from public;
+grant execute on function public.register_ban_do_nen(text, text, jsonb, text, integer, integer, integer, text, text) to service_role;
 
--- Lấy các tờ bản đồ giao khung nhìn hiện tại — dùng cho tile loader
--- (viewport) và lớp ranh+nhãn trên bản đồ chính. Mặc định chỉ trả tờ đã
--- 'ready' và đang kich_hoat; p_include_all=true dùng cho trang quản trị.
+-- Lấy các tờ bản đồ (đúng loại p_loai) giao khung nhìn hiện tại — dùng cho
+-- tile loader (viewport) và lớp ranh+nhãn trên bản đồ chính. Mặc định chỉ
+-- trả tờ đã 'ready' và đang kich_hoat; p_include_all=true dùng cho trang
+-- quản trị.
+drop function if exists public.get_ban_do_nen_in_view(
+    double precision, double precision, double precision, double precision, boolean
+);
 create or replace function public.get_ban_do_nen_in_view(
     p_west double precision,
     p_south double precision,
     p_east double precision,
     p_north double precision,
-    p_include_all boolean default false
+    p_include_all boolean default false,
+    p_loai text default 'dia_chinh'
 )
 returns jsonb
 language sql
@@ -1298,6 +1320,7 @@ as $$
             'geometry', ST_AsGeoJSON(b.geom)::jsonb,
             'properties', jsonb_build_object(
                 'id', b.id,
+                'loai', b.loai,
                 'ma_xa', b.ma_xa,
                 'so_to', b.so_to,
                 'tile_url', b.tile_url,
@@ -1311,22 +1334,24 @@ as $$
         ) as feature
         from public.ban_do_nen b
         where b.geom && ST_MakeEnvelope(p_west, p_south, p_east, p_north, 4326)
+          and b.loai = coalesce(p_loai, 'dia_chinh')
           and (p_include_all or (b.trang_thai = 'ready' and b.kich_hoat))
         order by b.so_to
     ) features;
 $$;
 
-revoke all on function public.get_ban_do_nen_in_view(double precision, double precision, double precision, double precision, boolean) from public;
-grant execute on function public.get_ban_do_nen_in_view(double precision, double precision, double precision, double precision, boolean) to service_role;
+revoke all on function public.get_ban_do_nen_in_view(double precision, double precision, double precision, double precision, boolean, text) from public;
+grant execute on function public.get_ban_do_nen_in_view(double precision, double precision, double precision, double precision, boolean, text) to service_role;
 
--- Tra cứu tờ bản đồ theo mã xã (+ số tờ tùy chọn) — dùng cho ô tìm kiếm
--- trên bản đồ chính và trang quản trị, không lọc theo khung nhìn/trạng
--- thái. ĐÍNH CHÍNH: p_so_to đổi sang text — drop chữ ký integer cũ vì
--- Postgres không cho create or replace đổi kiểu tham số.
+-- Tra cứu tờ bản đồ (đúng loại p_loai) theo mã xã (+ số tờ tùy chọn) — dùng
+-- cho ô tìm kiếm trên bản đồ chính và trang quản trị, không lọc theo khung
+-- nhìn/trạng thái.
 drop function if exists public.get_ban_do_nen_by_ma_xa_so_to(text, integer);
+drop function if exists public.get_ban_do_nen_by_ma_xa_so_to(text, text);
 create or replace function public.get_ban_do_nen_by_ma_xa_so_to(
     p_ma_xa text,
-    p_so_to text default null
+    p_so_to text default null,
+    p_loai text default 'dia_chinh'
 )
 returns jsonb
 language sql
@@ -1345,6 +1370,7 @@ as $$
             'geometry', ST_AsGeoJSON(b.geom)::jsonb,
             'properties', jsonb_build_object(
                 'id', b.id,
+                'loai', b.loai,
                 'ma_xa', b.ma_xa,
                 'so_to', b.so_to,
                 'tile_url', b.tile_url,
@@ -1358,12 +1384,13 @@ as $$
         ) as feature
         from public.ban_do_nen b
         where b.ma_xa = p_ma_xa
+          and b.loai = coalesce(p_loai, 'dia_chinh')
           and (p_so_to is null or b.so_to = p_so_to)
     ) features;
 $$;
 
-revoke all on function public.get_ban_do_nen_by_ma_xa_so_to(text, text) from public;
-grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, text) to service_role;
+revoke all on function public.get_ban_do_nen_by_ma_xa_so_to(text, text, text) from public;
+grant execute on function public.get_ban_do_nen_by_ma_xa_so_to(text, text, text) to service_role;
 
 -- =========================================================
 -- XUẤT DANH SÁCH GCN ĐÃ THU THẬP THUỘC 1 NHÓM KH 2959 (trang Công cụ ->

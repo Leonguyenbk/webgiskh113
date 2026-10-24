@@ -222,6 +222,13 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [banDoNenLayerOn, setBanDoNenLayerOn] = useState(false);
   // Lớp "Bản đồ địa chính" đang bật nhưng zoom < MIN_LOAD_ZOOM (không tải tờ nào).
   const [banDoNenZoomTooLow, setBanDoNenZoomTooLow] = useState(false);
+  // Lớp "Bản đồ đăng ký" (thông tin người đăng ký lúc đo đạc, ảnh nền trong
+  // suốt) — cùng cơ chế tải theo khung nhìn như "Bản đồ địa chính", chỉ
+  // chế độ xem tự do (không ghim theo xã), nằm giữa lớp địa chính và lớp
+  // thửa (giảm độ mờ thửa để nhìn xuyên xuống).
+  const [banDoDangKySheets, setBanDoDangKySheets] = useState([]);
+  const [banDoDangKyLayerOn, setBanDoDangKyLayerOn] = useState(false);
+  const [banDoDangKyZoomTooLow, setBanDoDangKyZoomTooLow] = useState(false);
 
   // Đổi xã ở ô chính -> nạp lại danh sách tờ bản đồ nền của xã đó.
   useEffect(() => {
@@ -1151,6 +1158,16 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               onZoomTooLow={setBanDoNenZoomTooLow}
             />
 
+            <MapSheetTilesLoader
+              onData={setBanDoDangKySheets}
+              onEnabledChange={setBanDoDangKyLayerOn}
+              onZoomTooLow={setBanDoDangKyZoomTooLow}
+              overlayName="Bản đồ đăng ký"
+              loai="dang_ky"
+              pane="banDoDangKyPane"
+              paneZIndex={260}
+            />
+
             <RanhThonOverlayLoader onNeed={ensureRanhThonLoaded} />
 
             <MapInstanceCapture onReady={setMapInstance} />
@@ -1234,6 +1251,12 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   <MapSheetBoundaryLayer sheets={banDoNenSheets} />
                 </LayerGroup>
               </LayersControl.Overlay>
+
+              <LayersControl.Overlay name="Bản đồ đăng ký">
+                <LayerGroup>
+                  <MapSheetTilesLayer sheets={banDoDangKySheets} opacity={1} pane="banDoDangKyPane" />
+                </LayerGroup>
+              </LayersControl.Overlay>
             </LayersControl>
 
             <FitBounds focusFeature={selectedFeature} focusTick={focusTick} />
@@ -1312,6 +1335,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             {banDoNenLayerOn && banDoNenZoomTooLow && (
               <p style={{ margin: "8px 0 0", color: "#b45309", fontSize: 12 }}>
                 Phóng to thêm để xem bản đồ địa chính.
+              </p>
+            )}
+            {banDoDangKyLayerOn && banDoDangKyZoomTooLow && (
+              <p style={{ margin: "8px 0 0", color: "#b45309", fontSize: 12 }}>
+                Phóng to thêm để xem bản đồ đăng ký.
               </p>
             )}
 

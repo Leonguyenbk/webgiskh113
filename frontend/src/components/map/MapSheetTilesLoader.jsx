@@ -23,7 +23,11 @@ const MIN_LOAD_ZOOM_FILTERED = 13;
 // Phải khớp CHÍNH XÁC name="..." của LayersControl.Overlay bọc lớp này
 // trong App.jsx — Leaflet phát sự kiện overlayadd/overlayremove kèm đúng
 // chuỗi name đó khi người dùng bật/tắt checkbox.
+// Mặc định là lớp "Bản đồ địa chính" — lớp "Bản đồ đăng ký" dùng lại loader
+// này qua props overlayName/loai/pane (xem App.jsx).
 const OVERLAY_NAME = "Bản đồ địa chính";
+const PANE_NAME = "banDoNenPane";
+const PANE_Z_INDEX = 250;
 
 // Tải danh sách tờ bản đồ nền (metadata: tile_url/bbox/trạng thái) giao
 // khung nhìn hiện tại, tải lại khi pan/zoom (debounce 400ms) — khác các
@@ -48,6 +52,10 @@ export default function MapSheetTilesLoader({
   pinnedSheets = [],
   onEnabledChange,
   onZoomTooLow,
+  overlayName = OVERLAY_NAME,
+  loai,
+  pane = PANE_NAME,
+  paneZIndex = PANE_Z_INDEX,
 }) {
   const map = useMap();
   const timerRef = useRef(null);
@@ -105,6 +113,7 @@ export default function MapSheetTilesLoader({
         south: bounds.getSouth(),
         east: bounds.getEast(),
         north: bounds.getNorth(),
+        loai,
       },
       { signal: controller.signal },
     )
@@ -129,14 +138,14 @@ export default function MapSheetTilesLoader({
     moveend: scheduleLoad,
     zoomend: scheduleLoad,
     overlayadd: (event) => {
-      if (event.name !== OVERLAY_NAME) return;
+      if (event.name !== overlayName) return;
       enabledRef.current = true;
       onEnabledChange?.(true);
       if (filterRef.current) emitViewportCull();
       else load();
     },
     overlayremove: (event) => {
-      if (event.name !== OVERLAY_NAME) return;
+      if (event.name !== overlayName) return;
       enabledRef.current = false;
       onEnabledChange?.(false);
       onZoomTooLow?.(false);
@@ -168,8 +177,8 @@ export default function MapSheetTilesLoader({
     // z-index cố định giữa tilePane (200) và overlayPane (400, nơi
     // polygon thửa đất nằm) đảm bảo LUÔN nằm trên mọi lớp nền, LUÔN dưới
     // thửa đất, bất kể thứ tự bật/tắt.
-    if (!map.getPane("banDoNenPane")) {
-      map.createPane("banDoNenPane").style.zIndex = 250;
+    if (!map.getPane(pane)) {
+      map.createPane(pane).style.zIndex = paneZIndex;
     }
 
     return () => {

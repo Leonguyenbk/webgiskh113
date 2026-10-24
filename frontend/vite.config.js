@@ -11,6 +11,12 @@ const proxy = {
     target: "http://127.0.0.1:5000",
     changeOrigin: true,
   },
+  // Lớp "Bản đồ đăng ký": Tool Windows đặt URL server có tiền tố này (vừa
+  // upload/register, vừa tile_url) — xem backend ban_do_nen_service.py.
+  "/ban-do-dang-ky": {
+    target: "http://127.0.0.1:5000",
+    changeOrigin: true,
+  },
 };
 
 export default defineConfig({

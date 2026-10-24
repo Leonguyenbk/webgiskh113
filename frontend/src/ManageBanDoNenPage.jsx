@@ -24,6 +24,8 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
   const [filterMaXa, setFilterMaXa] = useState("");
   const [filterSoTo, setFilterSoTo] = useState("");
   const [filterTrangThai, setFilterTrangThai] = useState("");
+  // "" = Bản đồ địa chính, "dang_ky" = Bản đồ đăng ký (xem ban_do_nen.loai).
+  const [filterLoai, setFilterLoai] = useState("");
 
   const [xaList, setXaList] = useState([]);
   const [xaQuery, setXaQuery] = useState("");
@@ -77,12 +79,13 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
     if (maXa) params.ma_xa = maXa;
     if (soTo) params.so_to = soTo;
     if (filterTrangThai) params.trang_thai = filterTrangThai;
+    if (filterLoai) params.loai = filterLoai;
 
     return listBanDoNen(params)
       .then((result) => setItems(result?.items || []))
       .catch((err) => setListError(err.message))
       .finally(() => setLoadingList(false));
-  }, [filterMaXa, filterSoTo, filterTrangThai]);
+  }, [filterMaXa, filterSoTo, filterTrangThai, filterLoai]);
 
   const handleFilterKeyDown = (event) => {
     if (event.key === "Enter") loadList();
@@ -236,6 +239,14 @@ export default function ManageBanDoNenPage({ onNavigateHome }) {
               />
             </div>
           </div>
+          <select
+            className="filterInput"
+            value={filterLoai}
+            onChange={(event) => setFilterLoai(event.target.value)}
+          >
+            <option value="">Bản đồ địa chính</option>
+            <option value="dang_ky">Bản đồ đăng ký</option>
+          </select>
           <select
             className="filterInput"
             value={filterTrangThai}
