@@ -13,8 +13,12 @@ const VIEWPORT_PAD = 0.25;
 
 // Dưới zoom này KHÔNG tải/mount tờ nào — zoom nhỏ cả tỉnh, khung nhìn giao
 // cả ~10.000 tờ: API trả vài MB và mount ~10.000 TileLayer + viền tờ làm
-// trình duyệt đơ, trong khi tile (min_zoom 13-14) chưa hiện ở mức này.
-const MIN_LOAD_ZOOM = 13;
+// trình duyệt đơ. Xem tự do (theo khung nhìn): 18 — phải zoom sát mới đọc
+// được số thửa trên ảnh quét để ứng thửa, zoom nhỏ hơn chỉ tốn tải. Đã chọn
+// xã/tờ ở sidebar: 13 — chỉ trong 1 xã, đã lọc theo khung nhìn, và chọn 1
+// tờ thì bản đồ tự fitBounds về khoảng zoom 15, ngưỡng 16 sẽ ra màn trống.
+const MIN_LOAD_ZOOM = 18;
+const MIN_LOAD_ZOOM_FILTERED = 13;
 
 // Phải khớp CHÍNH XÁC name="..." của LayersControl.Overlay bọc lớp này
 // trong App.jsx — Leaflet phát sự kiện overlayadd/overlayremove kèm đúng
@@ -59,7 +63,8 @@ export default function MapSheetTilesLoader({
   // Zoom quá nhỏ: huỷ request đang chờ, gỡ hết tờ đang mount. Trả true nếu
   // đã chặn (caller dừng luôn).
   const blockIfZoomTooLow = () => {
-    const tooLow = map.getZoom() < MIN_LOAD_ZOOM;
+    const minZoom = filterRef.current ? MIN_LOAD_ZOOM_FILTERED : MIN_LOAD_ZOOM;
+    const tooLow = map.getZoom() < minZoom;
     onZoomTooLow?.(tooLow);
     if (!tooLow) return false;
     window.clearTimeout(timerRef.current);
