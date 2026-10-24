@@ -4,8 +4,12 @@ import datetime
 import io
 import os
 import re
+import threading
+import time
+import unicodedata
+import uuid
 
-from flask import jsonify
+from flask import current_app, jsonify
 from openpyxl import load_workbook
 
 from ..repositories import danhmuchoso_repository
@@ -338,13 +342,75 @@ def tai_mau_xlsx():
     return (data, "MAUFILE.xlsx"), None
 
 
-_IMPORT_MAX_ROWS = 3000
+_IMPORT_MAX_ROWS = 5000
 
 
 def _xlsx_text(value) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _chuan_hoa_tieu_de(value) -> str:
+    """Bỏ dấu, chữ thường, gộp khoảng trắng — để so tên cột không phụ thuộc
+    cách gõ ("Số sêri GCN" / "Số Sê ri giấy chứng nhận", xuống dòng...)."""
+    text = unicodedata.normalize("NFD", _xlsx_text(value).replace("đ", "d").replace("Đ", "D"))
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+    return " ".join(text.lower().split())
+
+
+# Nhận diện cột theo tên tiêu đề (đã _chuan_hoa_tieu_de) — thứ tự quan trọng:
+# "Địa chỉ thửa đất (Chỉ ghi cấp xã...)" phải xét trước các cột "thửa đất".
+_TIEU_DE_COT = [
+    ("dia_chi_thua_dat", lambda t: t.startswith("dia chi")),
+    ("thua_dat_so_moi", lambda t: t.startswith("thua dat so") and "moi" in t),
+    ("thua_dat_so_cu", lambda t: t.startswith("thua dat so") and "(cu)" in t),
+    ("ban_do_so_moi", lambda t: t.startswith("ban do so") and "moi" in t),
+    ("ban_do_so_cu", lambda t: t.startswith("ban do so") and "(cu)" in t),
+    ("ten_nguoi_su_dung_dat", lambda t: "ten nguoi" in t),
+    ("so_seri_gcn", lambda t: "seri" in t or "se ri" in t),
+    ("loai_ho_so", lambda t: t.startswith("loai ho so")),
+    ("ghi_chu", lambda t: t.startswith("ghi chu")),
+    ("chi_nhanh", lambda t: t.startswith("chi nhanh")),
+    ("da_co_tren_vbdlis", lambda t: "vbdlis" in t),
+    ("so_tt_ho_so", lambda t: t.startswith("stt") or t.startswith("so tt")),
+    ("nam", lambda t: t == "nam"),
+    ("ngay", lambda t: t == "ngay"),
+    ("cap", lambda t: t == "cap"),
+]
+
+
+def _cot_theo_tieu_de(cells) -> dict[str, int]:
+    cot: dict[str, int] = {}
+    for idx, value in enumerate(cells):
+        text = _chuan_hoa_tieu_de(value)
+        if not text:
+            continue
+        for field, khop in _TIEU_DE_COT:
+            if field not in cot and khop(text):
+                cot[field] = idx
+                break
+    return cot
+
+
+def _bo_cuc_file(ws) -> tuple[dict[str, int], int]:
+    """Tìm dòng tiêu đề trong 10 dòng đầu (dòng có cả cột "Tên người sử dụng
+    đất" lẫn "Số sêri") + dòng tiêu đề phụ ngay dưới (Thửa/Bản đồ Mới/Cũ),
+    trả (field -> chỉ số cột 0-based, dòng dữ liệu đầu tiên). File không
+    đúng mẫu cột (vd thiếu cột "Ngày" — các cột sau lệch sang trái 1 ô) vẫn
+    đọc đúng. Không nhận ra tiêu đề thì dùng nguyên layout cố định của mẫu
+    MAUFILE.xlsx như trước."""
+    dau = list(ws.iter_rows(min_row=1, max_row=11, values_only=True))
+    for i in range(min(10, len(dau))):
+        cot = _cot_theo_tieu_de(dau[i])
+        if "ten_nguoi_su_dung_dat" not in cot or "so_seri_gcn" not in cot:
+            continue
+        phu = _cot_theo_tieu_de(dau[i + 1]) if i + 1 < len(dau) else {}
+        co_dong_phu = any(f.startswith(("thua_dat", "ban_do", "dia_chi")) for f in phu)
+        for field, idx in phu.items():
+            cot.setdefault(field, idx)
+        return cot, i + 1 + (2 if co_dong_phu else 1)
+    return {field: idx for idx, field in enumerate(_MAU_COLUMNS)}, _MAU_FIRST_DATA_ROW
 
 
 _NAM_TIEU_DE_RE = re.compile(r"NĂM\s*(\d{4})")
@@ -359,9 +425,157 @@ def _nam_tu_tieu_de(ws) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _doc_dong_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | None):
+    """Đọc + ánh xạ cột toàn bộ file (nhanh, chưa ghi DB) — xem import_xlsx.
+    Trả ((cac_dong, loi_doc, cac_nam), None) hoặc (None, error_response);
+    cac_dong: list (số dòng trong file, body cho _them_mot_dong)."""
+    try:
+        wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    except Exception:
+        return None, (jsonify({"error": "Không đọc được file .xlsx — kiểm tra lại file"}), 400)
+    ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
+
+    cot, dong_dau = _bo_cuc_file(ws)
+    nam_tieu_de = _nam_tu_tieu_de(ws)
+    nam_chon_tay = _int_or_none(nam_raw)
+    chi_nhanh_chung = (chi_nhanh_raw or "").strip() or None
+
+    def lay(values, field):
+        idx = cot.get(field)
+        return values[idx] if idx is not None and idx < len(values) else None
+
+    cac_dong: list[tuple[int, dict]] = []
+    loi: list[dict] = []
+    cac_nam: set[int] = set()
+    for offset, values in enumerate(ws.iter_rows(min_row=dong_dau, values_only=True)):
+        values = list(values)
+        if not any(_xlsx_text(lay(values, field)) for field in cot):
+            continue  # dòng trống, bỏ qua không tính lỗi
+        so_dong_file = dong_dau + offset
+        if len(cac_dong) + len(loi) >= _IMPORT_MAX_ROWS:
+            loi.append({"dong": so_dong_file, "loi": f"Vượt quá {_IMPORT_MAX_ROWS} dòng, dừng đọc"})
+            break
+
+        nam_dong = _int_or_none(lay(values, "nam")) or nam_tieu_de or nam_chon_tay
+        if nam_dong is None:
+            loi.append({
+                "dong": so_dong_file,
+                "loi": "Thiếu Năm — không có ở cột Năm, tiêu đề file lẫn ô chọn thủ công.",
+            })
+            continue
+        cac_nam.add(nam_dong)
+
+        body = {field: _xlsx_text(lay(values, field)) for field in _MAU_COLUMNS if field not in ("nam", "ngay", "chi_nhanh", "da_co_tren_vbdlis")}
+        body["nam"] = nam_dong
+        # datetime.date (ô Excel định dạng ngày) hoặc text DD/MM/YYYY —
+        # _them_mot_dong tự chuẩn hoá qua _parse_ngay
+        body["ngay"] = lay(values, "ngay")
+        body["chi_nhanh"] = _xlsx_text(lay(values, "chi_nhanh")) or chi_nhanh_chung
+        cac_dong.append((so_dong_file, body))
+    return (cac_dong, loi, cac_nam), None
+
+
+def _ghi_cac_dong(cac_dong, loi: list[dict], tien_do: dict | None = None):
+    thanh_cong = 0
+    trung_danh_muc = 0
+    for so_dong_file, body in cac_dong:
+        _result, error_response, da_trung = _them_mot_dong(body)
+        if error_response:
+            try:
+                thong_bao = error_response[0].get_json().get("error", "Lỗi không rõ")
+            except Exception:
+                thong_bao = "Lỗi không rõ"
+            loi.append({"dong": so_dong_file, "loi": thong_bao})
+        else:
+            thanh_cong += 1
+            if da_trung:
+                trung_danh_muc += 1
+        if tien_do is not None:
+            tien_do["da_xu_ly"] += 1
+            tien_do["thanh_cong"] = thanh_cong
+            tien_do["so_dong_loi"] = len(loi)
+    return thanh_cong, trung_danh_muc
+
+
+def _ket_qua_import(cac_dong, loi, cac_nam, thanh_cong, trung_danh_muc) -> dict:
+    loi = sorted(loi, key=lambda item: item["dong"])
+    return {
+        "cac_nam_da_dung": sorted(cac_nam),
+        "tong_dong_doc": len(cac_dong) + sum(1 for item in loi if item["loi"].startswith("Thiếu Năm")),
+        "thanh_cong": thanh_cong,
+        "trung_danh_muc": trung_danh_muc,
+        "so_dong_loi": len(loi),
+        "loi": loi[:200],
+    }
+
+
+# Import chạy nền (xem bat_dau_import) — file vài nghìn dòng mất nhiều phút
+# (mỗi dòng 2 lượt gọi Supabase), vượt giới hạn 100 giây/request của
+# Cloudflare; chạy đồng bộ thì trình duyệt báo lỗi trong khi server vẫn ghi
+# tiếp, người dùng nhập lại => trùng dòng. Lưu trong RAM của process là đủ
+# (chỉ 1 process Flask), mất khi restart — chỉ là tiến độ, không phải dữ liệu.
+_IMPORT_JOBS: dict[str, dict] = {}
+_IMPORT_JOBS_LOCK = threading.Lock()
+_IMPORT_JOB_GIU_GIAY = 6 * 3600
+
+
+def bat_dau_import(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | None = None):
+    """Đọc file ngay (lỗi file báo luôn 400), rồi ghi từng dòng trong thread
+    nền. Trả {"job_id", "tong_dong"} — FE hỏi tiến độ qua trang_thai_import."""
+    parsed, error_response = _doc_dong_xlsx(file_bytes, nam_raw, chi_nhanh_raw)
+    if error_response:
+        return None, error_response
+    cac_dong, loi, cac_nam = parsed
+
+    job_id = uuid.uuid4().hex
+    job = {
+        "trang_thai": "dang_chay",
+        "tong_dong": len(cac_dong),
+        "da_xu_ly": 0,
+        "thanh_cong": 0,
+        "so_dong_loi": len(loi),
+        "ket_qua": None,
+        "loi_he_thong": None,
+        "bat_dau_luc": time.time(),
+    }
+    with _IMPORT_JOBS_LOCK:
+        han = time.time() - _IMPORT_JOB_GIU_GIAY
+        for cu in [k for k, v in _IMPORT_JOBS.items() if v["bat_dau_luc"] < han]:
+            del _IMPORT_JOBS[cu]
+        _IMPORT_JOBS[job_id] = job
+
+    app = current_app._get_current_object()
+
+    def chay():
+        with app.app_context():
+            try:
+                thanh_cong, trung = _ghi_cac_dong(cac_dong, loi, job)
+                job["ket_qua"] = _ket_qua_import(cac_dong, loi, cac_nam, thanh_cong, trung)
+                job["trang_thai"] = "xong"
+            except Exception as exc:  # noqa: BLE001 - báo lại cho FE thay vì chết im
+                job["loi_he_thong"] = f"Lỗi khi nhập: {exc}"
+                job["trang_thai"] = "loi"
+
+    threading.Thread(target=chay, name=f"dmhs-import-{job_id[:8]}", daemon=True).start()
+    return {"job_id": job_id, "tong_dong": len(cac_dong)}, None
+
+
+def trang_thai_import(job_id: str):
+    with _IMPORT_JOBS_LOCK:
+        job = _IMPORT_JOBS.get(job_id or "")
+    if job is None:
+        return None, (
+            jsonify({"error": "Không tìm thấy đợt nhập (server có thể đã khởi động lại) — tìm kiếm danh mục để xem dòng nào đã lưu."}),
+            404,
+        )
+    return {k: v for k, v in job.items() if k != "bat_dau_luc"}, None
+
+
 def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | None = None):
-    """Nhập hàng loạt từ file .xlsx đúng layout mẫu MAUFILE.xlsx (cột
-    A..M, dữ liệu từ dòng 4) — "Năm" đọc theo TỪNG DÒNG ở cột A (1 file
+    """Nhập hàng loạt từ file .xlsx theo mẫu MAUFILE.xlsx — cột nhận diện
+    theo TÊN TIÊU ĐỀ (xem _bo_cuc_file), file thiếu/thừa/đổi chỗ cột vẫn
+    đọc đúng; không nhận ra tiêu đề thì dùng layout cố định A..O, dữ liệu
+    từ dòng 4. "Năm" đọc theo TỪNG DÒNG ở cột Năm (1 file
     có thể gồm nhiều năm khác nhau). Dòng nào bỏ trống cột Năm thì lấy
     theo tiêu đề dòng 1 (xem _nam_tu_tieu_de, bản mẫu cũ chỉ có 1
     năm/file), rồi mới tới nam_raw (chọn tay cho cả đợt) — dòng nào
@@ -374,80 +588,9 @@ def import_xlsx(file_bytes: bytes, nam_raw: str | None, chi_nhanh_raw: str | Non
     nhận lịch sử (yêu cầu người dùng), chỉ báo lại số dòng trùng. Lỗi
     từng dòng không làm hỏng cả batch — dòng lỗi bị bỏ qua, báo cáo lại
     chi tiết để người dùng tự sửa file rồi nhập lại dòng đó."""
-    try:
-        wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
-    except Exception:
-        return None, (jsonify({"error": "Không đọc được file .xlsx — kiểm tra lại file"}), 400)
-    ws = wb[_MAU_SHEET] if _MAU_SHEET in wb.sheetnames else wb.active
-
-    nam_tieu_de = _nam_tu_tieu_de(ws)
-    nam_chon_tay = _int_or_none(nam_raw)
-    chi_nhanh_chung = (chi_nhanh_raw or "").strip() or None
-
-    thanh_cong = 0
-    trung_danh_muc = 0
-    loi: list[dict] = []
-    so_dong_doc = 0
-    cac_nam_da_dung: set[int] = set()
-
-    for offset, row in enumerate(
-        ws.iter_rows(min_row=_MAU_FIRST_DATA_ROW, max_col=_MAU_VBDLIS_COL, values_only=True)
-    ):
-        if so_dong_doc >= _IMPORT_MAX_ROWS:
-            loi.append({"dong": _MAU_FIRST_DATA_ROW + offset, "loi": f"Vượt quá {_IMPORT_MAX_ROWS} dòng, dừng đọc"})
-            break
-        values = list(row) + [None] * (_MAU_VBDLIS_COL - len(row))
-        core = values[:13]
-        if not any(_xlsx_text(v) for v in core):
-            continue  # dòng trống, bỏ qua không tính lỗi
-
-        so_dong_doc += 1
-        so_dong_file = _MAU_FIRST_DATA_ROW + offset
-
-        nam_dong = _int_or_none(core[0]) or nam_tieu_de or nam_chon_tay
-        if nam_dong is None:
-            loi.append({
-                "dong": so_dong_file,
-                "loi": "Thiếu Năm — không có ở cột Năm, tiêu đề file lẫn ô chọn thủ công.",
-            })
-            continue
-        cac_nam_da_dung.add(nam_dong)
-
-        chi_nhanh_dong = _xlsx_text(values[_MAU_CHI_NHANH_COL - 1]) or chi_nhanh_chung
-        body = {
-            "nam": nam_dong,
-            "ngay": core[1],  # datetime.date (ô Excel định dạng ngày) hoặc text DD/MM/YYYY — _them_mot_dong tự chuẩn hoá qua _parse_ngay
-            "chi_nhanh": chi_nhanh_dong,
-            "cap": _xlsx_text(core[2]),
-            "so_tt_ho_so": _xlsx_text(core[3]),
-            "ten_nguoi_su_dung_dat": _xlsx_text(core[4]),
-            "thua_dat_so_moi": _xlsx_text(core[5]),
-            "ban_do_so_moi": _xlsx_text(core[6]),
-            "thua_dat_so_cu": _xlsx_text(core[7]),
-            "ban_do_so_cu": _xlsx_text(core[8]),
-            "dia_chi_thua_dat": _xlsx_text(core[9]),
-            "so_seri_gcn": _xlsx_text(core[10]),
-            "loai_ho_so": _xlsx_text(core[11]),
-            "ghi_chu": _xlsx_text(core[12]),
-        }
-
-        _result, error_response, da_trung = _them_mot_dong(body)
-        if error_response:
-            try:
-                thong_bao = error_response[0].get_json().get("error", "Lỗi không rõ")
-            except Exception:
-                thong_bao = "Lỗi không rõ"
-            loi.append({"dong": so_dong_file, "loi": thong_bao})
-            continue
-        thanh_cong += 1
-        if da_trung:
-            trung_danh_muc += 1
-
-    return {
-        "cac_nam_da_dung": sorted(cac_nam_da_dung),
-        "tong_dong_doc": so_dong_doc,
-        "thanh_cong": thanh_cong,
-        "trung_danh_muc": trung_danh_muc,
-        "so_dong_loi": len(loi),
-        "loi": loi[:200],
-    }, None
+    parsed, error_response = _doc_dong_xlsx(file_bytes, nam_raw, chi_nhanh_raw)
+    if error_response:
+        return None, error_response
+    cac_dong, loi, cac_nam = parsed
+    thanh_cong, trung_danh_muc = _ghi_cac_dong(cac_dong, loi)
+    return _ket_qua_import(cac_dong, loi, cac_nam, thanh_cong, trung_danh_muc), None

@@ -3122,6 +3122,14 @@ alter table public.danhmuchoso enable row level security;
 create index if not exists idx_danhmuchoso_nam on public.danhmuchoso (nam);
 create index if not exists idx_danhmuchoso_chi_nhanh on public.danhmuchoso (chi_nhanh);
 
+-- Index biểu thức trim(...) khớp đúng điều kiện trong danhmuchoso_kiem_tra_gcn
+-- bên dưới — không có thì mỗi lần kiểm tra quét tuần tự du_lieu_gcn (~780k
+-- dòng) + dong_bo_du_lieu (~2,7 triệu dòng), ~2-5 giây/lần, import Excel vài
+-- nghìn dòng mất hàng giờ.
+create index if not exists idx_danhmuchoso_so_seri_gcn_trim on public.danhmuchoso (trim(so_seri_gcn));
+create index if not exists idx_du_lieu_gcn_sophathanhgcn_trim on public.du_lieu_gcn (trim(sophathanhgcn));
+create index if not exists idx_dong_bo_du_lieu_so_gcn_mplis_trim on public.dong_bo_du_lieu (trim(so_gcn_mplis));
+
 -- p_exclude_id: dùng khi KIỂM TRA LÚC SỬA 1 hồ sơ đã có (modal "Cập nhật
 -- hồ sơ") — loại trừ chính dòng đang sửa khỏi điều kiện "đã có trong danh
 -- mục" (nếu không, dòng nào cũng tự báo trùng với chính nó). Để null khi
@@ -3134,31 +3142,33 @@ language sql
 stable
 security definer
 set search_path = public, extensions
+-- KHÔNG dùng CTE "with gcn as (...)" như bản cũ: CTE dùng nhiều lần bị
+-- materialize thành 1 bảng join, planner không dùng được index trim(...)
+-- (quét hết ~780k + 2,7 triệu dòng, 0,6-2 giây/lần, lại tính 2 lần do
+-- ton_tai). Subquery đơn giản "v" được kéo phẳng, v.g thành hằng => dùng
+-- index (< 1 ms), mỗi nguồn chỉ tra 1 lần.
 as $$
-    with gcn as (select trim(coalesce(p_so_seri_gcn, '')) as g)
     select jsonb_build_object(
-        'da_nhap_form_nhom4', exists (
-            select 1 from public.du_lieu_gcn x, gcn where trim(x.sophathanhgcn) = gcn.g and gcn.g <> ''
-        ),
-        'da_dong_bo_mplis', exists (
-            select 1 from public.dong_bo_du_lieu x, gcn where trim(x.so_gcn_mplis) = gcn.g and gcn.g <> ''
-        ),
-        'da_co_trong_danh_muc', exists (
-            select 1 from public.danhmuchoso x, gcn
-            where trim(x.so_seri_gcn) = gcn.g and gcn.g <> ''
-              and (p_exclude_id is null or x.id <> p_exclude_id)
-        )
-    ) || jsonb_build_object(
-        'ton_tai', (
-            exists (select 1 from public.du_lieu_gcn x, gcn where trim(x.sophathanhgcn) = gcn.g and gcn.g <> '')
-            or exists (select 1 from public.dong_bo_du_lieu x, gcn where trim(x.so_gcn_mplis) = gcn.g and gcn.g <> '')
-            or exists (
-                select 1 from public.danhmuchoso x, gcn
-                where trim(x.so_seri_gcn) = gcn.g and gcn.g <> ''
+        'da_nhap_form_nhom4', f.n4,
+        'da_dong_bo_mplis', f.mplis,
+        'da_co_trong_danh_muc', f.dm,
+        'ton_tai', f.n4 or f.mplis or f.dm
+    )
+    from (
+        select
+            v.g <> '' and exists (
+                select 1 from public.du_lieu_gcn x where trim(x.sophathanhgcn) = v.g
+            ) as n4,
+            v.g <> '' and exists (
+                select 1 from public.dong_bo_du_lieu x where trim(x.so_gcn_mplis) = v.g
+            ) as mplis,
+            v.g <> '' and exists (
+                select 1 from public.danhmuchoso x
+                where trim(x.so_seri_gcn) = v.g
                   and (p_exclude_id is null or x.id <> p_exclude_id)
-            )
-        )
-    );
+            ) as dm
+        from (select trim(coalesce(p_so_seri_gcn, '')) as g) v
+    ) f;
 $$;
 
 revoke all on function public.danhmuchoso_kiem_tra_gcn(text, bigint) from public;

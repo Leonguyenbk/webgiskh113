@@ -85,13 +85,22 @@ def danhmuchoso_mau():
 def danhmuchoso_import():
     # Nhập hàng loạt từ file .xlsx đúng mẫu — multipart/form-data: file
     # (bắt buộc), nam (bắt buộc, áp dụng chung cả file), chi_nhanh (tuỳ
-    # chọn, áp dụng cho dòng không có sẵn cột Chi nhánh).
+    # chọn, áp dụng cho dòng không có sẵn cột Chi nhánh). Ghi chạy nền —
+    # trả 202 {job_id, tong_dong}, FE hỏi tiến độ qua GET .../import/<job_id>.
     file = request.files.get("file")
     if file is None or not file.filename:
         return jsonify({"error": "Thiếu file .xlsx"}), 400
-    data, error_response = danhmuchoso_service.import_xlsx(
+    data, error_response = danhmuchoso_service.bat_dau_import(
         file.read(), request.form.get("nam"), request.form.get("chi_nhanh")
     )
     if error_response:
         return error_response
-    return jsonify(data), 201
+    return jsonify(data), 202
+
+
+@danhmuchoso_bp.get("/api/danhmuchoso/import/<job_id>")
+def danhmuchoso_import_trang_thai(job_id: str):
+    data, error_response = danhmuchoso_service.trang_thai_import(job_id)
+    if error_response:
+        return error_response
+    return jsonify(data)

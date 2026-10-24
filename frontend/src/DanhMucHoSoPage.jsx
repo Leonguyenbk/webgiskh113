@@ -113,6 +113,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
   const [importResult, setImportResult] = useState(null);
+  const [importProgress, setImportProgress] = useState(null); // {da_xu_ly, tong_dong, ...} khi đang chạy nền
   const [downloadingMau, setDownloadingMau] = useState(false);
   const [mauError, setMauError] = useState("");
 
@@ -296,11 +297,13 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
     setImporting(true);
     setImportError("");
     setImportResult(null);
+    setImportProgress(null);
     try {
       const result = await importDanhMucHoSo({
         file: importFile,
         nam: importNam,
         chiNhanh: importChiNhanh || undefined,
+        onProgress: setImportProgress,
       });
       setImportResult(result);
       setImportFile(null);
@@ -311,6 +314,7 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
       setImportError(err.message);
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -658,6 +662,15 @@ export default function DanhMucHoSoPage({ onNavigateHome }) {
                 <div className="notice error" style={{ marginTop: 10 }}>
                   <strong>Không tải được mẫu</strong>
                   <span>{mauError}</span>
+                </div>
+              )}
+              {importing && importProgress && (
+                <div className="notice" style={{ marginTop: 10 }}>
+                  <span>
+                    Đang nhập {formatSo(importProgress.da_xu_ly)}/{formatSo(importProgress.tong_dong)} dòng — đã lưu{" "}
+                    {formatSo(importProgress.thanh_cong)}, lỗi {formatSo(importProgress.so_dong_loi)}. Có thể mất vài phút,
+                    đừng nhập lại file này.
+                  </span>
                 </div>
               )}
               {importError && (
