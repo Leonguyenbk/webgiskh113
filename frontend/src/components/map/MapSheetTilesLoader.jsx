@@ -11,6 +11,11 @@ const DEBOUNCE_MS = 400;
 // mount trước để kéo bản đồ 1 chút là thấy ngay, không giật.
 const VIEWPORT_PAD = 0.25;
 
+// Dưới zoom này KHÔNG tải/mount tờ nào — zoom nhỏ cả tỉnh, khung nhìn giao
+// cả ~10.000 tờ: API trả vài MB và mount ~10.000 TileLayer + viền tờ làm
+// trình duyệt đơ, trong khi tile (min_zoom 13-14) chưa hiện ở mức này.
+const MIN_LOAD_ZOOM = 13;
+
 // Phải khớp CHÍNH XÁC name="..." của LayersControl.Overlay bọc lớp này
 // trong App.jsx — Leaflet phát sự kiện overlayadd/overlayremove kèm đúng
 // chuỗi name đó khi người dùng bật/tắt checkbox.
@@ -38,6 +43,7 @@ export default function MapSheetTilesLoader({
   filterMaXa = "",
   pinnedSheets = [],
   onEnabledChange,
+  onZoomTooLow,
 }) {
   const map = useMap();
   const timerRef = useRef(null);
@@ -50,9 +56,22 @@ export default function MapSheetTilesLoader({
   const pinnedRef = useRef(pinnedSheets);
   pinnedRef.current = pinnedSheets;
 
+  // Zoom quá nhỏ: huỷ request đang chờ, gỡ hết tờ đang mount. Trả true nếu
+  // đã chặn (caller dừng luôn).
+  const blockIfZoomTooLow = () => {
+    const tooLow = map.getZoom() < MIN_LOAD_ZOOM;
+    onZoomTooLow?.(tooLow);
+    if (!tooLow) return false;
+    window.clearTimeout(timerRef.current);
+    abortRef.current?.abort();
+    onData([]);
+    return true;
+  };
+
   // Lọc danh sách tờ ghim còn các tờ giao khung nhìn (đã nới 25%).
   const emitViewportCull = () => {
     if (!enabledRef.current || !filterRef.current) return;
+    if (blockIfZoomTooLow()) return;
     const view = map.getBounds().pad(VIEWPORT_PAD);
     const visible = pinnedRef.current.filter((feature) => {
       try {
@@ -69,6 +88,7 @@ export default function MapSheetTilesLoader({
     // Đang lọc theo xã: danh sách tờ do App ghim, lọc theo khung nhìn ở
     // emitViewportCull — không gọi API viewport.
     if (filterRef.current) return;
+    if (blockIfZoomTooLow()) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -95,6 +115,7 @@ export default function MapSheetTilesLoader({
       emitViewportCull();
       return;
     }
+    if (blockIfZoomTooLow()) return;
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(load, DEBOUNCE_MS);
   };
@@ -113,6 +134,7 @@ export default function MapSheetTilesLoader({
       if (event.name !== OVERLAY_NAME) return;
       enabledRef.current = false;
       onEnabledChange?.(false);
+      onZoomTooLow?.(false);
       window.clearTimeout(timerRef.current);
       abortRef.current?.abort();
       // Đang lọc theo xã thì giữ nguyên danh sách của App để bật lại thấy ngay.

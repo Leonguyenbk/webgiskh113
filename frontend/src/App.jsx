@@ -220,6 +220,8 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   const [banDoNenFilterMaXa, setBanDoNenFilterMaXa] = useState("");
   const [banDoNenPinnedSheets, setBanDoNenPinnedSheets] = useState([]);
   const [banDoNenLayerOn, setBanDoNenLayerOn] = useState(false);
+  // Lớp "Bản đồ địa chính" đang bật nhưng zoom < MIN_LOAD_ZOOM (không tải tờ nào).
+  const [banDoNenZoomTooLow, setBanDoNenZoomTooLow] = useState(false);
 
   // Đổi xã ở ô chính -> nạp lại danh sách tờ bản đồ nền của xã đó.
   useEffect(() => {
@@ -1146,6 +1148,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
               filterMaXa={banDoNenFilterMaXa}
               pinnedSheets={banDoNenPinnedSheets}
               onEnabledChange={setBanDoNenLayerOn}
+              onZoomTooLow={setBanDoNenZoomTooLow}
             />
 
             <RanhThonOverlayLoader onNeed={ensureRanhThonLoaded} />
@@ -1305,6 +1308,12 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 }
               />
             </div>
+
+            {banDoNenLayerOn && banDoNenZoomTooLow && (
+              <p style={{ margin: "8px 0 0", color: "#b45309", fontSize: 12 }}>
+                Phóng to thêm để xem bản đồ địa chính.
+              </p>
+            )}
 
             <div className="opacitySlider banDoNenOpacitySlider">
               <label htmlFor="banDoNenOpacity">

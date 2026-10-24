@@ -1,3 +1,4 @@
+import L from "leaflet";
 import { TileLayer } from "react-leaflet";
 
 // Leaflet mặc định maxZoom=18 cho MỌI TileLayer nếu không set — vượt quá
@@ -8,6 +9,21 @@ import { TileLayer } from "react-leaflet";
 // to tile ở maxNativeZoom (độ phân giải thật của từng tờ) cho các mức
 // zoom cao hơn, không tải tile mới.
 const MAP_MAX_ZOOM = 21;
+
+// Giới hạn mỗi TileLayer trong khung bao ranh tờ (nới thêm SHEET_BOUNDS_PAD
+// để không cắt phần ảnh quét lấn ra ngoài ranh) — không có bounds, Leaflet
+// xin tile cho CẢ khung nhìn ở MỌI tờ đang mount, đa số trả 404 (ngoài
+// vùng tờ), N tờ = N lần số request, từng làm nghẽn cả server.
+const SHEET_BOUNDS_PAD = 0.1;
+
+function sheetBounds(feature) {
+  try {
+    const bounds = L.geoJSON(feature).getBounds();
+    return bounds.isValid() ? bounds.pad(SHEET_BOUNDS_PAD) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // 1 <TileLayer> raster mỗi tờ bản đồ đang trong khung nhìn (thay vì gộp
 // thành 1 lớp lớn) — tờ nào ra khỏi khung nhìn thì MapSheetTilesLoader
@@ -35,6 +51,7 @@ export default function MapSheetTilesLayer({ sheets, opacity }) {
           url={tileUrl}
           opacity={opacity}
           pane="banDoNenPane"
+          bounds={sheetBounds(feature)}
           minZoom={minZoom ?? undefined}
           maxNativeZoom={maxZoom ?? undefined}
           maxZoom={MAP_MAX_ZOOM}
