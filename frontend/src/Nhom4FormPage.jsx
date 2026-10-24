@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getXaList, searchParcels } from "./services/parcelService";
-import { checkTrungThua, getDiaChiThuaDat, getLoaiDatOptions, submitHoSo } from "./services/nhom4Service";
+import { checkTrungThua, getDiaChiThuaDat, getLoaiDatOptions, kiemTraHoSo, submitHoSo } from "./services/nhom4Service";
 import {
   HINH_THUC_SU_DUNG_OPTIONS,
   LOAI_CHU_OPTIONS,
@@ -157,6 +157,10 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     setFileInputKey((k) => k + 1);
   };
   const [status, setStatus] = useState("idle");
+  // Tiến trình tải file lên khi Lưu hồ sơ (null = chưa gửi file) — mạng
+  // chậm (đo thực tế Viettel ~0,06 MB/s) 1 hồ sơ có thể mất cả phút, không
+  // hiện % người dùng tưởng treo rồi tải lại trang, làm đứt lượt nộp.
+  const [uploadPercent, setUploadPercent] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
@@ -514,14 +518,28 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
 
     submittingRef.current = true;
     setStatus("submitting");
+    setUploadPercent(null);
     try {
+      // Kiểm tra thông tin trước (không kèm file, vài trăm ms) — thiếu
+      // thông tin/thửa đã có dữ liệu thì báo ngay, khỏi tải PDF lên mất
+      // trắng. Lượt nộp thật bên dưới vẫn được backend kiểm tra lại đủ.
+      await kiemTraHoSo(payload);
+
+      setUploadPercent(0);
       // Dùng chung hồ sơ quét: gửi ĐÚNG 1 bộ file cho cả lô (xem
       // submitHoSo/nhom4_service.submit_ho_so) thay vì 1 bộ/thửa.
       const body = dungChungHoSo
-        ? await submitHoSo(payload, null, { chinh: fileChinh, phu: filePhu, tbxn: fileTbxn })
+        ? await submitHoSo(
+            payload,
+            null,
+            { chinh: fileChinh, phu: filePhu, tbxn: fileTbxn },
+            { onProgress: setUploadPercent },
+          )
         : await submitHoSo(
             payload,
             parcels.map((p) => ({ chinh: p.fileChinh, phu: p.filePhu, tbxn: p.fileTbxn })),
+            null,
+            { onProgress: setUploadPercent },
           );
       setResult(body);
       setStatus("done");
@@ -538,6 +556,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       setStatus("error");
     } finally {
       submittingRef.current = false;
+      setUploadPercent(null);
     }
   };
 
@@ -1102,8 +1121,24 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
           </div>
 
           <button type="submit" className="importButton" disabled={status === "submitting"}>
-            {status === "submitting" ? "Đang lưu…" : "Lưu hồ sơ"}
+            {status !== "submitting"
+              ? "Lưu hồ sơ"
+              : uploadPercent === null
+                ? "Đang kiểm tra thông tin…"
+                : uploadPercent < 100
+                  ? `Đang tải file lên… ${uploadPercent}%`
+                  : "Đang lưu…"}
           </button>
+          {status === "submitting" && uploadPercent !== null && (
+            <div className="uploadProgress">
+              <progress max={100} value={uploadPercent} />
+              <span>
+                {uploadPercent < 100
+                  ? "Đang gửi file quét lên máy chủ — mạng chậm có thể mất vài chục giây, đừng tải lại trang."
+                  : "Đã gửi xong file, đang lưu hồ sơ…"}
+              </span>
+            </div>
+          )}
 
           {status === "done" && result && (
             <div className="notice">

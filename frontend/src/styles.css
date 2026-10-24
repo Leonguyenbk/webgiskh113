@@ -93,6 +93,11 @@ button { cursor: pointer; }
   border-radius: 10px; background: #e6f3f0; font-size: 12px;
 }
 .notice.error { color: #8b2525; background: #fff0f0; }
+.uploadProgress {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 10px; color: #52736f; font-size: 12px;
+}
+.uploadProgress progress { width: 100%; height: 10px; accent-color: #0f766e; }
 .sectionTitle {
   display: flex; justify-content: space-between; align-items: center;
   margin: 26px 0 12px; padding-bottom: 9px;

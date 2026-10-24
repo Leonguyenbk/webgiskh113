@@ -249,6 +249,132 @@ def _build_rows(payload: dict, submission_id: str, file_info_list: list[dict]) -
     return rows
 
 
+def _reject_existing(seen_in_payload: set[str], parcel_keys: list[tuple[int, int, str]]):
+    """2-4) public.du_lieu_gcn là NGUỒN DUY NHẤT xác định thửa đã có dữ liệu
+    GCN. EXISTS 1 bản ghi cùng khóa madvhc_soto_sothua => thửa đã có dữ
+    liệu (dù thửa đó có nhiều dòng do nhiều chủ) => không cho nộp. KHÔNG
+    dùng bảng khóa phụ (nhom4_thua_da_nop đã bỏ) để quyết định."""
+    existing, err = nhom4_repository.filter_existing_keys(list(seen_in_payload))
+    if err:
+        return err
+    for _so_to, _so_thua, _key in parcel_keys:
+        if _key in existing:
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            f"Thửa {_so_thua}, tờ {_so_to} đã có dữ liệu GCN "
+                            "và không được nộp lại."
+                        )
+                    }
+                ),
+                409,
+            )
+    return None
+
+
+def _kiem_tra_thua(payload: dict):
+    """Các bước kiểm tra thửa KHÔNG cần file (dùng chung cho submit_ho_so
+    và kiem_tra_ho_so). Trả (seen_in_payload, parcel_keys, None) hoặc
+    (None, None, error_response)."""
+    ma_xa = payload["ma_xa"]
+    parcels = payload.get("thua_list") or []
+
+    # 1) Chuẩn hóa số tờ/số thửa + tạo khóa madvhc_soto_sothua cho từng
+    #    thửa. Chặn trùng ngay trong danh sách nhập.
+    seen_in_payload: set[str] = set()
+    parcel_keys: list[tuple[int, int, str]] = []
+    for parcel in parcels:
+        thua = parcel.get("thua") or {}
+        so_to = _to_int(thua.get("so_to"))
+        so_thua = _to_int(thua.get("so_thua"))
+        if so_to is None or so_thua is None:
+            return None, None, (
+                jsonify(
+                    {"error": f"Số tờ/số thửa không hợp lệ: {thua.get('so_to')}/{thua.get('so_thua')}"}
+                ),
+                400,
+            )
+        key = _make_key(ma_xa, so_to, so_thua)
+        if key in seen_in_payload:
+            return None, None, (
+                jsonify({"error": f"Danh sách thửa nhập bị trùng: thửa {so_thua}, tờ {so_to}"}),
+                400,
+            )
+        seen_in_payload.add(key)
+        parcel_keys.append((so_to, so_thua, key))
+
+    # 2-4) Thửa đã có dữ liệu GCN => không cho nộp (xem _reject_existing).
+    error_response = _reject_existing(seen_in_payload, parcel_keys)
+    if error_response:
+        return None, None, error_response
+
+    # Chỉ nhận thửa CÓ THẬT trong public.thua_dat (đã nhập GML) — chặn nộp
+    # nhầm số tờ/số thửa không tồn tại trên bản đồ. dong_bo_du_lieu/
+    # du_lieu_gcn không tự phát hiện được lỗi này vì 2 bảng đó không bắt
+    # buộc khớp với thua_dat (xem nhom4_repository.exists_in_thua_dat).
+    cap_dang_nop = [(so_to, so_thua) for so_to, so_thua, _key in parcel_keys]
+    thua_dat_keys, error_response = nhom4_repository.existing_thua_dat_keys(
+        ma_xa, cap_dang_nop
+    )
+    if error_response:
+        return None, None, error_response
+
+    for so_to, so_thua, _key in parcel_keys:
+        if (so_to, so_thua) not in thua_dat_keys:
+            return None, None, (
+                jsonify(
+                    {
+                        "error": (
+                            f"Thửa {so_thua}, tờ {so_to} không tồn tại trong dữ liệu thửa đất "
+                            "(thua_dat) — kiểm tra lại số tờ/số thửa."
+                        )
+                    }
+                ),
+                404,
+            )
+
+    phan_loai_by_key, error_response = nhom4_repository.phan_loai_for_keys(
+        ma_xa, cap_dang_nop
+    )
+    if error_response:
+        return None, None, error_response
+
+    for parcel in parcels:
+        thua = parcel.get("thua") or {}
+        so_to = _to_int(thua.get("so_to"))
+        so_thua = _to_int(thua.get("so_thua"))
+        phan_loai = phan_loai_by_key.get((so_to, so_thua))
+        if _is_nhom_1_2(phan_loai):
+            return None, None, (
+                jsonify(
+                    {
+                        "error": (
+                            f"Thửa {so_to}_{so_thua} đã thuộc {phan_loai} — "
+                            "coi như đã có dữ liệu từ trước, không cần nhập biểu Nhóm 4 nữa."
+                        )
+                    }
+                ),
+                409,
+            )
+
+    return seen_in_payload, parcel_keys, None
+
+
+def kiem_tra_ho_so(payload: dict):
+    """Kiểm tra trước toàn bộ phần KHÔNG cần file của 1 lượt nộp — frontend
+    gọi trước khi gửi file PDF, để người dùng mạng chậm (đo thực tế: Viettel
+    ~0,06 MB/s) không phải chờ tải hết file lên rồi mới biết thiếu thông
+    tin/thửa đã có dữ liệu."""
+    error = validate_payload(payload)
+    if error:
+        return None, (jsonify({"error": error}), 400)
+    _seen, _keys, error_response = _kiem_tra_thua(payload)
+    if error_response:
+        return None, error_response
+    return {"ok": True}, None
+
+
 def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files: dict | None = None):
     """files_by_parcel: 1 phần tử cho MỖI thửa trong payload["thua_list"],
     CÙNG THỨ TỰ — mỗi phần tử là {"chinh": FileStorage, "phu": FileStorage|
@@ -305,105 +431,9 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
                 if pdf_error:
                     return None, (jsonify({"error": f"{nhan_thua}: {pdf_error}"}), 400)
 
-    # 1) Chuẩn hóa số tờ/số thửa + tạo khóa madvhc_soto_sothua cho từng
-    #    thửa. Chặn trùng ngay trong danh sách nhập.
-    seen_in_payload: set[str] = set()
-    parcel_keys: list[tuple[int, int, str]] = []
-    for parcel in parcels:
-        thua = parcel.get("thua") or {}
-        so_to = _to_int(thua.get("so_to"))
-        so_thua = _to_int(thua.get("so_thua"))
-        if so_to is None or so_thua is None:
-            return None, (
-                jsonify(
-                    {"error": f"Số tờ/số thửa không hợp lệ: {thua.get('so_to')}/{thua.get('so_thua')}"}
-                ),
-                400,
-            )
-        key = _make_key(ma_xa, so_to, so_thua)
-        if key in seen_in_payload:
-            return None, (
-                jsonify({"error": f"Danh sách thửa nhập bị trùng: thửa {so_thua}, tờ {so_to}"}),
-                400,
-            )
-        seen_in_payload.add(key)
-        parcel_keys.append((so_to, so_thua, key))
-
-    # 2-4) public.du_lieu_gcn là NGUỒN DUY NHẤT xác định thửa đã có dữ liệu
-    #      GCN. EXISTS 1 bản ghi cùng khóa madvhc_soto_sothua => thửa đã có
-    #      dữ liệu (dù thửa đó có nhiều dòng do nhiều chủ) => không cho nộp.
-    #      KHÔNG dùng bảng khóa phụ (nhom4_thua_da_nop đã bỏ) để quyết định.
-    def _reject_existing():
-        existing, err = nhom4_repository.filter_existing_keys(list(seen_in_payload))
-        if err:
-            return err
-        for _so_to, _so_thua, _key in parcel_keys:
-            if _key in existing:
-                return (
-                    jsonify(
-                        {
-                            "error": (
-                                f"Thửa {_so_thua}, tờ {_so_to} đã có dữ liệu GCN "
-                                "và không được nộp lại."
-                            )
-                        }
-                    ),
-                    409,
-                )
-        return None
-
-    error_response = _reject_existing()
+    seen_in_payload, parcel_keys, error_response = _kiem_tra_thua(payload)
     if error_response:
         return None, error_response
-
-    # Chỉ nhận thửa CÓ THẬT trong public.thua_dat (đã nhập GML) — chặn nộp
-    # nhầm số tờ/số thửa không tồn tại trên bản đồ. dong_bo_du_lieu/
-    # du_lieu_gcn không tự phát hiện được lỗi này vì 2 bảng đó không bắt
-    # buộc khớp với thua_dat (xem nhom4_repository.exists_in_thua_dat).
-    cap_dang_nop = [(so_to, so_thua) for so_to, so_thua, _key in parcel_keys]
-    thua_dat_keys, error_response = nhom4_repository.existing_thua_dat_keys(
-        ma_xa, cap_dang_nop
-    )
-    if error_response:
-        return None, error_response
-
-    for so_to, so_thua, _key in parcel_keys:
-        if (so_to, so_thua) not in thua_dat_keys:
-            return None, (
-                jsonify(
-                    {
-                        "error": (
-                            f"Thửa {so_thua}, tờ {so_to} không tồn tại trong dữ liệu thửa đất "
-                            "(thua_dat) — kiểm tra lại số tờ/số thửa."
-                        )
-                    }
-                ),
-                404,
-            )
-
-    phan_loai_by_key, error_response = nhom4_repository.phan_loai_for_keys(
-        ma_xa, cap_dang_nop
-    )
-    if error_response:
-        return None, error_response
-
-    for parcel in parcels:
-        thua = parcel.get("thua") or {}
-        so_to = _to_int(thua.get("so_to"))
-        so_thua = _to_int(thua.get("so_thua"))
-        phan_loai = phan_loai_by_key.get((so_to, so_thua))
-        if _is_nhom_1_2(phan_loai):
-            return None, (
-                jsonify(
-                    {
-                        "error": (
-                            f"Thửa {so_to}_{so_thua} đã thuộc {phan_loai} — "
-                            "coi như đã có dữ liệu từ trước, không cần nhập biểu Nhóm 4 nữa."
-                        )
-                    }
-                ),
-                409,
-            )
 
     # Tên file quét trên Drive khớp quy ước bieumau/Validate.js
     # (makeTenFileHsq_):
@@ -510,7 +540,7 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
     # nút Nộp, đây là lớp chặn cuối phía backend). Upload lỡ chạy trước mà
     # thửa bị chặn ở đây thì chỉ còn 1 file PDF thừa trên Drive — không ảnh
     # hưởng dữ liệu.
-    error_response = _reject_existing()
+    error_response = _reject_existing(seen_in_payload, parcel_keys)
     if error_response:
         return None, error_response
 

@@ -1,4 +1,4 @@
-import { request } from "./api";
+import { API_URL, request } from "./api";
 
 export function checkTrungThua({ maXa, soTo, soThua }, { signal } = {}) {
   return request("/api/nhom4/kiem-tra-trung-thua", {
@@ -36,7 +36,21 @@ export function getLoaiDatOptions({ signal } = {}) {
 // vì lặp lại cùng file cho từng thửa (payload phình to khi nhiều thửa,
 // từng khiến nộp thất bại) — filesByParcel bỏ qua (truyền null) khi dùng
 // sharedFiles.
-export function submitHoSo(payload, filesByParcel, sharedFiles) {
+// Kiểm tra trước phần KHÔNG cần file (thiếu thông tin, thửa đã có dữ
+// liệu/không tồn tại/Nhóm 1-2) — gọi trước khi tải PDF lên, để người mạng
+// chậm không phải chờ gửi hết file rồi mới nhận lỗi.
+export function kiemTraHoSo(payload) {
+  return request("/api/nhom4/kiem-tra-ho-so", {
+    method: "POST",
+    body: payload,
+    errorFallback: "Không kiểm tra được hồ sơ",
+  });
+}
+
+// Dùng XMLHttpRequest thay fetch() chỉ để có tiến trình tải lên (fetch
+// không báo upload progress) — onProgress(phanTram 0-100) gọi trong lúc
+// gửi file, 100 nghĩa là đã gửi xong, đang chờ máy chủ lưu.
+export function submitHoSo(payload, filesByParcel, sharedFiles, { onProgress } = {}) {
   const formData = new FormData();
   formData.append("payload", JSON.stringify(payload));
   if (sharedFiles) {
@@ -51,10 +65,24 @@ export function submitHoSo(payload, filesByParcel, sharedFiles) {
     });
   }
 
-  return request("/api/nhom4/ho-so", {
-    method: "POST",
-    body: formData,
-    isFormData: true,
-    errorFallback: "Lưu hồ sơ thất bại",
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/api/nhom4/ho-so`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => {
+      let body = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        // Không phải JSON (VD trang lỗi của proxy) — dùng thông báo mặc định.
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+      else reject(new Error(body?.error || "Lưu hồ sơ thất bại"));
+    };
+    xhr.onerror = () =>
+      reject(new Error("Mất kết nối khi gửi hồ sơ — kiểm tra mạng rồi bấm Lưu hồ sơ lại."));
+    xhr.send(formData);
   });
 }

@@ -52,6 +52,19 @@ def loai_dat_options():
     return jsonify(data)
 
 
+@nhom4_bp.post("/api/nhom4/kiem-tra-ho-so")
+def kiem_tra_ho_so():
+    # Cùng payload với /api/nhom4/ho-so nhưng KHÔNG kèm file — frontend gọi
+    # trước khi tải PDF lên (xem nhom4_service.kiem_tra_ho_so).
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Dữ liệu payload không phải JSON hợp lệ"}), 400
+    data, error_response = nhom4_service.kiem_tra_ho_so(payload)
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @nhom4_bp.post("/api/nhom4/ho-so")
 def submit_ho_so():
     raw_payload = request.form.get("payload", "")

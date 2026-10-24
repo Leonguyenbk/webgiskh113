@@ -2,10 +2,41 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const allowedHosts = ["kh113.vpdkdaklak.vn", "www.kh2959bmt.net", "kh2959bmt.net"];
+
+// Đo thời gian ĐẦU-CUỐI mỗi lượt nộp biểu Nhóm 4 (từ lúc request tới proxy
+// đến lúc trả xong, gồm cả thời gian tải file từ máy người dùng lên) —
+// so với "xu_ly_ms" trong backend/logs/nhom4_submit.log để tách phần
+// đường truyền với phần máy chủ xử lý. Ghi ra stdout (service-stdout.log).
+function logNhom4Submit(proxyServer) {
+  // "start" thay vì "proxyReq": proxyReq bị bỏ qua khi request có header
+  // Expect (upload lớn từ một số client).
+  proxyServer.on("start", (req, res) => {
+    if (req.method !== "POST" || !req.url.startsWith("/api/nhom4/ho-so")) return;
+    const started = Date.now();
+    let aborted = false;
+    req.on("aborted", () => {
+      aborted = true;
+    });
+    res.on("close", () => {
+      console.log(
+        JSON.stringify({
+          luc: new Date(started).toLocaleString("sv-SE"),
+          ip: req.headers["cf-connecting-ip"] || req.socket.remoteAddress,
+          bytes: Number(req.headers["content-length"]) || null,
+          tong_ms: Date.now() - started,
+          status: res.statusCode,
+          bi_huy: aborted || !res.writableFinished,
+        }),
+      );
+    });
+  });
+}
+
 const proxy = {
   "/api": {
     target: "http://127.0.0.1:5000",
     changeOrigin: true,
+    configure: logNhom4Submit,
   },
   "/tiles": {
     target: "http://127.0.0.1:5000",
