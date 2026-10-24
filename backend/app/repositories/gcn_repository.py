@@ -147,6 +147,22 @@ def refresh_nhom3_trang_thai_cache():
     )
 
 
+def nhom3_cache_computed_at():
+    # Thời điểm tính cache nhom3_trang_thai_cache gần nhất — refresh gán
+    # cùng 1 computed_at cho mọi dòng rồi xoá dòng cũ hơn, nên đọc 1 dòng
+    # là đủ (không cần sửa hàm SQL nhom3_tong_hop).
+    response, error_response = supabase_client.rest_request(
+        "GET", "nhom3_trang_thai_cache", params={"select": "computed_at", "limit": 1}
+    )
+    rows, error_response = _json_or_error(response, error_response)
+    if error_response or not rows:
+        return None
+    value = rows[0].get("computed_at")
+    # ISO 8601 có "T" — mọi trình duyệt đều new Date() được (jsonify mặc
+    # định ra dạng RFC 822, str() thì có dấu cách: Safari không đọc được).
+    return value.isoformat() if hasattr(value, "isoformat") else value
+
+
 def list_nguon():
     response, error_response = supabase_client.rest_request(
         "GET", NGUON_GCN_TABLE, params={"select": "*", "order": "ma_nguon.asc"}

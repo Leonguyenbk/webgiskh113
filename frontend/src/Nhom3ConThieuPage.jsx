@@ -7,6 +7,14 @@ function formatSo(n) {
   return Number(n || 0).toLocaleString("vi-VN");
 }
 
+// "2026-10-24T17:25:08+07:00" -> "17:25 24/10/2026" (giờ máy người xem).
+function formatCapNhatLuc(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
 function formatPercent(phan, tong) {
   if (!tong) return 0;
   return Math.round((phan / tong) * 1000) / 10;
@@ -218,7 +226,17 @@ export default function Nhom3ConThieuPage({
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
-          <h1>Nhóm 3 — thống kê còn thiếu dữ liệu</h1>
+          <h1>
+            Nhóm 3 — thống kê còn thiếu dữ liệu
+            {tongHop?.cap_nhat_luc && (
+              <span
+                title="Số liệu tự làm mới mỗi 2 giờ"
+                style={{ marginLeft: 10, fontSize: "0.6em", fontWeight: 500, opacity: 0.75, whiteSpace: "nowrap" }}
+              >
+                🕒 cập nhật lúc {formatCapNhatLuc(tongHop.cap_nhat_luc)}
+              </span>
+            )}
+          </h1>
           <p>
             Đối chiếu danh sách thửa cần thu thập (Nhóm 3) với thửa đã thuộc Nhóm 1 và thửa đã thu thập — chỉ còn lại là thửa thật sự cần nhập biểu.
           </p>

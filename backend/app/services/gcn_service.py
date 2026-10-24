@@ -423,6 +423,9 @@ def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
     result.setdefault("chua_lien_ket_khong_gian", 0)
     result.setdefault("tong_tru_kg", 0)
     result.setdefault("theo_xa", [])
+    # Hiển thị "Số liệu cập nhật lúc ..." trên trang — lỗi đọc thì bỏ qua
+    # (None), không làm hỏng cả trang thống kê.
+    result["cap_nhat_luc"] = gcn_repository.nhom3_cache_computed_at()
     return result, None
 
 
