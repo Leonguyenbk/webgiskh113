@@ -1,11 +1,25 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, send_from_directory
+import base64
+
+from flask import Blueprint, Response, jsonify, request, send_from_directory
 
 from ..services import ban_do_nen_service
 from ..utils.validators import check_import_token
 
 ban_do_nen_bp = Blueprint("ban_do_nen", __name__)
+
+# URL tile có v<version> (tải lại tờ => version tăng => URL đổi) nên cho
+# trình duyệt + Cloudflare cache hẳn 1 ngày. Trước đây send_from_directory
+# trả "no-cache" => mỗi lần kéo/zoom bản đồ lại hỏi server toàn bộ tile.
+TILE_CACHE_CONTROL = "public, max-age=86400"
+
+# Tool cắt tile bỏ qua ô trong suốt (không ghi file) nên phần lớn ô trong
+# ranh tờ không có file — trả 404 thì không được cache, Leaflet xin lại mãi
+# (từng ~1.000 request 404/phút cho 1 tờ). Trả PNG 1x1 trong suốt thay thế.
+_EMPTY_TILE_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg=="
+)
 
 
 @ban_do_nen_bp.get("/tiles/ban-do-nen/<ma_xa>/<so_to>/v<int:version>/<int:z>/<int:x>/<int:y>.png")
@@ -13,7 +27,15 @@ def get_ban_do_nen_tile(ma_xa: str, so_to: str, version: int, z: int, x: int, y:
     directory = ban_do_nen_service.tile_dir(
         ma_xa, so_to, version, z, x, ban_do_nen_service.current_loai()
     )
-    return send_from_directory(directory, f"{y}.png")
+    if (directory / f"{y}.png").is_file():
+        response = send_from_directory(directory, f"{y}.png")
+    elif directory.parent.parent.is_dir():
+        # Tờ/version có thật, chỉ ô này trống.
+        response = Response(_EMPTY_TILE_PNG, mimetype="image/png")
+    else:
+        return jsonify({"error": "Không có tile"}), 404
+    response.headers["Cache-Control"] = TILE_CACHE_CONTROL
+    return response
 
 
 @ban_do_nen_bp.post("/api/ban-do-nen/upload-tiles")
