@@ -23,19 +23,12 @@ import psycopg2.extras
 
 from app.config import Config
 
-# DANHSACHGUIXA/ (20261021): VPĐK gửi lại danh sách THAY THẾ cho 3 xã khu
-# vực Ea Súp (24211, 24217, 24229) — yêu cầu người dùng: XOÁ HẾT dòng cũ
-# của đúng 3 xã này rồi nạp lại từ đầu (dùng XOA_THEO_MA_XA_TRUOC, không
-# phải bổ sung). Cả 3 xã đều có thửa đã đánh dấu thuoc_du_an (xem
-# public.nhom3_du_an_danh_dau) — PHẢI khôi phục lại cờ này sau khi nạp
-# (scratch_apply_3xa_20261021_restore_thuoc_du_an.py), xã 24211 còn có 785
-# thửa đánh dấu TRƯỚC khi có bảng tracking (xem
-# scratch_apply_easup_restore_thuoc_du_an_tu_backup.py/scratch_easup_thuoc_du_an_keys.tsv)
-# nên phải khôi phục thêm từ file backup đó.
+# DANHSACHGUIXA/ (20261025): VPĐK gửi danh sách mới cho xã Suối Trai
+# (22192) — 4414 thửa, chứa trọn 1584 thửa đã nạp trước đó (trùng cả mã
+# định danh, không thửa nào thuoc_du_an) nên chỉ cần thêm 2830 thửa mới
+# (CHI_THEM_MOI), giữ nguyên dòng cũ — không xoá/nạp lại.
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24217_Xã Ea Rốk.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24229_Xã Ea Bung.xlsx",
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\24211_Xã Ea Súp.xlsx",
+    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\22192_Xã Suối Trai.xlsx",
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
@@ -46,12 +39,12 @@ TRUNCATE_TRUOC = False
 
 # True = file SRC có lẫn cả thửa cũ đã nạp lẫn thửa mới bổ sung — chỉ
 # insert thửa CHƯA có trong bảng, không update/đụng tới thửa đã trùng khoá.
-CHI_THEM_MOI = False
+CHI_THEM_MOI = True
 
 # True = xoá hết dòng hiện có của đúng những mã xã xuất hiện trong SRC_LIST
 # rồi nạp lại từ đầu (file SRC là danh sách THAY THẾ cho các xã đó, không
 # phải bổ sung) — các xã khác không nạp trong lần này giữ nguyên.
-XOA_THEO_MA_XA_TRUOC = True
+XOA_THEO_MA_XA_TRUOC = False
 
 
 def chon_sheet_du_lieu(wb):
