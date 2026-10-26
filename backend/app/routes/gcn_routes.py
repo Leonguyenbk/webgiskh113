@@ -36,6 +36,27 @@ def gcn_danh_sach():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/gcn-danh-sach/export")
+def gcn_danh_sach_export():
+    # Nút "Xuất Excel" ở trang "Danh sách thửa đã nhập" — toàn bộ thửa đã
+    # nhập của 1 xã kèm ngày nhập + nguồn, cùng bộ lọc với /api/gcn-danh-sach.
+    # ?ma_xa=&sort=asc|desc&so_to=&so_thua=
+    result, error_response = gcn_service.export_danh_sach_da_nhap_xlsx(
+        request.args.get("ma_xa", ""),
+        request.args.get("sort"),
+        request.args.get("so_to"),
+        request.args.get("so_thua"),
+    )
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @gcn_bp.get("/api/gcn-danh-sach/chi-tiet")
 def gcn_danh_sach_chi_tiet():
     # Nút "Xem/Sửa" ở trang "Danh sách thửa đã nhập". ?ma_xa=&so_to=&so_thua=

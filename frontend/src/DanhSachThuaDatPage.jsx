@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { API_URL } from "./config/env";
 import {
   deleteGcnChiTiet,
   getGcnChiTiet,
@@ -137,6 +138,7 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
   const [chiTietSavingId, setChiTietSavingId] = useState(null);
   const [chiTietSavedAt, setChiTietSavedAt] = useState({});
   const [deletingKey, setDeletingKey] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     setXaLoading(true);
@@ -277,6 +279,42 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
       })
       .catch((err) => setChiTietError(err.message))
       .finally(() => setChiTietSavingId(null));
+  };
+
+  // Xuất Excel toàn bộ thửa đã nhập của xã đang chọn (cùng bộ lọc số
+  // tờ/số thửa + chiều sắp xếp), kèm ngày nhập và nguồn.
+  const handleExportExcel = async () => {
+    if (!maXa || exporting) return;
+    setExporting(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ ma_xa: maXa, sort: sortDesc ? "desc" : "asc" });
+      if (soToFilter.trim()) params.set("so_to", soToFilter.trim());
+      if (soThuaFilter.trim()) params.set("so_thua", soThuaFilter.trim());
+      const res = await fetch(`${API_URL}/api/gcn-danh-sach/export?${params}`);
+      if (!res.ok) {
+        let message = `Xuất Excel thất bại (HTTP ${res.status})`;
+        try {
+          message = (await res.json())?.error || message;
+        } catch {
+          /* body không phải JSON */
+        }
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `danh_sach_da_nhap_${maXa}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleDeleteRow = (row) => {
@@ -438,6 +476,15 @@ export default function DanhSachThuaDatPage({ onNavigateHome }) {
                     onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
                   >
                     Trang sau →
+                  </button>
+                  <button
+                    type="button"
+                    className="downloadButton"
+                    disabled={exporting || loading || total === 0}
+                    style={{ opacity: exporting || loading || total === 0 ? 0.5 : 1 }}
+                    onClick={handleExportExcel}
+                  >
+                    {exporting ? "Đang xuất…" : "⬇ Xuất Excel"}
                   </button>
                 </div>
                 {!loading && (

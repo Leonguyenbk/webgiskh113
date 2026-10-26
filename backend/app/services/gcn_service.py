@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import current_app, jsonify
@@ -205,6 +205,82 @@ def get_danh_sach_da_nhap(
     result.setdefault("total_khac", 0)
     result.setdefault("items", [])
     return result, None
+
+
+_GIO_VN = timezone(timedelta(hours=7))
+
+
+def _ngay_nhap_excel(iso: str | None):
+    # created_at (timestamptz, ISO) -> datetime giờ VN không kèm tz (openpyxl
+    # không ghi được datetime có tzinfo).
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(_GIO_VN).replace(tzinfo=None)
+    return dt
+
+
+def export_danh_sach_da_nhap_xlsx(
+    ma_xa: str,
+    sort_raw: str | None,
+    so_to_raw: str | None = None,
+    so_thua_raw: str | None = None,
+):
+    """Xuất .xlsx TOÀN BỘ trang 'Danh sách thửa đã nhập' của 1 xã (đúng bộ
+    lọc số tờ/số thửa + chiều sắp xếp đang chọn trên trang) — kèm ngày nhập
+    và nguồn (biểu Nhóm 4 / đồng bộ Sheet). Không chứa CCCD/tên/địa chỉ
+    nên không cần IMPORT_TOKEN, giống /api/gcn-danh-sach."""
+    ma_xa = (ma_xa or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+
+    sort_asc = (sort_raw or "").strip().lower() == "asc"
+    so_to = (so_to_raw or "").strip() or None
+    so_thua = (so_thua_raw or "").strip() or None
+
+    rows: list = []
+    offset = 0
+    while True:
+        page, error_response = gcn_repository.list_da_nhap(
+            ma_xa, sort_asc, _EXPORT_PAGE, offset, so_to, so_thua
+        )
+        if error_response:
+            return None, error_response
+        page = page if isinstance(page, dict) else {}
+        items = page.get("items") if isinstance(page.get("items"), list) else []
+        rows.extend(items)
+        if len(items) < _EXPORT_PAGE or len(rows) >= _EXPORT_MAX:
+            break
+        offset += _EXPORT_PAGE
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Da nhap"
+    ws.append(["STT", "Xã / phường", "Mã xã", "Số tờ", "Số thửa", "Mã định danh", "Ngày nhập", "Nguồn"])
+    for index, row in enumerate(rows, start=1):
+        ws.append([
+            index,
+            _xlsx_cell(row.get("ten_xa")),
+            _xlsx_cell(row.get("ma_xa")),
+            _xlsx_cell(row.get("so_to")),
+            _xlsx_cell(row.get("so_thua")),
+            _xlsx_cell(row.get("ma_dinh_danh")),
+            _ngay_nhap_excel(row.get("ngay_nhap")),
+            "Biểu Nhóm 4" if row.get("is_form") else "Đồng bộ Sheet",
+        ])
+        ws.cell(row=ws.max_row, column=7).number_format = "dd/mm/yyyy hh:mm:ss"
+    if not rows:
+        ws.append(["", "Xã/phường này chưa có dữ liệu đã nhập"])
+    for col, width in zip("ABCDEFGH", (7, 24, 9, 8, 9, 22, 20, 15)):
+        ws.column_dimensions[col].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return (buf.getvalue(), f"danh_sach_da_nhap_{ma_xa}.xlsx"), None
 
 
 # Cột CHO PHÉP sửa qua trang web (nút "Xem/Sửa" ở "Danh sách thửa đã
