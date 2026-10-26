@@ -79,13 +79,24 @@ def _rings_from_polygon(polygon: ET.Element, transformer: Transformer) -> list[l
 
 
 def _geometry_rings(parcel: ET.Element, transformer: Transformer) -> list[list[list[float]]] | None:
-    geometry = _child(parcel, "Geometry")
+    # "geometryProperty": file xuất qua OGR/GDAL (ogr:ThuaDat trong
+    # ogr:featureMember, VD THUADAT/KHU VUC DONG HOA/.../XA HOA XUAN).
+    geometry = _child(parcel, "Geometry", "geometryProperty")
     if geometry is None:
         return None
 
     polygon = _child(geometry, "Polygon")
     if polygon is not None:
         return _rings_from_polygon(polygon, transformer)
+
+    # OGR luôn bọc thành MultiSurface kể cả thửa chỉ 1 polygon — lấy được
+    # khi có đúng 1 surfaceMember, nhiều phần rời thì bỏ như MultiPolygon.
+    multi = _child(geometry, "MultiSurface")
+    if multi is not None:
+        members = [m for m in multi if _local_name(m.tag) == "surfaceMember"]
+        polygon = _child(members[0], "Polygon") if len(members) == 1 else None
+        if polygon is not None:
+            return _rings_from_polygon(polygon, transformer)
 
     # MultiPolygon (thửa có nhiều phần rời nhau) — cột geom trong Supabase
     # đang khai báo kiểu Polygon đơn, chưa hỗ trợ lưu MultiPolygon nên bỏ
@@ -103,8 +114,9 @@ def _feature_from_member(member: ET.Element, transformer: Transformer, index: in
     if rings is None:
         return None
 
-    so_to = int(_text(parcel, "soHieuToBanDo", "0") or "0")
-    so_thua = int(_text(parcel, "soThuTuThua", "0") or "0")
+    # File OGR/shapefile cắt tên trường còn 10 ký tự (soHieuToBa, soThuTuThu).
+    so_to = int(_text(parcel, "soHieuToBanDo") or _text(parcel, "soHieuToBa") or "0")
+    so_thua = int(_text(parcel, "soThuTuThua") or _text(parcel, "soThuTuThu") or "0")
     dien_tich_raw = _text(parcel, "dienTich", "0")
 
     return {
@@ -144,7 +156,7 @@ def iter_features(source: BinaryIO) -> Iterator[dict]:
     _, root = next(context)
     index = 0
     for event, elem in context:
-        if event != "end" or _local_name(elem.tag) != "member":
+        if event != "end" or _local_name(elem.tag) not in ("member", "featureMember"):
             continue
         index += 1
         feature = _feature_from_member(elem, transformer, index)
