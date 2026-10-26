@@ -93,6 +93,13 @@ export default function ParcelInfoPanel({
           </div>
 
           <div>
+            <dt>Tên chủ ĐK (sổ mục kê cũ)</dt>
+            <dd>
+              <EmptyValue>{parcel.ten_chu_dk}</EmptyValue>
+            </dd>
+          </div>
+
+          <div>
             <dt>Phân loại KH 2959</dt>
             <dd>
               <span

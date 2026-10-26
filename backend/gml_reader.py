@@ -124,6 +124,9 @@ def _feature_from_member(member: ET.Element, transformer: Transformer, index: in
             "muc_dich_su_dung": _text(parcel, "mucDichSuDung") or _text(parcel, "maLoaiDat"),
             "dien_tich": float(dien_tich_raw or 0),
             "ten_chu": _text(parcel, "tenChu"),
+            # Tên chủ đăng ký theo sổ mục kê cũ — đa số file chưa có thẻ này,
+            # để trống thì upsert_thua_dat_diff giữ nguyên giá trị đã có.
+            "ten_chu_dk": _text(parcel, "tenChuDK") or _text(parcel, "tenChuDangKy"),
             "dia_chi": _text(parcel, "diaChi"),
         },
     }

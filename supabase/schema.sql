@@ -10,6 +10,8 @@ create table if not exists public.thua_dat (
     muc_dich_su_dung text,
     dien_tich double precision,
     ten_chu text,
+    -- Tên chủ đăng ký theo sổ mục kê cũ (khác ten_chu = chủ hiện tại từ GML).
+    ten_chu_dk text,
     dia_chi text,
     geom extensions.geometry(Polygon, 4326) not null,
     created_at timestamptz not null default now(),
@@ -22,6 +24,8 @@ create table if not exists public.thua_dat (
 -- không phải khóa tra cứu (vẫn dùng ma_xa+so_to+so_thua như cũ).
 alter table public.thua_dat
     add column if not exists ma_thua_dat text;
+alter table public.thua_dat
+    add column if not exists ten_chu_dk text;
 
 -- ĐÍNH CHÍNH: bỏ chỉ mục theo biểu thức đã thêm trước đó
 -- (thua_dat_ma_xa_so_to_so_thua_idx) — kiểm tra thực tế qua
@@ -138,6 +142,7 @@ begin
             nullif(r->>'muc_dich_su_dung', '') as muc_dich_su_dung,
             (r->>'dien_tich')::double precision as dien_tich,
             nullif(r->>'ten_chu', '') as ten_chu,
+            nullif(r->>'ten_chu_dk', '') as ten_chu_dk,
             nullif(r->>'dia_chi', '') as dia_chi,
             ST_SetSRID(ST_GeomFromGeoJSON(r->'geom'), 4326) as geom
         from jsonb_array_elements(p_rows) as r
@@ -152,19 +157,21 @@ begin
            or t.muc_dich_su_dung is distinct from i.muc_dich_su_dung
            or t.dien_tich is distinct from i.dien_tich
            or t.ten_chu is distinct from i.ten_chu
+           or (i.ten_chu_dk is not null and t.ten_chu_dk is distinct from i.ten_chu_dk)
            or t.dia_chi is distinct from i.dia_chi
            or not ST_Equals(t.geom, i.geom)
     ),
     upserted as (
         insert into public.thua_dat
-            (ma_xa, so_to, so_thua, ma_thua_dat, muc_dich_su_dung, dien_tich, ten_chu, dia_chi, geom, updated_at)
-        select ma_xa, so_to, so_thua, ma_thua_dat, muc_dich_su_dung, dien_tich, ten_chu, dia_chi, geom, now()
+            (ma_xa, so_to, so_thua, ma_thua_dat, muc_dich_su_dung, dien_tich, ten_chu, ten_chu_dk, dia_chi, geom, updated_at)
+        select ma_xa, so_to, so_thua, ma_thua_dat, muc_dich_su_dung, dien_tich, ten_chu, ten_chu_dk, dia_chi, geom, now()
         from changed
         on conflict (ma_xa, so_to, so_thua) do update set
             ma_thua_dat = excluded.ma_thua_dat,
             muc_dich_su_dung = excluded.muc_dich_su_dung,
             dien_tich = excluded.dien_tich,
             ten_chu = excluded.ten_chu,
+            ten_chu_dk = coalesce(excluded.ten_chu_dk, thua_dat.ten_chu_dk),
             dia_chi = excluded.dia_chi,
             geom = excluded.geom,
             updated_at = now()
@@ -595,6 +602,7 @@ as $$
                 'muc_dich_su_dung', t.muc_dich_su_dung,
                 'dien_tich', t.dien_tich,
                 'ten_chu', t.ten_chu,
+                'ten_chu_dk', t.ten_chu_dk,
                 'dia_chi', t.dia_chi,
                 'dong_bo', case when d.id is null then null else jsonb_build_object(
                     'da_xuat_so_dia_chinh_dien_tu', d.da_xuat_so_dia_chinh_dien_tu,
@@ -793,6 +801,7 @@ as $$
                 'muc_dich_su_dung', t.muc_dich_su_dung,
                 'dien_tich', t.dien_tich,
                 'ten_chu', t.ten_chu,
+                'ten_chu_dk', t.ten_chu_dk,
                 'dia_chi', t.dia_chi,
                 'dong_bo', case when d.id is null then null else jsonb_build_object(
                     'da_xuat_so_dia_chinh_dien_tu', d.da_xuat_so_dia_chinh_dien_tu,
