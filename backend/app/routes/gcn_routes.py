@@ -122,6 +122,17 @@ def nhom3_con_thieu_tong_hop():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/thong-ke/buon-ma-thuot")
+def thong_ke_buon_ma_thuot():
+    # API công khai (chỉ đọc) cho dashboard Phường Buôn Ma Thuột: tổng quan
+    # Nhóm 3, theo thôn/TDP, nhập biểu web theo ngày, trend tiến độ.
+    # ?so_ngay=<1-365, mặc định 30>. Kết quả giữ 5 phút ở server.
+    data, error_response = gcn_service.get_thong_ke_buon_ma_thuot(request.args.get("so_ngay"))
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/nhom3-con-thieu/export-tong-hop")
 def nhom3_con_thieu_export_tong_hop():
     # Xuất .xlsx tổng hợp tiến độ theo xã: khối lượng gửi xuống, đã vào dữ

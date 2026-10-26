@@ -137,6 +137,14 @@ def nhom3_tien_do_trend(ma_xa: str | None, tu: str | None, den: str | None):
     )
 
 
+def thong_ke_nhom3_xa(ma_xa: str, so_ngay: int):
+    # Nhóm 3 của 1 xã theo ranh thôn + số thửa nhập biểu web theo ngày —
+    # xem public.thong_ke_nhom3_xa (~1.3s với Phường Buôn Ma Thuột).
+    return supabase_client.call_rpc(
+        "thong_ke_nhom3_xa", {"p_ma_xa": ma_xa, "p_so_ngay": so_ngay}, timeout=35
+    )
+
+
 def refresh_nhom3_trang_thai_cache():
     # Nhánh chậm: quét toàn bộ nhom3_can_thu_thap để tính lại cache
     # nhom3_trang_thai_cache. Gọi TAY (POST /api/nhom3-con-thieu/refresh)

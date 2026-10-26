@@ -639,6 +639,69 @@ def get_nhom3_tien_do_trend(ma_xa_raw: str | None, tu_raw: str | None, den_raw: 
     return {"items": result}, None
 
 
+# API dashboard riêng Phường Buôn Ma Thuột (/api/thong-ke/buon-ma-thuot) —
+# gộp dòng của phường trong nhom3_tong_hop (~3s), thống kê theo ranh thôn
+# (~1.3s) và trend tiến độ, nên giữ kết quả trong bộ nhớ vài phút: số liệu
+# Nhóm 3 chỉ đổi khi refresh cache (3 giờ/lần), dashboard gọi liên tục
+# không làm nặng DB.
+_BMT_MA_XA = "24133"
+_BMT_CACHE_GIAY = 300
+_BMT_SO_NGAY_MAC_DINH = 30
+_BMT_SO_NGAY_TOI_DA = 365
+_bmt_cache: dict[int, tuple[datetime, dict]] = {}
+
+
+def get_thong_ke_buon_ma_thuot(so_ngay_raw: str | None):
+    """Số liệu Nhóm 3 của Phường Buôn Ma Thuột cho dashboard bên ngoài:
+    tổng quan (cùng số với trang /nhom-3-con-thieu), theo từng thôn/TDP,
+    số thửa nhập biểu web theo ngày và trend tiến độ trong so_ngay ngày
+    gần nhất (mặc định 30)."""
+    try:
+        so_ngay = int((so_ngay_raw or "").strip() or _BMT_SO_NGAY_MAC_DINH)
+    except ValueError:
+        return None, (jsonify({"error": "so_ngay không hợp lệ"}), 400)
+    so_ngay = min(max(so_ngay, 1), _BMT_SO_NGAY_TOI_DA)
+
+    now = datetime.now(_GIO_VN)
+    cached = _bmt_cache.get(so_ngay)
+    if cached and (now - cached[0]).total_seconds() < _BMT_CACHE_GIAY:
+        return cached[1], None
+
+    tong_hop, error_response = gcn_repository.nhom3_tong_hop(None)
+    if error_response:
+        return None, error_response
+    theo_xa = (tong_hop.get("theo_xa") if isinstance(tong_hop, dict) else None) or []
+    tong_quan = next((x for x in theo_xa if x.get("ma_xa") == _BMT_MA_XA), None)
+    if tong_quan is None:
+        return None, (jsonify({"error": "Chưa có số liệu Nhóm 3 của Phường Buôn Ma Thuột"}), 404)
+
+    theo_thon, error_response = gcn_repository.thong_ke_nhom3_xa(_BMT_MA_XA, so_ngay)
+    if error_response:
+        return None, error_response
+    if not isinstance(theo_thon, dict):
+        theo_thon = {}
+
+    tu = (now - timedelta(days=so_ngay)).isoformat()
+    tien_do, error_response = gcn_repository.nhom3_tien_do_trend(_BMT_MA_XA, tu, None)
+    if error_response:
+        return None, error_response
+
+    result = {
+        "ma_xa": _BMT_MA_XA,
+        "ten_xa": tong_quan.get("ten_xa"),
+        "cap_nhat_luc": gcn_repository.nhom3_cache_computed_at(),
+        "tao_luc": now.isoformat(),
+        "so_ngay": so_ngay,
+        "tong_quan": tong_quan,
+        "so_thon": theo_thon.get("so_thon", 0),
+        "theo_thon": theo_thon.get("theo_thon", []),
+        "nhap_bieu_web_theo_ngay": theo_thon.get("nhap_bieu_web_theo_ngay", []),
+        "tien_do": tien_do if isinstance(tien_do, list) else [],
+    }
+    _bmt_cache[so_ngay] = (now, result)
+    return result, None
+
+
 def refresh_nhom3_cache():
     result, error_response = gcn_repository.refresh_nhom3_trang_thai_cache()
     if error_response:
