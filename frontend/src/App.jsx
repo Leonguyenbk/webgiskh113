@@ -62,6 +62,9 @@ const ESRI_IMAGERY_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/" +
   "World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
+// CARTO Dark Matter: nền đường phố tối màu (dữ liệu OSM), làm nổi lớp thửa.
+const CARTO_DARK_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+
 // Nới khung quanh phạm vi dữ liệu để không sót thửa nằm sát mép, đơn vị độ.
 const EXTENT_PADDING = 0.01;
 
@@ -1183,6 +1186,17 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   minZoom={0}
                   maxZoom={19}
                   attribution="&copy; OpenStreetMap contributors"
+                />
+              </LayersControl.BaseLayer>
+
+              <LayersControl.BaseLayer name="Đường phố tối màu">
+                <TileLayer
+                  url={CARTO_DARK_URL}
+                  subdomains="abcd"
+                  minZoom={0}
+                  maxZoom={21}
+                  maxNativeZoom={20}
+                  attribution="&copy; OpenStreetMap contributors &copy; CARTO"
                 />
               </LayersControl.BaseLayer>
 
