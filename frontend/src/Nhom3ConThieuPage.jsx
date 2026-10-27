@@ -51,7 +51,7 @@ const SORT_COLUMNS = [
   { key: "tong_tru_kg", label: "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "percent_tru_kg", label: "% (trừ cả chưa liên kết KG)", type: "number", defaultDir: "asc", group: "loai4" },
   { key: "tong_ke_hoach", label: "Tổng danh sách theo kế hoạch (đã gồm Loại 1 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
-  { key: "da_lam_ke_hoach", label: "Đã thực hiện theo kế hoạch", type: "number", defaultDir: "desc", group: "ke_hoach" },
+  { key: "da_lam_ke_hoach", label: "Đã thực hiện theo kế hoạch (gồm Loại 1+2+3 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
   { key: "percent_ke_hoach", label: "Tỷ lệ theo kế hoạch", type: "number", defaultDir: "asc", group: "ke_hoach" },
 ];
 
@@ -174,9 +174,10 @@ export default function Nhom3ConThieuPage({
       // biểu (không tính phần Chi nhánh KV làm trực tiếp, chưa nhập) +
       // Nhóm 3 đã nhập biểu (yêu cầu người dùng).
       const daLam = (row.da_nhom_1_2_da_nhap || 0) + (row.da_thu_thap || 0);
-      // Đã làm theo kế hoạch = Đã làm (Loại 4) + Loại 1 đã làm (VPĐK gửi
-      // song song, chưa từng nằm trong tổng gửi xã — yêu cầu người dùng).
-      const daLamKeHoach = daLam + (row.loai_1_da_lam || 0);
+      // Đã làm theo kế hoạch = Đã làm (Loại 4) + Loại 1 + Loại 2 + Loại 3
+      // đã làm (VPĐK gửi song song, như file KhoiLuongXa-KH113 — yêu cầu
+      // người dùng). Tổng kế hoạch vẫn chỉ cộng Loại 1.
+      const daLamKeHoach = daLam + (row.loai_123_da_lam || 0);
       return {
         ...row,
         ten_xa: row.ten_xa || row.ma_xa,
@@ -218,7 +219,7 @@ export default function Nhom3ConThieuPage({
   const daLam = (tongHop?.da_nhom_1_2_da_nhap || 0) + (tongHop?.da_thu_thap || 0);
   const tyLeDaLam = formatPercent(daLam, tongHop?.tong || 0);
   const tyLeDaLamTruKg = formatPercent(daLam, tongHop?.tong_tru_kg || 0);
-  const daLamKeHoach = daLam + (tongHop?.loai_1_da_lam || 0);
+  const daLamKeHoach = daLam + (tongHop?.loai_123_da_lam || 0);
   const tyLeKeHoach = formatPercent(daLamKeHoach, tongHop?.tong_ke_hoach || 0);
 
   return (
@@ -355,8 +356,8 @@ export default function Nhom3ConThieuPage({
                 </strong>
               </div>
               <div className="statTile">
-                <span>Trong đó: Loại 1 đã làm (VPĐK gửi song song)</span>
-                <strong style={{ color: "#6a817e" }}>{formatSo(tongHop.loai_1_da_lam)}</strong>
+                <span>Trong đó: Loại 1 + 2 + 3 đã làm (VPĐK gửi song song)</span>
+                <strong style={{ color: "#6a817e" }}>{formatSo(tongHop.loai_123_da_lam)}</strong>
               </div>
               <div className="statTile">
                 <span>Tổng danh sách theo kế hoạch (đã gồm Loại 1 đã làm)</span>

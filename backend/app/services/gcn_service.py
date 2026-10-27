@@ -513,8 +513,8 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     Chi nhánh KV chưa nhập; "tong_tru_kg" trừ thêm chưa liên kết không
     gian — mỗi cột tổng có 1 cột % tương ứng, cùng tử số Đã làm = Nhóm 1
     đã nhập + đã nhập đủ dữ liệu. Thêm cặp cột "theo kế hoạch" (yêu cầu
-    người dùng): tổng/đã làm cộng thêm Loại 1 đã làm (public.nhom3_loai_123_da_lam,
-    VPĐK gửi song song ngoài hệ thống) trên nền tổng đã trừ KG — phân
+    người dùng): tổng cộng thêm Loại 1 đã làm, đã làm cộng thêm Loại 1+2+3
+    đã làm (public.nhom3_loai_123_da_lam, VPĐK gửi song song ngoài hệ thống) trên nền tổng đã trừ KG — phân
     biệt với phần hệ thống tự theo dõi ("Loại 4") ở các cột trước. Xã
     "ghi chú" (thuộc dự án tổng thể khác, xem nhom3_xa_ghi_chu) vẫn liệt
     kê nhưng số liệu = 0, % bỏ trống."""
@@ -537,13 +537,13 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         "Nhóm 1 đã nhập biểu (Xã làm)", "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)",
         "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Chưa liên kết không gian",
         "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", "% (trừ cả chưa liên kết KG)",
-        "Tổng theo kế hoạch (đã gồm Loại 1 đã làm)", "Đã thực hiện theo kế hoạch", "% theo kế hoạch",
+        "Tổng theo kế hoạch (đã gồm Loại 1 đã làm)", "Đã thực hiện theo kế hoạch (gồm Loại 1+2+3 đã làm)", "% theo kế hoạch",
         "Ghi chú",
     ])
 
     tong_chung = nhom12_da_nhap_chung = nhom12_chua_nhap_chung = 0
     da_thu_thap_chung = con_thieu_chung = chua_lien_ket_chung = tong_tru_kg_chung = 0
-    loai_1_chung = tong_ke_hoach_chung = 0
+    loai_123_chung = tong_ke_hoach_chung = 0
     for row in theo_xa:
         tong = int(row.get("tong") or 0)
         nhom12_da_nhap = int(row.get("da_nhom_1_2_da_nhap") or 0)
@@ -552,10 +552,12 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         con_thieu = int(row.get("con_thieu") or 0)
         chua_lien_ket = int(row.get("chua_lien_ket_khong_gian") or 0)
         tong_tru_kg = int(row.get("tong_tru_kg") or 0)
-        loai_1_da_lam = int(row.get("loai_1_da_lam") or 0)
+        loai_123_da_lam = int(row.get("loai_123_da_lam") or 0)
         tong_ke_hoach = int(row.get("tong_ke_hoach") or 0)
         da_lam = nhom12_da_nhap + da_thu_thap
-        da_lam_ke_hoach = da_lam + loai_1_da_lam
+        # Đã thực hiện theo kế hoạch cộng cả Loại 1+2+3 đã làm (như file
+        # KhoiLuongXa-KH113); tổng kế hoạch vẫn chỉ cộng Loại 1.
+        da_lam_ke_hoach = da_lam + loai_123_da_lam
         percent = round(da_lam / tong * 1000) / 10 if tong > 0 else None
         percent_tru_kg = round(da_lam / tong_tru_kg * 1000) / 10 if tong_tru_kg > 0 else None
         percent_ke_hoach = round(da_lam_ke_hoach / tong_ke_hoach * 1000) / 10 if tong_ke_hoach > 0 else None
@@ -566,7 +568,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         con_thieu_chung += con_thieu
         chua_lien_ket_chung += chua_lien_ket
         tong_tru_kg_chung += tong_tru_kg
-        loai_1_chung += loai_1_da_lam
+        loai_123_chung += loai_123_da_lam
         tong_ke_hoach_chung += tong_ke_hoach
         ws.append([
             _xlsx_cell(row.get("to_giam_sat")),
@@ -590,7 +592,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         ])
 
     da_lam_chung = nhom12_da_nhap_chung + da_thu_thap_chung
-    da_lam_ke_hoach_chung = da_lam_chung + loai_1_chung
+    da_lam_ke_hoach_chung = da_lam_chung + loai_123_chung
     percent_chung = round(da_lam_chung / tong_chung * 1000) / 10 if tong_chung > 0 else None
     percent_tru_kg_chung = round(da_lam_chung / tong_tru_kg_chung * 1000) / 10 if tong_tru_kg_chung > 0 else None
     percent_ke_hoach_chung = (

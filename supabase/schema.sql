@@ -2328,7 +2328,9 @@ alter table public.nhom3_loai_123_da_lam enable row level security;
 -- "tong_ke_hoach" = tong_tru_kg + loai_1_da_lam (public.nhom3_loai_123_da_lam
 -- — khối lượng Loại 1 đã làm song song ngoài hệ thống, chưa từng nằm
 -- trong "tổng gửi xã" nên cộng vào cả tổng lẫn đã làm, yêu cầu người
--- dùng; Loại 2/3 không dùng trong công thức này) — ra "tổng/tỷ lệ theo
+-- dùng; Loại 2/3 không dùng trong công thức này). "loai_123_da_lam" =
+-- Loại 1+2+3 đã làm, cộng vào "đã thực hiện theo kế hoạch" ở tầng ứng
+-- dụng (như file KhoiLuongXa-KH113, yêu cầu người dùng) — ra "tổng/tỷ lệ theo
 -- kế hoạch" ở tầng ứng dụng, phân biệt với "tổng/tỷ lệ Loại 4" (phần hệ
 -- thống tự theo dõi) ở trên.
 create or replace function public.nhom3_tong_hop(p_to_giam_sat integer default null)
@@ -2360,14 +2362,15 @@ as $$
             -- thửa chưa đụng tới lẫn thửa này).
             count(*) filter (where not c.la_nhom_1_2 and c.co_nhap and not c.da_thu_thap) as da_nhap_chua_dat,
             coalesce(kg.so_luong, 0) as chua_lien_ket_khong_gian,
-            coalesce(l123.loai_1, 0) as loai_1_da_lam
+            coalesce(l123.loai_1, 0) as loai_1_da_lam,
+            coalesce(l123.loai_1, 0) + coalesce(l123.loai_2, 0) + coalesce(l123.loai_3, 0) as loai_123_da_lam
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         left join public.nhom3_to_giam_sat tg on tg.ma_xa = c.ma_xa
         left join public.nhom3_chua_lien_ket_khong_gian kg on kg.ma_xa = c.ma_xa
         left join public.nhom3_loai_123_da_lam l123 on l123.ma_xa = c.ma_xa
         where p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat
-        group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, kg.so_luong, l123.loai_1
+        group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, kg.so_luong, l123.loai_1, l123.loai_2, l123.loai_3
     ),
     theo_xa as (
         select
@@ -2380,6 +2383,7 @@ as $$
             chua_lien_ket_khong_gian,
             (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian) as tong_tru_kg,
             loai_1_da_lam,
+            loai_123_da_lam,
             (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian + loai_1_da_lam) as tong_ke_hoach,
             null::text as ghi_chu
         from raw
@@ -2389,7 +2393,7 @@ as $$
         -- Xã có ghi chú riêng (xem nhom3_xa_ghi_chu) VÀ chưa có dữ liệu
         -- trong cache -> hiện 1 dòng ghi chú (0 khắp số liệu, không cộng
         -- dồn gì thêm vào tổng).
-        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, g.ghi_chu
+        select g.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, g.ghi_chu
         from public.nhom3_xa_ghi_chu g
         left join public.danhsachxaphuong xp on xp.ma_xa = g.ma_xa
         left join public.nhom3_to_giam_sat tg on tg.ma_xa = g.ma_xa
@@ -2409,6 +2413,7 @@ as $$
         'chua_lien_ket_khong_gian', coalesce(sum(chua_lien_ket_khong_gian), 0),
         'tong_tru_kg', coalesce(sum(tong_tru_kg), 0),
         'loai_1_da_lam', coalesce(sum(loai_1_da_lam), 0),
+        'loai_123_da_lam', coalesce(sum(loai_123_da_lam), 0),
         'tong_ke_hoach', coalesce(sum(tong_ke_hoach), 0),
         'theo_xa', coalesce(jsonb_agg(row_to_json(theo_xa) order by tong desc), '[]'::jsonb)
     )
