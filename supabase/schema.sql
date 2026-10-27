@@ -2862,16 +2862,39 @@ begin
     -- 1 pass: giao (ST_Intersects + ST_Intersection) tính 1 lần, dùng
     -- chung cho cả đếm "tổng thửa giao ranh" lẫn lọc Nhóm 3 bên dưới —
     -- tránh tính ST_Intersection 2 lần cho cùng 1 tập thửa.
-    with giao as (
+    --
+    -- Ranh lớn (hàng chục nghìn đỉnh) giao trực tiếp với từng thửa rất chậm
+    -- (vượt timeout -> "GEOS Error: Interrupted"): cắt ranh (đã gộp, không
+    -- còn chồng nhau) thành mảnh <= 128 đỉnh bằng ST_Subdivide, mỗi thửa chỉ
+    -- giao với vài mảnh nhỏ nó chạm rồi cộng diện tích — các mảnh không
+    -- chồng nhau nên tổng đúng bằng giao với cả ranh; thửa nằm trọn trong 1
+    -- mảnh lấy luôn diện tích thửa, khỏi tính giao.
+    with manh as (
+        select ST_Subdivide(ST_CollectionExtract(ST_UnaryUnion(v_ranh), 3), 128) as g
+    ),
+    cap as (
         -- ST_MakeValid từng thửa trước khi giao — 1 polygon lỗi (hiếm, dữ
         -- liệu GML cũ) không làm cả câu lỗi, chỉ lệch diện tích thửa đó
         -- (chấp nhận được, còn hơn chặn đứng cả truy vấn).
         select
+            t.id,
+            ST_CoveredBy(t.geom, m.g) as tron,
+            case when ST_CoveredBy(t.geom, m.g) then null
+                 else ST_Area(ST_Intersection(ST_MakeValid(t.geom), m.g)::geography) end as giao_m2
+        from manh m
+        join public.thua_dat t on t.geom && m.g and ST_Intersects(t.geom, m.g)
+    ),
+    giao as (
+        select
             t.ma_xa, t.so_to, t.so_thua, t.ma_thua_dat, t.muc_dich_su_dung,
             ST_Area(t.geom::geography) as dien_tich_thua_m2,
-            ST_Area(ST_Intersection(ST_MakeValid(t.geom), v_ranh)::geography) as dien_tich_giao_m2
-        from public.thua_dat t
-        where ST_Intersects(t.geom, v_ranh)
+            least(
+                case when bool_or(c.tron) then ST_Area(t.geom::geography) else sum(c.giao_m2) end,
+                ST_Area(t.geom::geography)
+            ) as dien_tich_giao_m2
+        from cap c
+        join public.thua_dat t on t.id = c.id
+        group by t.id
     ),
     giao_duong as (
         select * from giao where dien_tich_giao_m2 > 0
@@ -2965,15 +2988,30 @@ begin
     -- cần biết TOÀN BỘ thửa giao đủ ngưỡng với ranh này để ghi vào
     -- nhom3_du_an_danh_dau, kể cả thửa đã thuộc 1 ranh dự án khác từ trước
     -- (để huy_danh_dau_du_an_nhom3 biết thửa đó còn ranh khác giữ, không gỡ nhầm).
-    with giao as (
+    -- Cắt ranh thành mảnh nhỏ như thua_dat_nhom3_trong_ranh (ranh lớn giao
+    -- trực tiếp quá chậm, xem comment ở hàm đó).
+    with manh as (
+        select ST_Subdivide(ST_UnaryUnion(v_ranh), 128) as g
+    ),
+    cap as (
+        select
+            t.id,
+            ST_CoveredBy(t.geom, m.g) as tron,
+            case when ST_CoveredBy(t.geom, m.g) then null
+                 else ST_Area(ST_Intersection(ST_MakeValid(t.geom), m.g)::geography) end as giao_m2
+        from manh m
+        join public.thua_dat t on t.geom && m.g and ST_Intersects(t.geom, m.g)
+        join public.nhom3_can_thu_thap n3
+            on n3.ma_xa = t.ma_xa and n3.so_to = t.so_to and n3.so_thua = t.so_thua
+    ),
+    giao as (
         select
             t.ma_xa, t.so_to, t.so_thua,
             ST_Area(t.geom::geography) as dien_tich_thua_m2,
-            ST_Area(ST_Intersection(ST_MakeValid(t.geom), v_ranh)::geography) as dien_tich_giao_m2
-        from public.thua_dat t
-        join public.nhom3_can_thu_thap n3
-            on n3.ma_xa = t.ma_xa and n3.so_to = t.so_to and n3.so_thua = t.so_thua
-        where ST_Intersects(t.geom, v_ranh)
+            case when bool_or(c.tron) then ST_Area(t.geom::geography) else sum(c.giao_m2) end as dien_tich_giao_m2
+        from cap c
+        join public.thua_dat t on t.id = c.id
+        group by t.id
     ),
     du_an as (
         select ma_xa, so_to, so_thua
