@@ -23,12 +23,15 @@ import psycopg2.extras
 
 from app.config import Config
 
-# DANHSACHGUIXA/ (20261025): VPĐK gửi danh sách mới cho xã Suối Trai
-# (22192) — 4414 thửa, chứa trọn 1584 thửa đã nạp trước đó (trùng cả mã
-# định danh, không thửa nào thuoc_du_an) nên chỉ cần thêm 2830 thửa mới
-# (CHI_THEM_MOI), giữ nguyên dòng cũ — không xoá/nạp lại.
+# DANHSACHGUIXA/ (20261027): VPĐK gửi lại danh sách THAY THẾ cho xã Hòa
+# Xuân (22291) — 20.005 thửa. Danh sách cũ (16.400 thửa, file "HOA XUAN
+# -3605.xlsx") sai số tờ: cùng mã định danh nhưng chỉ 1 thửa trùng tờ/thửa,
+# 4.168 thửa không có trên bản đồ; file mới khớp bản đồ 19.897/20.005.
+# Cột đầu của file là STT (không phải mã xã) nên ép mã xã 22291; header
+# không bắt đầu bằng MAXA nên chỉ rõ tên sheet.
 SRC_LIST = [
-    r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\22192_Xã Suối Trai.xlsx",
+    (r"D:\QUANGTUAN\webgiskh113\DANHSACHGUIXA\Bản sao của 22291_Xã Hòa Xuân.xlsx",
+     "DSCanThuThap,DangKy (Do VPĐK gi", "22291"),
 ]
 
 # True = xoá hết bảng rồi nạp lại từ SRC (dùng khi SRC là danh sách đầy đủ
@@ -39,12 +42,12 @@ TRUNCATE_TRUOC = False
 
 # True = file SRC có lẫn cả thửa cũ đã nạp lẫn thửa mới bổ sung — chỉ
 # insert thửa CHƯA có trong bảng, không update/đụng tới thửa đã trùng khoá.
-CHI_THEM_MOI = True
+CHI_THEM_MOI = False
 
 # True = xoá hết dòng hiện có của đúng những mã xã xuất hiện trong SRC_LIST
 # rồi nạp lại từ đầu (file SRC là danh sách THAY THẾ cho các xã đó, không
 # phải bổ sung) — các xã khác không nạp trong lần này giữ nguyên.
-XOA_THEO_MA_XA_TRUOC = False
+XOA_THEO_MA_XA_TRUOC = True
 
 
 def chon_sheet_du_lieu(wb):
