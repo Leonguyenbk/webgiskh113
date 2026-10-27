@@ -140,7 +140,15 @@ export default function ImportRanhThonPage({ onNavigateHome }) {
             <div className="notice">
               <strong>Hoàn tất</strong>
               <span>
-                Đã nhập {result.imported}/{result.total} thôn vào cơ sở dữ liệu.
+                Đã nhập {result.imported} thôn vào cơ sở dữ liệu
+                {result.so_vung > result.total ? ` (từ ${result.so_vung} vùng trong file)` : ""}.
+                {result.thon_gop?.length > 0 && (
+                  <>
+                    {" "}
+                    Đã gộp các vùng cùng tên thành 1 thôn:{" "}
+                    {result.thon_gop.map((t) => `${t.ten_thon} (${t.so_vung} vùng)`).join(", ")}.
+                  </>
+                )}
                 {result.deleted > 0 && (
                   <>
                     {" "}

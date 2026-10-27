@@ -159,7 +159,15 @@ export default function ImportGmlPage({ onNavigateHome }) {
             <div className="notice">
               <strong>Hoàn tất</strong>
               <span>
-                Đã nhập {thonResult.imported}/{thonResult.total} thôn vào cơ sở dữ liệu.
+                Đã nhập {thonResult.imported} thôn vào cơ sở dữ liệu
+                {thonResult.so_vung > thonResult.total ? ` (từ ${thonResult.so_vung} vùng trong file)` : ""}.
+                {thonResult.thon_gop?.length > 0 && (
+                  <>
+                    {" "}
+                    Đã gộp các vùng cùng tên thành 1 thôn:{" "}
+                    {thonResult.thon_gop.map((t) => `${t.ten_thon} (${t.so_vung} vùng)`).join(", ")}.
+                  </>
+                )}
                 {thonResult.deleted > 0 && (
                   <>
                     {" "}

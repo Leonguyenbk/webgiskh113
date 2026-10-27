@@ -117,6 +117,27 @@ def import_ranh_thon(file_stream, filename: str = ""):
         nguon = "GML" if la_gml else "Shapefile"
         return None, (jsonify({"error": f"File {nguon} không có ranh thôn hợp lệ"}), 400)
 
+    # Nhiều vùng cùng (mã xã, tên thôn) — 1 thôn vẽ thành nhiều mảnh — gộp
+    # thành 1 MultiPolygon. Trước đây upsert chỉ giữ vùng xuất hiện sau
+    # cùng nên mất các mảnh còn lại ("Đã nhập 14/16 thôn").
+    so_vung = len(rows)
+    gop: dict[tuple[str, str], dict] = {}
+    so_manh: dict[tuple[str, str], int] = {}
+    for row in rows:
+        key = (row["ma_xa"], row["ten_thon"])
+        if key in gop:
+            gop[key]["geom"]["coordinates"].extend(row["geom"]["coordinates"])
+            so_manh[key] += 1
+        else:
+            gop[key] = row
+            so_manh[key] = 1
+    rows = list(gop.values())
+    thon_gop = [
+        {"ma_xa": ma_xa, "ten_thon": ten_thon, "so_vung": n}
+        for (ma_xa, ten_thon), n in so_manh.items()
+        if n > 1
+    ]
+
     # Đồng bộ theo xã giống import_gml: thôn không còn trong file mới (đổi
     # tên/vẽ lại/gộp) bị xóa, thôn còn lại thì thêm mới/cập nhật hình học.
     thon_by_xa: dict[str, list[str]] = {}
@@ -151,6 +172,8 @@ def import_ranh_thon(file_stream, filename: str = ""):
         "ok": True,
         "total": len(rows),
         "imported": imported,
+        "so_vung": so_vung,
+        "thon_gop": thon_gop,
         "deleted": deleted,
         "xa": list(thon_by_xa.keys()),
     }
