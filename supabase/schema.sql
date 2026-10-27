@@ -2838,7 +2838,7 @@ language plpgsql
 stable
 security definer
 set search_path = public, extensions
-set statement_timeout = '90s'
+set statement_timeout = '600s'
 as $$
 declare
     v_ranh geometry;
@@ -2925,7 +2925,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, extensions
-set statement_timeout = '120s'
+set statement_timeout = '600s'
 as $$
 declare
     v_ranh geometry;
@@ -3017,7 +3017,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, extensions
-set statement_timeout = '60s'
+set statement_timeout = '600s'
 as $$
 declare
     v_ten text;
