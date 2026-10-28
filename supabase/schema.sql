@@ -2325,12 +2325,11 @@ alter table public.nhom3_loai_123_da_lam enable row level security;
 -- tỷ lệ "đã làm" đều dùng cùng tử số (da_nhom_1_2_da_nhap + da_thu_thap),
 -- chỉ khác mẫu số (tong hoặc tong_tru_kg).
 --
--- "tong_ke_hoach" = tong_tru_kg + loai_1_da_lam (public.nhom3_loai_123_da_lam
--- — khối lượng Loại 1 đã làm song song ngoài hệ thống, chưa từng nằm
+-- "tong_ke_hoach" = tong_tru_kg + loai_123_da_lam (public.nhom3_loai_123_da_lam
+-- — khối lượng Loại 1+2+3 đã làm song song ngoài hệ thống, chưa từng nằm
 -- trong "tổng gửi xã" nên cộng vào cả tổng lẫn đã làm, yêu cầu người
--- dùng; Loại 2/3 không dùng trong công thức này). "loai_123_da_lam" =
--- Loại 1+2+3 đã làm, cộng vào "đã thực hiện theo kế hoạch" ở tầng ứng
--- dụng (như file KhoiLuongXa-KH113, yêu cầu người dùng) — ra "tổng/tỷ lệ theo
+-- dùng). "loai_123_da_lam" cũng cộng vào "đã thực hiện theo kế hoạch" ở
+-- tầng ứng dụng (như file KhoiLuongXa-KH113, yêu cầu người dùng) — ra "tổng/tỷ lệ theo
 -- kế hoạch" ở tầng ứng dụng, phân biệt với "tổng/tỷ lệ Loại 4" (phần hệ
 -- thống tự theo dõi) ở trên.
 create or replace function public.nhom3_tong_hop(p_to_giam_sat integer default null)
@@ -2384,7 +2383,7 @@ as $$
             (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian) as tong_tru_kg,
             loai_1_da_lam,
             loai_123_da_lam,
-            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian + loai_1_da_lam) as tong_ke_hoach,
+            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian + loai_123_da_lam) as tong_ke_hoach,
             null::text as ghi_chu
         from raw
 
