@@ -41,6 +41,8 @@ import {
   GROUP_COLORS,
   GROUP_LABELS,
   NEAR_ME_TARGET,
+  NGOAI_DS_COLOR,
+  NGOAI_DS_LABEL,
   SELECTED_COLOR,
   TO_CHUC_STRIPE_CSS,
   TO_CHUC_STRIPE_LABEL,
@@ -48,6 +50,7 @@ import {
   getGroupKey,
   getParcelFillColor,
   getToChucStripePattern,
+  isNgoaiDsGuiXa,
   isToChucChuaPhanLoai,
 } from "./utils/constants";
 import { featureKey } from "./utils/geometry";
@@ -533,8 +536,9 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
       // thay vì xám trơn để dễ rà soát riêng. CanvasPattern (không phải
       // string) vẫn gán được vào fillColor vì Leaflet canvas renderer gán
       // thẳng options.fillColor vào ctx.fillStyle.
+      // Thửa không có trong danh sách gửi xã thì giữ màu gần đen (đè lên sọc).
       const stripePattern =
-        !inSet && isToChucChuaPhanLoai(feature.properties)
+        !inSet && !isNgoaiDsGuiXa(feature.properties) && isToChucChuaPhanLoai(feature.properties)
           ? getToChucStripePattern()
           : null;
 
@@ -1057,7 +1061,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                         <span
                           className="parcelListDot"
                           style={
-                            isToChucChuaPhanLoai(p)
+                            !isNgoaiDsGuiXa(p) && isToChucChuaPhanLoai(p)
                               ? { background: TO_CHUC_STRIPE_CSS }
                               : { backgroundColor: getParcelFillColor(p) }
                           }
@@ -1317,6 +1321,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             <div>
               <span style={{ backgroundColor: DU_AN_COLOR }} />
               <label>{DU_AN_LABEL}</label>
+            </div>
+
+            <div>
+              <span style={{ backgroundColor: NGOAI_DS_COLOR }} />
+              <label>{NGOAI_DS_LABEL}</label>
             </div>
 
             <div>

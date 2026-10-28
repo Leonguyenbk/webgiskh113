@@ -53,6 +53,15 @@ export const GCN_LABEL = "Thửa đất đã nhập biểu";
 export const DU_AN_COLOR = "#eab308";
 export const DU_AN_LABEL = "Thuộc dự án";
 
+// Thửa Nhóm 3 (chưa thuộc Nhóm 1/2) KHÔNG có trong danh sách gửi xã
+// (properties.ngoai_ds_gui_xa — xã đó đã có danh sách nhom3_can_thu_thap
+// mà thửa này không nằm trong, xem get_parcels_in_view/search_parcels
+// trong supabase/schema.sql) — tô gần đen để người thu thập không làm
+// nhầm (yêu cầu người dùng). Đè lên cả sọc "đất tổ chức"; thửa đã nhập
+// biểu (xanh dương) vẫn giữ màu đó vì đã làm xong.
+export const NGOAI_DS_COLOR = "#0f172a";
+export const NGOAI_DS_LABEL = "Không có trong DS gửi xã (không thu thập)";
+
 // Màu tô thửa ĐANG CHỌN trên bản đồ (chọn 1 hoặc nhiều). Tím đậm — tách
 // hẳn khỏi xanh lá (Nhóm 1), đỏ (Nhóm 2), xanh dương (đã nhập biểu), vàng
 // (thuộc dự án) và xám (chưa phân loại).
@@ -74,10 +83,16 @@ export function getGroupColor(phanLoai = "") {
   return GROUP_COLORS[getGroupKey(phanLoai)];
 }
 
+export function isNgoaiDsGuiXa(properties = {}) {
+  const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
+  return groupKey === "DEFAULT" && !properties.co_gcn && Boolean(properties.ngoai_ds_gui_xa);
+}
+
 export function getParcelFillColor(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
   if (groupKey === "DEFAULT") {
     if (properties.co_gcn) return GCN_COLOR;
+    if (properties.ngoai_ds_gui_xa) return NGOAI_DS_COLOR;
     if (properties.thuoc_du_an) return DU_AN_COLOR;
   }
   return GROUP_COLORS[groupKey];

@@ -630,7 +630,13 @@ as $$
                 -- Thửa Nhóm 3 đã đánh dấu thuộc 1 ranh dự án (xem
                 -- luu_ranh_du_an_va_danh_dau_nhom3) -> tô vàng trên bản đồ,
                 -- xem getParcelFillColor trong frontend/src/utils/constants.js.
-                'thuoc_du_an', coalesce(n3.thuoc_du_an, false)
+                'thuoc_du_an', coalesce(n3.thuoc_du_an, false),
+                -- Thửa không có trong danh sách gửi xã của 1 xã ĐÃ có danh
+                -- sách -> tô gần đen trên bản đồ (không thu thập nhầm), xem
+                -- NGOAI_DS_COLOR trong frontend/src/utils/constants.js.
+                'ngoai_ds_gui_xa', n3.ma_xa is null and exists (
+                    select 1 from public.nhom3_can_thu_thap x where x.ma_xa = t.ma_xa
+                )
             )
         ) as feature
         from public.thua_dat t
@@ -821,7 +827,13 @@ as $$
                     from public.du_lieu_gcn g
                     where g.madvhc_soto_sothua = t.ma_xa || '_' || t.so_to::text || '_' || t.so_thua::text
                 ),
-                'thuoc_du_an', coalesce(n3.thuoc_du_an, false)
+                'thuoc_du_an', coalesce(n3.thuoc_du_an, false),
+                -- Thửa không có trong danh sách gửi xã của 1 xã ĐÃ có danh
+                -- sách -> tô gần đen trên bản đồ (không thu thập nhầm), xem
+                -- NGOAI_DS_COLOR trong frontend/src/utils/constants.js.
+                'ngoai_ds_gui_xa', n3.ma_xa is null and exists (
+                    select 1 from public.nhom3_can_thu_thap x where x.ma_xa = t.ma_xa
+                )
             )
         ) as feature
         from public.thua_dat t
