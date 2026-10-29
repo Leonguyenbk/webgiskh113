@@ -5,7 +5,7 @@ import json
 from flask import Blueprint, jsonify, request, send_from_directory
 
 from ..repositories.local_file_storage import SCANS_DIR
-from ..services import nhom4_service
+from ..services import nhom4_ai_service, nhom4_service
 from ..utils.validators import check_import_token
 
 nhom4_bp = Blueprint("nhom4", __name__)
@@ -100,6 +100,33 @@ def submit_ho_so():
             for i in range(so_thua)
         ]
         data, error_response = nhom4_service.submit_ho_so(payload, files_by_parcel)
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
+# Loại file quét nhận cho AI đọc: cùng 3 ô hồ sơ quét của form Nhóm 4.
+_AI_MIME = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+
+
+@nhom4_bp.post("/api/nhom4/ai-doc-ho-so")
+def ai_doc_ho_so():
+    # Trang ẩn /nhom-4-ai: gửi file quét cho AI đọc rồi trả dữ liệu để
+    # frontend tự điền biểu — KHÔNG lưu gì (xem nhom4_ai_service).
+    files = []
+    for loai in ("chinh", "phu", "tbxn"):
+        f = request.files.get(f"file_{loai}")
+        if not f or not f.filename:
+            continue
+        duoi = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+        if duoi not in _AI_MIME:
+            return jsonify({"error": f"File '{f.filename}' không phải PDF/ảnh (jpg, png, webp)"}), 400
+        files.append((loai, _AI_MIME[duoi], f.read()))
+
+    ip = request.headers.get("CF-Connecting-IP") or request.remote_addr or "-"
+    data, error_response = nhom4_ai_service.doc_ho_so(
+        request.form.get("ma_xa", "").strip(), request.form.get("ten_xa", "").strip(), files, ip
+    )
     if error_response:
         return error_response
     return jsonify(data)

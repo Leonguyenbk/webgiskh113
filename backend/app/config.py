@@ -30,6 +30,11 @@ class Config:
     GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
     GOOGLE_DRIVE_ROOT_FOLDER_ID = os.getenv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "")
 
+    # Trang ẩn /nhom-4-ai: đọc hồ sơ quét bằng Google Gemini (xem
+    # services/nhom4_ai_service.py). Không có key thì endpoint báo 503.
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "")
+
     PORT = int(os.getenv("PORT", "5000"))
     FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     RENDER_ENV = os.getenv("RENDER", "local")

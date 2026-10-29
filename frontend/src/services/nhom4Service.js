@@ -86,3 +86,33 @@ export function submitHoSo(payload, filesByParcel, sharedFiles, { onProgress } =
     xhr.send(formData);
   });
 }
+
+// Trang ẩn /nhom-4-ai: gửi 3 ô hồ sơ quét cho AI đọc (backend gọi Gemini,
+// xem app/services/nhom4_ai_service.py) — chỉ trả dữ liệu để tự điền biểu,
+// không lưu gì. Có thể mất 20–80 giây; không parse được JSON (VD Cloudflare
+// cắt request quá lâu, trả trang HTML) thì báo lỗi dễ hiểu.
+export async function aiDocHoSo({ maXa, tenXa, files }) {
+  const formData = new FormData();
+  formData.append("ma_xa", maXa || "");
+  formData.append("ten_xa", tenXa || "");
+  if (files.chinh) formData.append("file_chinh", files.chinh);
+  if (files.phu) formData.append("file_phu", files.phu);
+  if (files.tbxn) formData.append("file_tbxn", files.tbxn);
+
+  let response;
+  try {
+    response = await fetch(`${API_URL}/api/nhom4/ai-doc-ho-so`, { method: "POST", body: formData });
+  } catch {
+    throw new Error("Mất kết nối khi gửi hồ sơ cho AI — kiểm tra mạng rồi thử lại.");
+  }
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Không phải JSON — thường do quá thời gian chờ.
+  }
+  if (!response.ok || !body) {
+    throw new Error(body?.error || "AI đọc hồ sơ thất bại (có thể do quá thời gian chờ) — thử lại.");
+  }
+  return body;
+}

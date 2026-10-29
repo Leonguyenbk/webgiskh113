@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getXaList, searchParcels } from "./services/parcelService";
-import { checkTrungThua, getDiaChiThuaDat, getLoaiDatOptions, kiemTraHoSo, submitHoSo } from "./services/nhom4Service";
+import {
+  aiDocHoSo,
+  checkTrungThua,
+  getDiaChiThuaDat,
+  getLoaiDatOptions,
+  kiemTraHoSo,
+  submitHoSo,
+} from "./services/nhom4Service";
 import {
   HINH_THUC_SU_DUNG_OPTIONS,
   LOAI_CHU_OPTIONS,
@@ -24,6 +31,37 @@ function chuanHoaThoiHan(value) {
   const s = String(value ?? "").trim();
   const m = s.match(/^(\d{1,3})\s*(năm)?$/i);
   return m ? `${m[1]} năm` : s;
+}
+
+// Quy tắc Nhóm 4 khi loại đất được điền thêm từ dữ liệu bản đồ (trang AI)
+// — giống ap_quy_tac_mac_dinh ở backend/app/services/nhom4_ai_service.py:
+// ONT/ODT -> công nhận như giao đất CÓ thu tiền, loại khác -> KHÔNG thu
+// tiền; từ 2 người -> Sử dụng chung; đất ở/cơ quan/quốc phòng/an ninh/
+// phòng hộ -> Lâu dài, nông nghiệp -> 50 năm.
+const LOAI_DAT_LAU_DAI_AI = new Set(["ONT", "ODT", "TSC", "CQP", "CAN", "RPH"]);
+const LOAI_DAT_50_NAM_AI = new Set(["CLN", "LUC", "LUK", "BHK", "NHK", "NTS"]);
+function apQuyTacDat(dat, soNguoi) {
+  if (!dat.loaiDat) return dat;
+  return {
+    ...dat,
+    nguonGocSuDung: LOAI_DAT_LAU_DAI.has(dat.loaiDat) ? NGUON_GOC_OPTIONS[4] : NGUON_GOC_OPTIONS[5],
+    hinhThucSuDung: soNguoi >= 2 ? "Sử dụng chung" : "Sử dụng riêng",
+    thoiHanSuDung: LOAI_DAT_LAU_DAI_AI.has(dat.loaiDat)
+      ? "Lâu dài"
+      : LOAI_DAT_50_NAM_AI.has(dat.loaiDat) && !SO_NAM.test(dat.thoiHanSuDung || "")
+        ? "50 năm"
+        : dat.thoiHanSuDung,
+  };
+}
+
+function datTuAI(d) {
+  return {
+    loaiDat: d?.loai_dat || "",
+    dienTich: d?.dien_tich || "",
+    nguonGocSuDung: d?.nguon_goc_su_dung || "",
+    hinhThucSuDung: d?.hinh_thuc_su_dung || "",
+    thoiHanSuDung: chuanHoaThoiHan(d?.thoi_han_su_dung || ""),
+  };
 }
 
 function parseSoVN(value) {
@@ -93,7 +131,12 @@ function LoaiDatCombo({ id, value, options, onChange }) {
   );
 }
 
-export default function Nhom4FormPage({ onNavigateHome, prefill }) {
+// aiMode (trang ẩn /nhom-4-ai, chưa công khai): chọn hồ sơ quét trước, bấm
+// "Kiểm tra" để AI đọc (backend gọi Gemini, cùng prompt/quy tắc với tool
+// Nhom4_AI_Tool) rồi tự điền biểu; người dùng chỉ nhập số tờ/số thửa theo
+// bản đồ địa chính hiện tại cho từng thửa AI đọc được, soát lại rồi Lưu hồ
+// sơ như form thường (hồ sơ quét dùng chung cho cả danh sách thửa).
+export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false }) {
   const [xaList, setXaList] = useState([]);
   const [maXa, setMaXa] = useState("");
   const [doiTuong, setDoiTuong] = useState("Hộ gia đình, cá nhân");
@@ -169,6 +212,16 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
   // khi người dùng bấm Nộp 2 lần thật nhanh.
   const submittingRef = useRef(false);
 
+  // Trang AI: trạng thái đọc hồ sơ, cảnh báo cần soát, các thửa AI đọc được
+  // trên giấy CHƯA nạp vào ô nhập (nạp lần lượt sau mỗi "+ Thêm thửa đất").
+  const [aiStatus, setAiStatus] = useState("idle");
+  const [aiError, setAiError] = useState("");
+  const [aiKetQua, setAiKetQua] = useState(null);
+  const [aiThuaCho, setAiThuaCho] = useState([]);
+  // Đổi loại chủ theo AI thì KHÔNG để effect [loaiChu] bên dưới reset danh
+  // sách chủ sử dụng vừa điền.
+  const giuOwnersRef = useRef(false);
+
   useEffect(() => {
     getXaList()
       .then((body) => setXaList(body?.items || []))
@@ -188,6 +241,10 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
   }, []);
 
   useEffect(() => {
+    if (giuOwnersRef.current) {
+      giuOwnersRef.current = false;
+      return;
+    }
     const soNguoi = SO_NGUOI_MAC_DINH[loaiChu] || 1;
     setOwners(Array.from({ length: soNguoi }, taoChuRong));
   }, [loaiChu]);
@@ -286,12 +343,30 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       const feature = found?.features?.[0];
       if (feature) {
         const props = feature.properties || {};
+        // Trang AI, hồ sơ chưa cấp GCN: diện tích trên đơn chỉ là tự khai —
+        // luôn lấy theo số đo đạc trên bản đồ (giống tool Nhom4_AI_Tool).
+        const layDienTichBanDo = aiMode && cheDo === "Chưa được cấp GCN" && props.dien_tich;
         setThua((prev) => ({
           ...prev,
           maDinhDanh: prev.maDinhDanh || props.ma_thua_dat || prev.maDinhDanh,
-          dienTichThuaDat: prev.dienTichThuaDat || (props.dien_tich ? String(props.dien_tich) : prev.dienTichThuaDat),
+          dienTichThuaDat: layDienTichBanDo
+            ? String(props.dien_tich)
+            : prev.dienTichThuaDat || (props.dien_tich ? String(props.dien_tich) : prev.dienTichThuaDat),
           diaChiThuaDat: prev.diaChiThuaDat || props.dia_chi || prev.diaChiThuaDat,
         }));
+        // Trang AI: giấy không ghi loại đất thì lấy theo bản đồ + áp quy tắc.
+        const codes = String(props.muc_dich_su_dung || "")
+          .split(/[+,;/\\\s]+/)
+          .map((c) => c.trim().toUpperCase())
+          .filter(Boolean);
+        if (aiMode && codes.length && !dat1.loaiDat) {
+          const soNguoi = doiTuong === "Tổ chức" ? 1 : owners.filter((o) => o.hoTen).length;
+          setDat1((prev) => apQuyTacDat({ ...prev, loaiDat: codes[0] }, soNguoi));
+          if (codes.length > 1 && !coDat2) {
+            setCoDat2(true);
+            setDat2((prev) => apQuyTacDat({ ...prev, loaiDat: codes[1] }, soNguoi));
+          }
+        }
       }
     } catch {
       // Không auto-fill được thì người dùng tự nhập tay — không chặn luồng nhập.
@@ -363,9 +438,97 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     setDat2(taoDatRong());
     setCoDat2(false);
     setTrungThuaStatus("");
+    if (aiMode && aiThuaCho.length) {
+      napThuaAI(aiThuaCho[0]);
+      setAiThuaCho((prev) => prev.slice(1));
+    }
     // Dùng chung hồ sơ quét: giữ nguyên 3 ô file để áp cho thửa kế tiếp,
     // khỏi phải chọn lại cùng 1 file nhiều lần.
     if (!dungChungHoSo) clearFileInputs();
+  };
+
+  // Nạp 1 thửa AI đọc được trên giấy vào các ô nhập — số tờ/số thửa theo
+  // bản đồ địa chính hiện tại để trống cho người dùng nhập (số trên giấy là
+  // số cũ, có thể khác).
+  function napThuaAI(t) {
+    setThua({
+      ...taoThuaRong(),
+      soToGCN: t.so_to_gcn || "",
+      soThuaGCN: t.so_thua_gcn || "",
+      maDinhDanh: t.ma_dinh_danh || "",
+      dienTichThuaDat: t.dien_tich_thua_dat || "",
+      diaChiThuaDat: t.dia_chi_thua_dat || "",
+    });
+    setDat1(datTuAI(t.dat1));
+    setCoDat2(Boolean(t.dat2?.loai_dat));
+    setDat2(t.dat2?.loai_dat ? datTuAI(t.dat2) : taoDatRong());
+    setTrungThuaStatus("");
+  }
+
+  const apDungKetQuaAI = (kq) => {
+    setDoiTuong(kq.doi_tuong);
+    setCheDo(kq.che_do);
+    setGcn({
+      soPhatHanh: kq.gcn?.so_phat_hanh || "",
+      ngayCap: kq.gcn?.ngay_cap || "",
+      soVaoSo: kq.gcn?.so_vao_so || "",
+    });
+    const ownersAI = (kq.owners || []).map((o) => ({
+      hoTen: o.ho_ten || "",
+      ngaySinh: o.ngay_sinh || "",
+      gioiTinh: o.gioi_tinh || "",
+      cccd: o.cccd || "",
+      diaChiThuongTru: o.dia_chi_thuong_tru || "",
+    }));
+    if (kq.loai_chu && kq.loai_chu !== loaiChu) giuOwnersRef.current = true;
+    if (kq.loai_chu) setLoaiChu(kq.loai_chu);
+    setOwners(ownersAI.length ? ownersAI : [taoChuRong()]);
+    const tc = kq.to_chuc || {};
+    setToChuc({
+      tenToChuc: tc.ten_to_chuc || "",
+      maDinhDanhToChuc: tc.ma_dinh_danh_to_chuc || "",
+      hoTenDaiDien: tc.ho_ten_dai_dien || "",
+      ngaySinhDaiDien: tc.ngay_sinh_dai_dien || "",
+      gioiTinhDaiDien: tc.gioi_tinh_dai_dien || "",
+      maDinhDanhCaNhanDaiDien: tc.ma_dinh_danh_ca_nhan_dai_dien || "",
+      diaChiThuongTruDaiDien: tc.dia_chi_thuong_tru_dai_dien || "",
+    });
+    const ht = kq.nguoi_su_dung_hien_tai || {};
+    setNguoiHienTai({
+      hoTen: ht.ho_ten || "",
+      cccd: ht.cccd || "",
+      diaChiThuongTru: ht.dia_chi_thuong_tru || "",
+      lyDoThayDoi: ht.ly_do_thay_doi || "",
+    });
+    // 1 bộ hồ sơ quét cho cả đơn — dùng chung cho mọi thửa trong danh sách.
+    setDungChungHoSo(true);
+    setThuaList([]);
+    const ds = kq.thua_list || [];
+    if (ds.length) napThuaAI(ds[0]);
+    setAiThuaCho(ds.slice(1));
+  };
+
+  const handleAiKiemTra = async () => {
+    if (!maXa) return setAiError("Vui lòng chọn xã/phường trước.");
+    if (!fileChinh) return setAiError("Vui lòng chọn file chính (Giấy chứng nhận hoặc Đơn đăng ký).");
+    setAiError("");
+    setError("");
+    setResult(null);
+    setStatus("idle");
+    setAiStatus("reading");
+    try {
+      const body = await aiDocHoSo({
+        maXa,
+        tenXa: xaList.find((x) => x.ma_xa === maXa)?.ten_xa || "",
+        files: { chinh: fileChinh, phu: filePhu, tbxn: fileTbxn },
+      });
+      setAiKetQua(body);
+      apDungKetQuaAI(body.ket_qua);
+      setAiStatus("done");
+    } catch (err) {
+      setAiError(err.message);
+      setAiStatus("error");
+    }
   };
 
   const xoaThua = (index) => setThuaList((prev) => prev.filter((_, i) => i !== index));
@@ -551,6 +714,9 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
       clearFileInputs();
       setDungChungHoSo(false);
       setNguoiHienTai({ hoTen: "", cccd: "", diaChiThuongTru: "", lyDoThayDoi: "" });
+      setAiKetQua(null);
+      setAiThuaCho([]);
+      setAiStatus("idle");
     } catch (err) {
       setError(err.message);
       setStatus("error");
@@ -560,13 +726,74 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
     }
   };
 
+  // Mục "Hồ sơ quét" — form thường hiện ở cuối (gắn với thửa đang nhập);
+  // trang AI đưa lên đầu (chọn file trước, rồi bấm Kiểm tra cho AI đọc).
+  const hoSoQuetBlock = (
+    <>
+      {/* Hồ sơ quét của THỬA ĐANG NHẬP ở trên — mỗi thửa 1 bộ riêng, dù
+          thông tin chủ sử dụng giống nhau giữa các thửa. Bấm "+ Thêm
+          thửa đất" bên dưới sẽ gói file đang chọn ở đây vào thửa đó,
+          rồi xóa ô để chọn file cho thửa kế tiếp (xem
+          themThuaVaoDanhSach). Nộp trực tiếp không qua danh sách (chỉ
+          1 thửa) thì dùng thẳng file đang chọn ở đây. */}
+      <h2 className="nhom4SectionTitle">Hồ sơ quét (của thửa đang nhập ở trên)</h2>
+      <label className="nhom4Check">
+        <input
+          type="checkbox"
+          checked={dungChungHoSo}
+          onChange={(e) => toggleDungChungHoSo(e.target.checked)}
+        />
+        Dùng chung hồ sơ quét này cho CẢ danh sách thửa (1 đơn nhiều thửa)
+      </label>
+      {dungChungHoSo && (
+        <p className="importHint">
+          Chọn file 1 lần, áp dụng cho mọi thửa trong danh sách bên dưới — không cần chọn lại ở mỗi thửa.
+        </p>
+      )}
+      <label>
+        {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận" : "File PDF Đơn đăng ký"} (tùy chọn)
+      </label>
+      <input
+        key={`chinh-${fileInputKey}`}
+        type="file"
+        accept="application/pdf"
+        onChange={(e) => setFileChinh(e.target.files?.[0] || null)}
+      />
+      {fileChinh && <p className="importHint">Đã chọn: {fileChinh.name}</p>}
+      <label>File PDF Giấy tờ (tùy chọn)</label>
+      <input
+        key={`phu-${fileInputKey}`}
+        type="file"
+        accept="application/pdf"
+        onChange={(e) => setFilePhu(e.target.files?.[0] || null)}
+      />
+      {filePhu && <p className="importHint">Đã chọn: {filePhu.name}</p>}
+      {cheDo !== "Đã có GCN" && (
+        <>
+          <label>File PDF Thông báo xác nhận (tùy chọn)</label>
+          <input
+            key={`tbxn-${fileInputKey}`}
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setFileTbxn(e.target.files?.[0] || null)}
+          />
+          {fileTbxn && <p className="importHint">Đã chọn: {fileTbxn.name}</p>}
+        </>
+      )}
+    </>
+  );
+
   return (
     <main className="toolsShell">
       <header className="topbar">
         <div className="brandMark">GIS</div>
         <div>
-          <h1>Nhập biểu Nhóm 4</h1>
-          <p>Nhập dữ liệu thu thập thửa đất, lưu vào cơ sở dữ liệu, hồ sơ quét lên Google Drive</p>
+          <h1>{aiMode ? "Nhập biểu Nhóm 4 bằng AI (thử nghiệm)" : "Nhập biểu Nhóm 4"}</h1>
+          <p>
+            {aiMode
+              ? "Chọn hồ sơ quét, bấm Kiểm tra để AI đọc và tự điền biểu — soát lại, nhập số tờ/số thửa rồi Lưu hồ sơ"
+              : "Nhập dữ liệu thu thập thửa đất, lưu vào cơ sở dữ liệu, hồ sơ quét lên Google Drive"}
+          </p>
         </div>
         <a
           className="backLink"
@@ -607,6 +834,55 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
               </option>
             ))}
           </select>
+
+          {aiMode && (
+            <>
+              {hoSoQuetBlock}
+              <button
+                type="button"
+                className="importButton"
+                onClick={handleAiKiemTra}
+                disabled={aiStatus === "reading" || status === "submitting"}
+              >
+                {aiStatus === "reading" ? "AI đang đọc hồ sơ…" : "🔍 Kiểm tra (AI đọc hồ sơ và điền biểu)"}
+              </button>
+              {aiStatus === "reading" && (
+                <div className="notice">AI đang đọc hồ sơ — thường mất 20–60 giây, đừng tải lại trang.</div>
+              )}
+              {aiError && (
+                <div className="notice error">
+                  <strong>Không đọc được hồ sơ</strong>
+                  <span>{aiError}</span>
+                </div>
+              )}
+              {aiStatus === "done" && aiKetQua && (
+                <div className="notice">
+                  <strong>
+                    AI đã điền biểu: {aiKetQua.ket_qua.che_do}, {aiKetQua.ket_qua.thua_list.length} thửa trên giấy
+                    {aiKetQua.ket_qua.thua_list.length
+                      ? " (" +
+                        aiKetQua.ket_qua.thua_list
+                          .map((x) => `tờ ${x.so_to_gcn || "?"}/thửa ${x.so_thua_gcn || "?"}`)
+                          .join(", ") +
+                        ")"
+                      : ""}
+                  </strong>
+                  <span>
+                    Soát lại toàn bộ thông tin bên dưới. Ở mục Thông tin thửa đất: nhập số tờ/số thửa THEO BẢN ĐỒ ĐỊA
+                    CHÍNH HIỆN TẠI cho thửa đang hiện, bấm "+ Thêm thửa đất" — thửa kế tiếp AI đọc được sẽ tự hiện ra.
+                    Một thửa trên giấy ứng với nhiều thửa trên bản đồ thì thêm từng thửa.
+                  </span>
+                  {aiKetQua.canh_bao?.length > 0 && (
+                    <ul className="nhom4AiCanhBao">
+                      {aiKetQua.canh_bao.map((c, i) => (
+                        <li key={i}>⚠ {c}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           <h2 className="nhom4SectionTitle">Đối tượng sử dụng đất</h2>
           <div className="nhom4Tabs">
@@ -839,6 +1115,13 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
           </div>
 
           <h2 className="nhom4SectionTitle">Thông tin thửa đất</h2>
+          {aiMode && (thua.soToGCN || thua.soThuaGCN) && (
+            <p className="importHint">
+              Thửa đang nhập theo giấy: tờ {thua.soToGCN || "?"} / thửa {thua.soThuaGCN || "?"} — nhập số tờ/số thửa
+              theo bản đồ địa chính hiện tại.
+              {aiThuaCho.length > 0 && ` Còn ${aiThuaCho.length} thửa trên giấy chờ nhập.`}
+            </p>
+          )}
           <div className="nhom4Grid2">
             <div>
               <label>Số hiệu tờ bản đồ *</label>
@@ -1023,56 +1306,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill }) {
             onChange={(e) => setThua({ ...thua, ghiChu: e.target.value })}
           />
 
-          {/* Hồ sơ quét của THỬA ĐANG NHẬP ở trên — mỗi thửa 1 bộ riêng, dù
-              thông tin chủ sử dụng giống nhau giữa các thửa. Bấm "+ Thêm
-              thửa đất" bên dưới sẽ gói file đang chọn ở đây vào thửa đó,
-              rồi xóa ô để chọn file cho thửa kế tiếp (xem
-              themThuaVaoDanhSach). Nộp trực tiếp không qua danh sách (chỉ
-              1 thửa) thì dùng thẳng file đang chọn ở đây. */}
-          <h2 className="nhom4SectionTitle">Hồ sơ quét (của thửa đang nhập ở trên)</h2>
-          <label className="nhom4Check">
-            <input
-              type="checkbox"
-              checked={dungChungHoSo}
-              onChange={(e) => toggleDungChungHoSo(e.target.checked)}
-            />
-            Dùng chung hồ sơ quét này cho CẢ danh sách thửa (1 đơn nhiều thửa)
-          </label>
-          {dungChungHoSo && (
-            <p className="importHint">
-              Chọn file 1 lần, áp dụng cho mọi thửa trong danh sách bên dưới — không cần chọn lại ở mỗi thửa.
-            </p>
-          )}
-          <label>
-            {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận" : "File PDF Đơn đăng ký"} (tùy chọn)
-          </label>
-          <input
-            key={`chinh-${fileInputKey}`}
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setFileChinh(e.target.files?.[0] || null)}
-          />
-          {fileChinh && <p className="importHint">Đã chọn: {fileChinh.name}</p>}
-          <label>File PDF Giấy tờ (tùy chọn)</label>
-          <input
-            key={`phu-${fileInputKey}`}
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setFilePhu(e.target.files?.[0] || null)}
-          />
-          {filePhu && <p className="importHint">Đã chọn: {filePhu.name}</p>}
-          {cheDo !== "Đã có GCN" && (
-            <>
-              <label>File PDF Thông báo xác nhận (tùy chọn)</label>
-              <input
-                key={`tbxn-${fileInputKey}`}
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => setFileTbxn(e.target.files?.[0] || null)}
-              />
-              {fileTbxn && <p className="importHint">Đã chọn: {fileTbxn.name}</p>}
-            </>
-          )}
+          {!aiMode && hoSoQuetBlock}
 
           <div className="nhom4Subcard">
             <div className="nhom4OwnerHead">

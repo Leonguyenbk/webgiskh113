@@ -1632,3 +1632,6 @@ label[for="mplisCookie"] {
 @media (max-width: 640px) {
   .nhom4Grid2 { grid-template-columns: 1fr; }
 }
+
+/* Trang ẩn /nhom-4-ai: danh sách cảnh báo AI cần người dùng soát lại. */
+.nhom4AiCanhBao { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }

@@ -91,6 +91,11 @@ function Root() {
   if (path.startsWith("/cap-nhat-mplis")) {
     return <MplisSyncPage onNavigateHome={() => navigate("/")} />;
   }
+  // Trang ẩn (chưa công khai, không có link ở /tools): nhập biểu Nhóm 4 bằng
+  // AI đọc hồ sơ quét. Phải đứng TRƯỚC "/nhom-4" vì startsWith khớp cả 2.
+  if (path.startsWith("/nhom-4-ai")) {
+    return <Nhom4FormPage onNavigateHome={() => navigate("/")} aiMode />;
+  }
   if (path.startsWith("/nhom-4")) {
     return <Nhom4FormPage onNavigateHome={() => navigate("/")} prefill={nhom4Prefill} />;
   }
