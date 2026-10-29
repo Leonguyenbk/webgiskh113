@@ -36,7 +36,7 @@ const TO_GIAM_SAT_OPTIONS = [
 // defaultDir: hướng áp dụng khi bấm lần đầu vào 1 cột khác.
 // group: để gộp tiêu đề nhóm ở hàng trên (yêu cầu người dùng) — "loai4" =
 // phần hệ thống tự theo dõi (tổng gửi xã nội bộ), "ke_hoach" = phần cộng
-// thêm Loại 3 đã làm (Loại 1, 2 không tính — xem nhom3_tong_hop.tong_ke_hoach).
+// thêm Loại 1+2+3 đã làm (VPĐK gửi song song, xem nhom3_tong_hop.tong_ke_hoach).
 // Không có group (ten_xa) = cột rowSpan 2, đứng ngoài 2 nhóm.
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
@@ -50,7 +50,7 @@ const SORT_COLUMNS = [
   { key: "chua_lien_ket_khong_gian", label: "Chưa liên kết không gian", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "tong_tru_kg", label: "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "percent_tru_kg", label: "% (trừ cả chưa liên kết KG)", type: "number", defaultDir: "asc", group: "loai4" },
-  { key: "tong_ke_hoach", label: "Tổng danh sách theo kế hoạch (đã gồm Loại 3 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
+  { key: "tong_ke_hoach", label: "Tổng danh sách theo kế hoạch (đã gồm Loại 1+2+3 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
   { key: "da_lam_ke_hoach", label: "Đã thực hiện theo kế hoạch (gồm Loại 1+2+3 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
   { key: "percent_ke_hoach", label: "Tỷ lệ theo kế hoạch", type: "number", defaultDir: "asc", group: "ke_hoach" },
 ];
@@ -176,7 +176,7 @@ export default function Nhom3ConThieuPage({
       const daLam = (row.da_nhom_1_2_da_nhap || 0) + (row.da_thu_thap || 0);
       // Đã làm theo kế hoạch = Đã làm (Loại 4) + Loại 1 + Loại 2 + Loại 3
       // đã làm (VPĐK gửi song song, như file KhoiLuongXa-KH113 — yêu cầu
-      // người dùng). Tổng kế hoạch chỉ cộng Loại 3.
+      // người dùng). Tổng kế hoạch cũng cộng Loại 1+2+3.
       const daLamKeHoach = daLam + (row.loai_123_da_lam || 0);
       return {
         ...row,
@@ -360,7 +360,7 @@ export default function Nhom3ConThieuPage({
                 <strong style={{ color: "#6a817e" }}>{formatSo(tongHop.loai_123_da_lam)}</strong>
               </div>
               <div className="statTile">
-                <span>Tổng danh sách theo kế hoạch (đã gồm Loại 3 đã làm)</span>
+                <span>Tổng danh sách theo kế hoạch (đã gồm Loại 1+2+3 đã làm)</span>
                 <strong>{formatSo(tongHop.tong_ke_hoach)}</strong>
               </div>
               <div className="statTile">

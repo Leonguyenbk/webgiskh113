@@ -2337,9 +2337,10 @@ alter table public.nhom3_loai_123_da_lam enable row level security;
 -- tỷ lệ "đã làm" đều dùng cùng tử số (da_nhom_1_2_da_nhap + da_thu_thap),
 -- chỉ khác mẫu số (tong hoặc tong_tru_kg).
 --
--- "tong_ke_hoach" = tong_tru_kg + loai_3_da_lam (public.nhom3_loai_123_da_lam
--- — chỉ Loại 3; Loại 1 và Loại 2 KHÔNG tính vào tổng kế hoạch, yêu cầu
--- người dùng). "loai_123_da_lam" vẫn cộng vào "đã thực hiện theo kế hoạch" ở
+-- "tong_ke_hoach" = tong_tru_kg + loai_123_da_lam (public.nhom3_loai_123_da_lam
+-- — khối lượng Loại 1+2+3 đã làm song song ngoài hệ thống, chưa từng nằm
+-- trong "tổng gửi xã" nên cộng vào cả tổng lẫn đã làm, yêu cầu người
+-- dùng). "loai_123_da_lam" cũng cộng vào "đã thực hiện theo kế hoạch" ở
 -- tầng ứng dụng (như file KhoiLuongXa-KH113, yêu cầu người dùng) — ra "tổng/tỷ lệ theo
 -- kế hoạch" ở tầng ứng dụng, phân biệt với "tổng/tỷ lệ Loại 4" (phần hệ
 -- thống tự theo dõi) ở trên.
@@ -2373,7 +2374,6 @@ as $$
             count(*) filter (where not c.la_nhom_1_2 and c.co_nhap and not c.da_thu_thap) as da_nhap_chua_dat,
             coalesce(kg.so_luong, 0) as chua_lien_ket_khong_gian,
             coalesce(l123.loai_1, 0) as loai_1_da_lam,
-            coalesce(l123.loai_3, 0) as loai_3_da_lam,
             coalesce(l123.loai_1, 0) + coalesce(l123.loai_2, 0) + coalesce(l123.loai_3, 0) as loai_123_da_lam
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
@@ -2395,7 +2395,7 @@ as $$
             (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian) as tong_tru_kg,
             loai_1_da_lam,
             loai_123_da_lam,
-            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian + loai_3_da_lam) as tong_ke_hoach,
+            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian + loai_123_da_lam) as tong_ke_hoach,
             null::text as ghi_chu
         from raw
 
