@@ -513,7 +513,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     Chi nhánh KV chưa nhập; "tong_tru_kg" trừ thêm chưa liên kết không
     gian — mỗi cột tổng có 1 cột % tương ứng, cùng tử số Đã làm = Nhóm 1
     đã nhập + đã nhập đủ dữ liệu. Thêm cặp cột "theo kế hoạch" (yêu cầu
-    người dùng): tổng và đã làm cùng cộng thêm Loại 1+2+3
+    người dùng): tổng cộng thêm Loại 3, đã làm cộng thêm Loại 1+2+3
     đã làm (public.nhom3_loai_123_da_lam, VPĐK gửi song song ngoài hệ thống) trên nền tổng đã trừ KG — phân
     biệt với phần hệ thống tự theo dõi ("Loại 4") ở các cột trước. Xã
     "ghi chú" (thuộc dự án tổng thể khác, xem nhom3_xa_ghi_chu) vẫn liệt
@@ -537,7 +537,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         "Nhóm 1 đã nhập biểu (Xã làm)", "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)",
         "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu", "Chưa liên kết không gian",
         "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", "% (trừ cả chưa liên kết KG)",
-        "Tổng theo kế hoạch (đã gồm Loại 1+2+3 đã làm)", "Đã thực hiện theo kế hoạch (gồm Loại 1+2+3 đã làm)", "% theo kế hoạch",
+        "Tổng theo kế hoạch (đã gồm Loại 3 đã làm)", "Đã thực hiện theo kế hoạch (gồm Loại 1+2+3 đã làm)", "% theo kế hoạch",
         "Ghi chú",
     ])
 
@@ -556,7 +556,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
         tong_ke_hoach = int(row.get("tong_ke_hoach") or 0)
         da_lam = nhom12_da_nhap + da_thu_thap
         # Đã thực hiện theo kế hoạch cộng cả Loại 1+2+3 đã làm (như file
-        # KhoiLuongXa-KH113); tổng kế hoạch cũng cộng Loại 1+2+3.
+        # KhoiLuongXa-KH113); tổng kế hoạch chỉ cộng Loại 3.
         da_lam_ke_hoach = da_lam + loai_123_da_lam
         percent = round(da_lam / tong * 1000) / 10 if tong > 0 else None
         percent_tru_kg = round(da_lam / tong_tru_kg * 1000) / 10 if tong_tru_kg > 0 else None
