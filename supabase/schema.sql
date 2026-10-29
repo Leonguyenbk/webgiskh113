@@ -2304,6 +2304,12 @@ create table if not exists public.nhom3_chua_lien_ket_khong_gian (
     cap_nhat_luc timestamptz not null default now()
 );
 alter table public.nhom3_chua_lien_ket_khong_gian enable row level security;
+-- Số "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)" của xã trong CÙNG file với
+-- so_luong (mốc lúc chốt số chưa liên kết KG). Chi nhánh chủ yếu ứng thửa
+-- chưa liên kết KG -> thành Nhóm 1 chưa nhập; nhom3_tong_hop trừ phần Nhóm 1
+-- chưa nhập TĂNG THÊM so với mốc này khỏi so_luong để không trừ 2 lần
+-- (Buôn Hồ lên 122%, yêu cầu người dùng). null = không điều chỉnh.
+alter table public.nhom3_chua_lien_ket_khong_gian add column if not exists n1_chua_nhap_goc integer;
 
 -- Khối lượng "Loại 1/2/3" ĐÃ LÀM theo xã — số liệu do VPĐK gửi định kỳ
 -- (file DANHSACHGUIXA/KhoiLuongXa-KH113-*.xlsx, sheet "Tong hop Nhom 3"),
@@ -2372,7 +2378,12 @@ as $$
             -- export_nhom3_tong_hop_xlsx) khác với "còn thiếu" (gồm cả
             -- thửa chưa đụng tới lẫn thửa này).
             count(*) filter (where not c.la_nhom_1_2 and c.co_nhap and not c.da_thu_thap) as da_nhap_chua_dat,
-            coalesce(kg.so_luong, 0) as chua_lien_ket_khong_gian,
+            -- Số chưa liên kết KG trừ phần Nhóm 1 chưa nhập tăng thêm từ
+            -- lúc chốt số (xem n1_chua_nhap_goc), không âm.
+            greatest(0, coalesce(kg.so_luong, 0) - greatest(0,
+                count(*) filter (where c.la_nhom_1_2 and not c.co_nhap)
+                - coalesce(kg.n1_chua_nhap_goc, count(*) filter (where c.la_nhom_1_2 and not c.co_nhap))
+            )) as chua_lien_ket_khong_gian,
             coalesce(l123.loai_1, 0) as loai_1_da_lam,
             coalesce(l123.loai_1, 0) + coalesce(l123.loai_2, 0) + coalesce(l123.loai_3, 0) as loai_123_da_lam
         from public.nhom3_trang_thai_cache c
@@ -2381,7 +2392,7 @@ as $$
         left join public.nhom3_chua_lien_ket_khong_gian kg on kg.ma_xa = c.ma_xa
         left join public.nhom3_loai_123_da_lam l123 on l123.ma_xa = c.ma_xa
         where p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat
-        group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, kg.so_luong, l123.loai_1, l123.loai_2, l123.loai_3
+        group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, kg.so_luong, kg.n1_chua_nhap_goc, l123.loai_1, l123.loai_2, l123.loai_3
     ),
     theo_xa as (
         select
