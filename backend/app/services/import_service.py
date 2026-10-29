@@ -138,23 +138,15 @@ def import_ranh_thon(file_stream, filename: str = ""):
         if n > 1
     ]
 
-    # Đồng bộ theo xã giống import_gml: thôn không còn trong file mới (đổi
-    # tên/vẽ lại/gộp) bị xóa, thôn còn lại thì thêm mới/cập nhật hình học.
+    # Chỉ thêm mới/cập nhật hình học theo (mã xã, tên thôn), KHÔNG xóa thôn
+    # không có trong file: sau sáp nhập 1 xã mới nhập ranh thôn cũ theo từng
+    # xã cũ (mỗi xã cũ 1 file), trước đây file sau xóa sạch thôn của file
+    # trước. Cần làm lại cả xã thì dùng "Xóa ranh thôn của xã" rồi nhập lại.
     thon_by_xa: dict[str, list[str]] = {}
     for row in rows:
         thon_by_xa.setdefault(row["ma_xa"], []).append(row["ten_thon"])
 
     deleted = 0
-    try:
-        for ma_xa, keep_thon in thon_by_xa.items():
-            count, error_response = supabase_client.call_rpc(
-                "delete_ranh_gioi_thon_not_in", {"p_ma_xa": ma_xa, "p_keep_thon": keep_thon}, timeout=60
-            )
-            if error_response:
-                return None, error_response
-            deleted += int(count or 0)
-    except RuntimeError as exc:
-        return None, (jsonify({"error": str(exc)}), 500)
 
     try:
         imported = supabase_client.upsert_to_supabase(
