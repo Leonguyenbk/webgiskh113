@@ -16,7 +16,6 @@ const TO_GIAM_SAT_OPTIONS = [
 
 const COLUMNS = [
   { key: "ten_xa", label: "Xã/phường", type: "text" },
-  { key: "khu_vuc", label: "Khu vực", type: "text" },
   { key: "gui_xuong", label: "Số lượng gửi xuống (đã trừ dự án)", type: "number" },
   { key: "nhom_1", label: "Nhóm 1 trong danh sách", type: "number" },
   { key: "da_nhap_bieu", label: "Đã nhập biểu trong danh sách", type: "number" },
@@ -155,7 +154,7 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
             className="filterInput"
             autoComplete="off"
             value={filter}
-            placeholder="Lọc theo tên/mã xã hoặc khu vực…"
+            placeholder="Lọc theo tên hoặc mã xã/phường…"
             style={{ maxWidth: 320 }}
             onChange={(event) => setFilter(event.target.value)}
           />
@@ -195,7 +194,6 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
                   <tr key={r.ma_xa}>
                     <td>{i + 1}</td>
                     <td>{r.ten_xa || r.ma_xa}</td>
-                    <td>{r.khu_vuc || ""}</td>
                     <td>{formatSo(r.gui_xuong)}</td>
                     <td>{formatSo(r.nhom_1)}</td>
                     <td>{formatSo(r.da_nhap_bieu)}</td>
@@ -214,7 +212,7 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
               {rows.length > 0 && (
                 <tfoot>
                   <tr style={{ fontWeight: 700 }}>
-                    <td colSpan={3}>Tổng cộng ({rows.length} xã/phường)</td>
+                    <td colSpan={2}>Tổng cộng ({rows.length} xã/phường)</td>
                     <td>{formatSo(tongCong.gui)}</td>
                     <td>{formatSo(tongCong.n1)}</td>
                     <td>{formatSo(tongCong.nhap)}</td>
