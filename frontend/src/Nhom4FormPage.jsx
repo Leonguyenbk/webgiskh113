@@ -740,6 +740,25 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
           );
       setResult(body);
       setStatus("done");
+      // Gửi xong xóa sạch biểu, chỉ giữ xã/phường (yêu cầu người dùng) —
+      // tránh hồ sơ kế tiếp dính chủ sử dụng/GCN của hồ sơ vừa nộp.
+      setDoiTuong("Hộ gia đình, cá nhân");
+      setCheDo("Chưa được cấp GCN");
+      setGcn({ soPhatHanh: "", ngayCap: "", soVaoSo: "" });
+      giuOwnersRef.current = false;
+      setLoaiChu("Cá nhân");
+      setOwners([taoChuRong()]);
+      setToChuc({
+        tenToChuc: "",
+        maDinhDanhToChuc: "",
+        hoTenDaiDien: "",
+        ngaySinhDaiDien: "",
+        gioiTinhDaiDien: "",
+        maDinhDanhCaNhanDaiDien: "",
+        diaChiThuongTruDaiDien: "",
+      });
+      setTrungThuaStatus("");
+      setLoiHsq("");
       setThuaList([]);
       setThua(taoThuaRong());
       setDat1(taoDatRong());
