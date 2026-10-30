@@ -64,6 +64,10 @@ function datTuAI(d) {
   };
 }
 
+// Giới hạn dung lượng mỗi file hồ sơ quét (backend nhận tối đa 20 MB).
+const MAX_HSQ_MB = 15;
+const dungLuongMB = (file) => (file.size / 1024 / 1024).toFixed(1).replace(".", ",");
+
 function parseSoVN(value) {
   const s = String(value ?? "").trim().replace(/\s/g, "");
   if (!s) return null;
@@ -172,6 +176,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
   const [fileChinh, setFileChinh] = useState(null);
   const [filePhu, setFilePhu] = useState(null);
   const [fileTbxn, setFileTbxn] = useState(null);
+  const [loiHsq, setLoiHsq] = useState("");
   // "Dùng chung hồ sơ quét" (yêu cầu người dùng: 1 đơn nhiều thửa) — bật
   // thì "+ Thêm thửa đất" KHÔNG xóa 3 ô file (giữ nguyên để áp cho thửa kế
   // tiếp, khỏi chọn lại), và lúc nộp chỉ gửi ĐÚNG 1 bộ file dùng chung cho
@@ -565,6 +570,23 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
   const capNhatNguoi = (index, field, value) =>
     setOwners((prev) => prev.map((o, i) => (i === index ? { ...o, [field]: value } : o)));
 
+  // Chặn file quét quá MAX_HSQ_MB ngay lúc chọn (yêu cầu người dùng) —
+  // mạng xã chậm, tải file lớn lên mất cả phút rồi mới bị từ chối.
+  const chonFileHsq = (setter, label) => (e) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > MAX_HSQ_MB * 1024 * 1024) {
+      const loi = `${label} "${f.name}" nặng ${dungLuongMB(f)} MB, vượt giới hạn ${MAX_HSQ_MB} MB — vui lòng nén/quét lại file nhỏ hơn.`;
+      setError(loi);
+      setLoiHsq(loi);
+      e.target.value = "";
+      setter(null);
+      return;
+    }
+    setError("");
+    setLoiHsq("");
+    setter(f);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (submittingRef.current) return;
@@ -604,6 +626,18 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
     }
     if (nguoiHienTai.hoTen && !nguoiHienTai.cccd) {
       return setError("Đã nhập tên người sử dụng đất hiện tại thì phải nhập CCCD.");
+    }
+    // Kiểm tra lại cả file đã gói vào danh sách thửa trước khi gửi.
+    const tatCaFile = dungChungHoSo
+      ? [fileChinh, filePhu, fileTbxn]
+      : parcels.flatMap((p) => [p.fileChinh, p.filePhu, p.fileTbxn]);
+    const fileQuaLon = tatCaFile.filter((f) => f && f.size > MAX_HSQ_MB * 1024 * 1024);
+    if (fileQuaLon.length) {
+      return setError(
+        `File hồ sơ quét vượt ${MAX_HSQ_MB} MB, không gửi được: ` +
+          fileQuaLon.map((f) => `${f.name} (${dungLuongMB(f)} MB)`).join(", ") +
+          ".",
+      );
     }
 
     const payload = {
@@ -757,17 +791,17 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
         key={`chinh-${fileInputKey}`}
         type="file"
         accept="application/pdf"
-        onChange={(e) => setFileChinh(e.target.files?.[0] || null)}
+        onChange={chonFileHsq(setFileChinh, cheDo === "Đã có GCN" ? "File Giấy chứng nhận" : "File Đơn đăng ký")}
       />
-      {fileChinh && <p className="importHint">Đã chọn: {fileChinh.name}</p>}
+      {fileChinh && <p className="importHint">Đã chọn: {fileChinh.name} ({dungLuongMB(fileChinh)} MB)</p>}
       <label>File PDF Giấy tờ (tùy chọn)</label>
       <input
         key={`phu-${fileInputKey}`}
         type="file"
         accept="application/pdf"
-        onChange={(e) => setFilePhu(e.target.files?.[0] || null)}
+        onChange={chonFileHsq(setFilePhu, "File Giấy tờ")}
       />
-      {filePhu && <p className="importHint">Đã chọn: {filePhu.name}</p>}
+      {filePhu && <p className="importHint">Đã chọn: {filePhu.name} ({dungLuongMB(filePhu)} MB)</p>}
       {cheDo !== "Đã có GCN" && (
         <>
           <label>File PDF Thông báo xác nhận (tùy chọn)</label>
@@ -775,11 +809,13 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
             key={`tbxn-${fileInputKey}`}
             type="file"
             accept="application/pdf"
-            onChange={(e) => setFileTbxn(e.target.files?.[0] || null)}
+            onChange={chonFileHsq(setFileTbxn, "File Thông báo xác nhận")}
           />
-          {fileTbxn && <p className="importHint">Đã chọn: {fileTbxn.name}</p>}
+          {fileTbxn && <p className="importHint">Đã chọn: {fileTbxn.name} ({dungLuongMB(fileTbxn)} MB)</p>}
         </>
       )}
+      <p className="importHint">Mỗi file tối đa {MAX_HSQ_MB} MB.</p>
+      {loiHsq && <p className="nhom4AiCanhBao">⚠ {loiHsq}</p>}
     </>
   );
 
