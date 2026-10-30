@@ -122,6 +122,15 @@ def nhom3_con_thieu_tong_hop():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/nhom3-ty-le-gui-xuong")
+def nhom3_ty_le_gui_xuong():
+    # ?to_giam_sat=1|2|3|4 (bỏ trống = tất cả) — trang "/nhom-3-ty-le".
+    data, error_response = gcn_service.get_nhom3_ty_le_gui_xuong(request.args.get("to_giam_sat"))
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/thong-ke/buon-ma-thuot")
 def thong_ke_buon_ma_thuot():
     # API công khai (chỉ đọc) cho dashboard Phường Buôn Ma Thuột: tổng quan

@@ -31,6 +31,7 @@ export default function ToolsPage({
   onNavigateThongKeNguonNhap,
   onNavigateNhom3ConThieu,
   onNavigateNhom3Dashboard,
+  onNavigateNhom3TyLe,
   onNavigateDanhMucHoSo,
 }) {
   const ADMIN_TOOLS = [
@@ -94,6 +95,11 @@ export default function ToolsPage({
       name: "📊 Nhóm 3 — Dashboard tỉ lệ & tốc độ",
       description: "So sánh tỉ lệ hoàn thành và tốc độ xử lý (thửa/ngày) giữa các xã/phường, kèm trend theo thời gian.",
       onNavigate: onNavigateNhom3Dashboard,
+    },
+    {
+      name: "📋 Nhóm 3 — tỷ lệ so với số gửi xuống",
+      description: "Theo xã: số lượng gửi xuống (đã trừ dự án), Nhóm 1 và đã nhập biểu trong danh sách, tổng và tỷ lệ.",
+      onNavigate: onNavigateNhom3TyLe,
     },
     {
       name: "🗂️ Danh mục hồ sơ lưu trữ",

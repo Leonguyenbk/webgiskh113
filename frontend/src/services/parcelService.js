@@ -83,6 +83,14 @@ export function getNhom3TongHop(params, { signal } = {}) {
   });
 }
 
+export function getNhom3TyLeGuiXuong(params, { signal } = {}) {
+  return request("/api/nhom3-ty-le-gui-xuong", {
+    params,
+    signal,
+    errorFallback: "Không tải được tỷ lệ Nhóm 3",
+  });
+}
+
 export function getNhom3DanhSachConThieu(params, { signal, errorFallback } = {}) {
   return request("/api/nhom3-con-thieu/danh-sach", {
     params,

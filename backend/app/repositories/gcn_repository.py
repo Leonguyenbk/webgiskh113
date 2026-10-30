@@ -91,6 +91,14 @@ def nhom3_tong_hop(to_giam_sat: int | None = None):
     )
 
 
+def nhom3_ty_le_gui_xuong(to_giam_sat: int | None = None):
+    # Trang "/nhom-3-ty-le": gửi xuống (trừ dự án), Nhóm 1/2 và đã nhập biểu
+    # trong danh sách theo xã — xem public.nhom3_ty_le_gui_xuong (~4s).
+    return supabase_client.call_rpc(
+        "nhom3_ty_le_gui_xuong", {"p_to_giam_sat": to_giam_sat}, timeout=30
+    )
+
+
 def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int, co_nhap: bool | None = None):
     return supabase_client.call_rpc(
         "nhom3_list_con_thieu",

@@ -505,6 +505,38 @@ def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
     return result, None
 
 
+# nhom3_ty_le_gui_xuong mất ~4s (nối danh sách ~1,8 triệu thửa với cache)
+# trong khi cache Nhóm 3 chỉ đổi mỗi 2 giờ — giữ kết quả vài phút.
+_TY_LE_CACHE_GIAY = 300
+_ty_le_cache: dict[int | None, tuple[datetime, dict]] = {}
+
+
+def get_nhom3_ty_le_gui_xuong(to_giam_sat_raw: str | None = None):
+    """Trang '/nhom-3-ty-le' — theo xã: số lượng gửi xuống (đã trừ dự án),
+    Nhóm 1/2 trong danh sách, đã nhập biểu trong danh sách; tổng và tỷ lệ
+    tính ở frontend."""
+    to_giam_sat, error_response = _parse_to_giam_sat(to_giam_sat_raw)
+    if error_response:
+        return None, error_response
+
+    now = datetime.now(_GIO_VN)
+    cached = _ty_le_cache.get(to_giam_sat)
+    if cached and (now - cached[0]).total_seconds() < _TY_LE_CACHE_GIAY:
+        return cached[1], None
+
+    result, error_response = gcn_repository.nhom3_ty_le_gui_xuong(to_giam_sat)
+    if error_response:
+        return None, error_response
+    if not isinstance(result, dict):
+        result = {}
+    result.setdefault("gui_xuong", 0)
+    result.setdefault("nhom_1", 0)
+    result.setdefault("da_nhap_bieu", 0)
+    result.setdefault("theo_xa", [])
+    _ty_le_cache[to_giam_sat] = (now, result)
+    return result, None
+
+
 def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     """Xuất .xlsx tổng hợp tiến độ Nhóm 3 theo xã (lọc tuỳ chọn theo Tổ
     kiểm tra, giám sát 1-4) — Y HỆT bảng "Chi tiết theo xã/phường" trên

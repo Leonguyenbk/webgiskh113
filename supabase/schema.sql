@@ -2445,6 +2445,53 @@ $$;
 revoke all on function public.nhom3_tong_hop(integer) from public;
 grant execute on function public.nhom3_tong_hop(integer) to service_role;
 
+-- Trang "/nhom-3-ty-le" — tỷ lệ đơn giản theo xã (yêu cầu người dùng): số
+-- lượng gửi xuống (danh sách nhom3_can_thu_thap đã trừ thửa thuộc dự án),
+-- Nhóm 1/2 trong danh sách (cả Chi nhánh làm), đã nhập biểu trong danh sách
+-- (co_nhap, không tính thửa đã là Nhóm 1/2 để khỏi đếm 2 lần) và tổng 2 số.
+-- KHÔNG trừ chưa liên kết KG, không cộng Loại 1/2/3 (khác nhom3_tong_hop).
+-- Thửa không có hình học không nằm trong cache -> vẫn tính vào mẫu số.
+create or replace function public.nhom3_ty_le_gui_xuong(p_to_giam_sat integer default null)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    -- Gộp theo xã TRƯỚC rồi mới nối tên xã/tổ giám sát (nối trước khiến
+    -- planner chọn nested loop, ~17s thay vì ~2s).
+    with dem as (
+        select
+            n.ma_xa,
+            count(*) as gui_xuong,
+            count(*) filter (where c.la_nhom_1_2) as nhom_1,
+            count(*) filter (where not c.la_nhom_1_2 and c.co_nhap) as da_nhap_bieu
+        from public.nhom3_can_thu_thap n
+        left join public.nhom3_trang_thai_cache c
+            on c.ma_xa = n.ma_xa and c.so_to = n.so_to and c.so_thua = n.so_thua
+        where not coalesce(n.thuoc_du_an, false)
+        group by n.ma_xa
+    ),
+    theo_xa as (
+        select d.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, d.gui_xuong, d.nhom_1, d.da_nhap_bieu
+        from dem d
+        left join public.danhsachxaphuong xp on xp.ma_xa = d.ma_xa
+        left join public.nhom3_to_giam_sat tg on tg.ma_xa = d.ma_xa
+        where p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat
+    )
+    select jsonb_build_object(
+        'gui_xuong', coalesce(sum(gui_xuong), 0),
+        'nhom_1', coalesce(sum(nhom_1), 0),
+        'da_nhap_bieu', coalesce(sum(da_nhap_bieu), 0),
+        'cap_nhat_luc', (select max(computed_at) from public.nhom3_trang_thai_cache),
+        'theo_xa', coalesce(jsonb_agg(to_jsonb(t) order by t.khu_vuc, t.ten_xa), '[]'::jsonb)
+    )
+    from theo_xa t;
+$$;
+
+revoke all on function public.nhom3_ty_le_gui_xuong(integer) from public;
+grant execute on function public.nhom3_ty_le_gui_xuong(integer) to service_role;
+
 -- Danh sách phân trang thửa CÒN THIẾU dữ liệu — CHỈ đọc cache (có index
 -- riêng cho đúng điều kiện "not la_nhom_1_2 and not da_thu_thap" ở trên).
 -- p_ma_xa lọc thêm theo xã (tuỳ chọn). p_co_nhap lọc theo trạng thái (tuỳ

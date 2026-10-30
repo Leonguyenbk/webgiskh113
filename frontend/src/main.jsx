@@ -17,6 +17,7 @@ import ThongKeNguonNhapPage from "./ThongKeNguonNhapPage.jsx";
 import Nhom3ConThieuPage from "./Nhom3ConThieuPage.jsx";
 import Nhom3ConThieuChiTietPage from "./Nhom3ConThieuChiTietPage.jsx";
 import Nhom3DashboardPage from "./Nhom3DashboardPage.jsx";
+import Nhom3TyLePage from "./Nhom3TyLePage.jsx";
 import DanhMucHoSoPage from "./DanhMucHoSoPage.jsx";
 
 function Root() {
@@ -69,6 +70,7 @@ function Root() {
         onNavigateThongKeNguonNhap={() => navigate("/thong-ke-nguon-nhap")}
         onNavigateNhom3ConThieu={() => navigate("/nhom-3-con-thieu")}
         onNavigateNhom3Dashboard={() => navigate("/nhom-3-dashboard")}
+        onNavigateNhom3TyLe={() => navigate("/nhom-3-ty-le")}
         onNavigateDanhMucHoSo={() => navigate("/danh-muc-ho-so")}
       />
     );
@@ -110,6 +112,9 @@ function Root() {
   }
   if (path.startsWith("/thong-ke-nguon-nhap")) {
     return <ThongKeNguonNhapPage onNavigateHome={() => navigate("/")} />;
+  }
+  if (path.startsWith("/nhom-3-ty-le")) {
+    return <Nhom3TyLePage onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/nhom-3-dashboard")) {
     return (
