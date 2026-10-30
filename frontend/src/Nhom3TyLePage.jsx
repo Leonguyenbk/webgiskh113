@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { API_URL } from "./config/env";
 import { getNhom3TyLeGuiXuong } from "./services/parcelService";
 
 // Trang "/nhom-3-ty-le" — tỷ lệ đơn giản theo xã: số lượng gửi xuống (đã
@@ -20,6 +21,7 @@ const COLUMNS = [
   { key: "nhom_1", label: "Nhóm 1 trong danh sách", type: "number" },
   { key: "da_nhap_bieu", label: "Đã nhập biểu trong danh sách", type: "number" },
   { key: "tong", label: "Tổng Nhóm 1 và đã nhập biểu", type: "number" },
+  { key: "con_lai", label: "Còn lại", type: "number" },
   { key: "ty_le", label: "Tỷ lệ so với số lượng gửi xuống (%)", type: "number" },
 ];
 
@@ -70,7 +72,7 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
     const list = (data?.theo_xa || [])
       .map((r) => {
         const tong = (r.nhom_1 || 0) + (r.da_nhap_bieu || 0);
-        return { ...r, tong, ty_le: tyLe(tong, r.gui_xuong) };
+        return { ...r, tong, con_lai: (r.gui_xuong || 0) - tong, ty_le: tyLe(tong, r.gui_xuong) };
       })
       .filter((r) => !q || `${r.ten_xa || ""} ${r.ma_xa} ${r.khu_vuc || ""}`.toLowerCase().includes(q));
     const col = COLUMNS.find((c) => c.key === sort.key);
@@ -87,8 +89,43 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
     const gui = rows.reduce((s, r) => s + (r.gui_xuong || 0), 0);
     const n1 = rows.reduce((s, r) => s + (r.nhom_1 || 0), 0);
     const nhap = rows.reduce((s, r) => s + (r.da_nhap_bieu || 0), 0);
-    return { gui, n1, nhap, tong: n1 + nhap, tyLe: tyLe(n1 + nhap, gui) };
+    return { gui, n1, nhap, tong: n1 + nhap, conLai: gui - n1 - nhap, tyLe: tyLe(n1 + nhap, gui) };
   }, [rows]);
+
+  // Tải .xlsx danh sách còn lại của 1 xã (gồm cả thửa chưa có trên bản đồ,
+  // kèm thôn) — 1 xã/lần, mỗi lượt ~1-3s.
+  const [downloadingXa, setDownloadingXa] = useState("");
+  const [downloadError, setDownloadError] = useState("");
+  const handleExportConLai = async (maXa) => {
+    if (downloadingXa) return;
+    setDownloadingXa(maXa);
+    setDownloadError("");
+    try {
+      const res = await fetch(`${API_URL}/api/nhom3-ty-le-gui-xuong/export-con-lai?ma_xa=${encodeURIComponent(maXa)}`);
+      if (!res.ok) {
+        let message = `Tải thất bại (HTTP ${res.status})`;
+        try {
+          message = (await res.json())?.error || message;
+        } catch {
+          /* body không phải JSON */
+        }
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `nhom3_con_lai_${maXa}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(err.message);
+    } finally {
+      setDownloadingXa("");
+    }
+  };
 
   const handleSort = (key) =>
     setSort((prev) =>
@@ -168,6 +205,13 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
           </div>
         )}
 
+        {downloadError && (
+          <div className="notice error" style={{ marginBottom: 10 }}>
+            <strong>Không tải được file</strong>
+            <span>{downloadError}</span>
+          </div>
+        )}
+
         {!loading && !error && (
           <div className="statsTableWrap">
             <table className="statsTable">
@@ -187,6 +231,7 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
                       </span>
                     </th>
                   ))}
+                  <th style={{ whiteSpace: "normal", maxWidth: 110 }}>Xuất DS còn lại</th>
                 </tr>
               </thead>
               <tbody>
@@ -198,14 +243,26 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
                     <td>{formatSo(r.nhom_1)}</td>
                     <td>{formatSo(r.da_nhap_bieu)}</td>
                     <td>{formatSo(r.tong)}</td>
+                    <td>{formatSo(r.con_lai)}</td>
                     <td>
                       <strong>{formatTyLe(r.ty_le)}%</strong>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <button
+                        type="button"
+                        className="downloadButton"
+                        disabled={!!downloadingXa || !r.con_lai}
+                        onClick={() => handleExportConLai(r.ma_xa)}
+                        title={`Tải Excel ${formatSo(r.con_lai)} thửa còn lại`}
+                      >
+                        {downloadingXa === r.ma_xa ? "Đang tải…" : "⬇ Excel"}
+                      </button>
                     </td>
                   </tr>
                 ))}
                 {!rows.length && (
                   <tr>
-                    <td colSpan={COLUMNS.length + 1}>Không có xã/phường nào.</td>
+                    <td colSpan={COLUMNS.length + 2}>Không có xã/phường nào.</td>
                   </tr>
                 )}
               </tbody>
@@ -217,7 +274,9 @@ export default function Nhom3TyLePage({ onNavigateHome }) {
                     <td>{formatSo(tongCong.n1)}</td>
                     <td>{formatSo(tongCong.nhap)}</td>
                     <td>{formatSo(tongCong.tong)}</td>
+                    <td>{formatSo(tongCong.conLai)}</td>
                     <td>{formatTyLe(tongCong.tyLe)}%</td>
+                    <td />
                   </tr>
                 </tfoot>
               )}

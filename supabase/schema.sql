@@ -2492,6 +2492,48 @@ $$;
 revoke all on function public.nhom3_ty_le_gui_xuong(integer) from public;
 grant execute on function public.nhom3_ty_le_gui_xuong(integer) to service_role;
 
+-- Xuất danh sách CÒN LẠI của 1 xã cho trang "/nhom-3-ty-le" — đúng phần
+-- "Còn lại" = gửi xuống (trừ dự án) - Nhóm 1/2 - đã nhập biểu: thửa trong
+-- danh sách, không thuộc dự án, chưa Nhóm 1/2, chưa nhập biểu. Gồm cả thửa
+-- chưa có trên bản đồ (khác nhom3_list_con_thieu chỉ đọc cache). Thôn gán
+-- theo điểm nằm trong thửa. Trả 1 mảng jsonb (không bị PostgREST cắt 1000
+-- dòng như setof). Không có thông tin cá nhân.
+create or replace function public.nhom3_list_con_lai_gui_xuong(p_ma_xa text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    select coalesce(jsonb_agg(jsonb_build_object(
+        'so_to', n.so_to,
+        'so_thua', n.so_thua,
+        'ma_dinh_danh', coalesce(n.ma_dinh_danh, c.ma_dinh_danh),
+        'muc_dich_su_dung', t.muc_dich_su_dung,
+        'dien_tich', t.dien_tich,
+        'thon', th.ten_thon,
+        'co_ban_do', t.geom is not null
+    ) order by n.so_to, n.so_thua), '[]'::jsonb)
+    from public.nhom3_can_thu_thap n
+    left join public.nhom3_trang_thai_cache c
+        on c.ma_xa = n.ma_xa and c.so_to = n.so_to and c.so_thua = n.so_thua
+    left join public.thua_dat t
+        on t.ma_xa = n.ma_xa and t.so_to = n.so_to and t.so_thua = n.so_thua
+    left join lateral (
+        select r.ten_thon from public.ranh_gioi_thon r
+        where r.ma_xa = n.ma_xa and t.geom is not null
+          and st_intersects(r.geom, st_pointonsurface(t.geom))
+        limit 1
+    ) th on true
+    where n.ma_xa = p_ma_xa
+      and not coalesce(n.thuoc_du_an, false)
+      and not coalesce(c.la_nhom_1_2, false)
+      and not coalesce(c.co_nhap, false);
+$$;
+
+revoke all on function public.nhom3_list_con_lai_gui_xuong(text) from public;
+grant execute on function public.nhom3_list_con_lai_gui_xuong(text) to service_role;
+
 -- Danh sách phân trang thửa CÒN THIẾU dữ liệu — CHỈ đọc cache (có index
 -- riêng cho đúng điều kiện "not la_nhom_1_2 and not da_thu_thap" ở trên).
 -- p_ma_xa lọc thêm theo xã (tuỳ chọn). p_co_nhap lọc theo trạng thái (tuỳ

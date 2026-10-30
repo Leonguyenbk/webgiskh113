@@ -99,6 +99,14 @@ def nhom3_ty_le_gui_xuong(to_giam_sat: int | None = None):
     )
 
 
+def nhom3_list_con_lai_gui_xuong(ma_xa: str):
+    # Danh sách "còn lại" của 1 xã cho trang "/nhom-3-ty-le" — xem
+    # public.nhom3_list_con_lai_gui_xuong (1 mảng jsonb, ~1-3s/xã).
+    return supabase_client.call_rpc(
+        "nhom3_list_con_lai_gui_xuong", {"p_ma_xa": ma_xa}, timeout=60
+    )
+
+
 def nhom3_list_con_thieu(ma_xa: str | None, limit: int, offset: int, co_nhap: bool | None = None):
     return supabase_client.call_rpc(
         "nhom3_list_con_thieu",

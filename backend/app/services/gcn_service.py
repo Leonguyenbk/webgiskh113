@@ -991,6 +991,50 @@ def export_nhom3_con_thieu_xlsx(ma_xa: str):
     return (buf.getvalue(), f"nhom3_tong_gui_xa_{ma_xa}.xlsx"), None
 
 
+def export_nhom3_con_lai_gui_xuong_xlsx(ma_xa: str):
+    """Trang '/nhom-3-ty-le' — xuất .xlsx danh sách CÒN LẠI của 1 xã: thửa
+    trong danh sách gửi xuống (đã trừ dự án) chưa Nhóm 1/2, chưa nhập biểu,
+    gồm cả thửa chưa có trên bản đồ; kèm thôn theo ranh thôn. Không chứa
+    thông tin cá nhân nên không cần IMPORT_TOKEN (như export_nhom3_con_thieu_xlsx)."""
+    ma_xa = (ma_xa or "").strip()
+    if not ma_xa:
+        return None, (jsonify({"error": "Thiếu mã xã"}), 400)
+
+    rows, error_response = gcn_repository.nhom3_list_con_lai_gui_xuong(ma_xa)
+    if error_response:
+        return None, error_response
+    rows = rows if isinstance(rows, list) else []
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Con lai"
+    ws.append(["STT", "Mã xã", "Thôn/buôn", "Số tờ", "Số thửa", "Mã định danh",
+               "Mục đích sử dụng", "Diện tích (m²)", "Có trên bản đồ"])
+    for i, row in enumerate(rows, 1):
+        ws.append([
+            i,
+            ma_xa,
+            _xlsx_cell(row.get("thon") or ("(Ngoài ranh thôn)" if row.get("co_ban_do") else "")),
+            _xlsx_cell(row.get("so_to")),
+            _xlsx_cell(row.get("so_thua")),
+            _xlsx_cell(row.get("ma_dinh_danh")),
+            _xlsx_cell(row.get("muc_dich_su_dung")),
+            _xlsx_cell(row.get("dien_tich")),
+            "Có" if row.get("co_ban_do") else "Không",
+        ])
+    for col, width in zip("ABCDEFGHI", (7, 8, 24, 7, 8, 16, 16, 13, 13)):
+        ws.column_dimensions[col].width = width
+    ws.freeze_panes = "A2"
+    if rows:
+        ws.auto_filter.ref = ws.dimensions
+    else:
+        ws.append(["Không còn thửa nào"])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return (buf.getvalue(), f"nhom3_con_lai_{ma_xa}.xlsx"), None
+
+
 def list_sources():
     result, error_response = gcn_repository.list_nguon()
     if error_response:

@@ -131,6 +131,20 @@ def nhom3_ty_le_gui_xuong():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/nhom3-ty-le-gui-xuong/export-con-lai")
+def nhom3_ty_le_export_con_lai():
+    # ?ma_xa=<mã xã> — .xlsx danh sách còn lại (trang "/nhom-3-ty-le").
+    result, error_response = gcn_service.export_nhom3_con_lai_gui_xuong_xlsx(request.args.get("ma_xa", ""))
+    if error_response:
+        return error_response
+    content, filename = result
+    return Response(
+        content,
+        mimetype=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @gcn_bp.get("/api/thong-ke/buon-ma-thuot")
 def thong_ke_buon_ma_thuot():
     # API công khai (chỉ đọc) cho dashboard Phường Buôn Ma Thuột: tổng quan
