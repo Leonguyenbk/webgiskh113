@@ -131,6 +131,16 @@ def nhom3_ty_le_gui_xuong():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/nhom3-con-thieu-demo")
+def nhom3_con_thieu_demo():
+    # ?to_giam_sat=1|2|3|4 (bỏ trống = tất cả) — trang demo
+    # "/nhom-3-con-thieu-demo" (số gửi xuống chốt cứng, tỷ lệ <= 100%).
+    data, error_response = gcn_service.get_nhom3_tong_hop_co_dinh(request.args.get("to_giam_sat"))
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/nhom3-ty-le-gui-xuong/export-con-lai")
 def nhom3_ty_le_export_con_lai():
     # ?ma_xa=<mã xã> — .xlsx danh sách còn lại (trang "/nhom-3-ty-le").

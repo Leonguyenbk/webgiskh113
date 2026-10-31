@@ -99,6 +99,15 @@ def nhom3_ty_le_gui_xuong(to_giam_sat: int | None = None):
     )
 
 
+def nhom3_tong_hop_co_dinh(to_giam_sat: int | None = None):
+    # Trang demo "/nhom-3-con-thieu-demo": như nhom3_tong_hop nhưng mẫu số
+    # là số gửi xuống chốt cứng (nhom3_gui_xuong_co_dinh), tỷ lệ <= 100% —
+    # xem public.nhom3_tong_hop_co_dinh (~4s).
+    return supabase_client.call_rpc(
+        "nhom3_tong_hop_co_dinh", {"p_to_giam_sat": to_giam_sat}, timeout=30
+    )
+
+
 def nhom3_list_con_lai_gui_xuong(ma_xa: str):
     # Danh sách "còn lại" của 1 xã cho trang "/nhom-3-ty-le" — xem
     # public.nhom3_list_con_lai_gui_xuong (1 mảng jsonb, ~1-3s/xã).

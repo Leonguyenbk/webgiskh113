@@ -3637,3 +3637,82 @@ revoke all on function public.danhmuchoso_list(integer, integer, text, integer, 
 grant execute on function public.danhmuchoso_list(integer, integer, text, integer, text) to service_role;
 
 
+
+-- Trang demo "/nhom-3-con-thieu-demo" (yêu cầu người dùng): số lượng gửi
+-- xuống CỨNG theo xã — chốt 1 lần "Tổng gửi xã (đã trừ Chi nhánh KV + chưa
+-- liên kết KG)" và "Tổng danh sách theo kế hoạch" của nhom3_tong_hop vào
+-- bảng này, về sau không đổi dù danh sách/dự án/KG thay đổi. Chốt lại =
+-- xoá bảng rồi chạy lại câu insert ... select bên dưới.
+create table if not exists public.nhom3_gui_xuong_co_dinh (
+    ma_xa text primary key,
+    gui_xuong integer not null check (gui_xuong >= 0),
+    ke_hoach integer not null check (ke_hoach >= 0),
+    chot_luc timestamptz not null default now()
+);
+alter table public.nhom3_gui_xuong_co_dinh enable row level security;
+
+-- Như nhom3_tong_hop nhưng mẫu số lấy từ nhom3_gui_xuong_co_dinh, số đã làm
+-- kẹp tối đa bằng mẫu số (least) nên tỷ lệ không bao giờ vượt 100%. Xã chưa
+-- có số chốt (hoặc có ghi chú riêng) giữ nguyên ghi_chu, số liệu 0.
+create or replace function public.nhom3_tong_hop_co_dinh(p_to_giam_sat integer default null)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+    with th as (
+        select public.nhom3_tong_hop(p_to_giam_sat) as j
+    ),
+    theo_xa as (
+        select
+            e->>'ma_xa' as ma_xa,
+            e->>'ten_xa' as ten_xa,
+            e->>'khu_vuc' as khu_vuc,
+            case
+                when e->>'ghi_chu' is not null then e->>'ghi_chu'
+                when cd.ma_xa is null then 'Chưa có số gửi xuống cố định'
+            end as ghi_chu,
+            coalesce(cd.gui_xuong, 0) as gui_xuong,
+            coalesce(cd.ke_hoach, 0) as ke_hoach,
+            coalesce((e->>'da_nhom_1_2_da_nhap')::int, 0) as da_nhom_1_2_da_nhap,
+            coalesce((e->>'da_thu_thap')::int, 0) as da_thu_thap,
+            coalesce((e->>'loai_123_da_lam')::int, 0) as loai_123_da_lam,
+            coalesce((e->>'da_nhom_1_2_da_nhap')::int, 0) + coalesce((e->>'da_thu_thap')::int, 0) as da_lam_thuc
+        from th
+        cross join lateral jsonb_array_elements(th.j->'theo_xa') e
+        left join public.nhom3_gui_xuong_co_dinh cd on cd.ma_xa = e->>'ma_xa'
+    ),
+    kq as (
+        select
+            t.*,
+            least(t.da_lam_thuc, t.gui_xuong) as da_lam,
+            t.gui_xuong - least(t.da_lam_thuc, t.gui_xuong) as con_lai,
+            least(t.da_lam_thuc + t.loai_123_da_lam, t.ke_hoach) as da_lam_ke_hoach
+        from theo_xa t
+    )
+    select jsonb_build_object(
+        'gui_xuong', coalesce(sum(gui_xuong), 0),
+        'ke_hoach', coalesce(sum(ke_hoach), 0),
+        'da_nhom_1_2_da_nhap', coalesce(sum(da_nhom_1_2_da_nhap), 0),
+        'da_thu_thap', coalesce(sum(da_thu_thap), 0),
+        'loai_123_da_lam', coalesce(sum(loai_123_da_lam), 0),
+        'da_lam', coalesce(sum(da_lam), 0),
+        'con_lai', coalesce(sum(con_lai), 0),
+        'da_lam_ke_hoach', coalesce(sum(da_lam_ke_hoach), 0),
+        'chot_luc', (select max(chot_luc) from public.nhom3_gui_xuong_co_dinh),
+        'cap_nhat_luc', (select max(computed_at) from public.nhom3_trang_thai_cache),
+        'theo_xa', coalesce(jsonb_agg(to_jsonb(kq) order by kq.con_lai desc), '[]'::jsonb)
+    )
+    from kq;
+$$;
+
+revoke all on function public.nhom3_tong_hop_co_dinh(integer) from public;
+grant execute on function public.nhom3_tong_hop_co_dinh(integer) to service_role;
+
+-- Chốt số (đã chạy 31/10/2026):
+-- insert into public.nhom3_gui_xuong_co_dinh (ma_xa, gui_xuong, ke_hoach)
+-- select e->>'ma_xa', greatest(0, (e->>'tong_tru_kg')::int), greatest(0, (e->>'tong_ke_hoach')::int)
+-- from jsonb_array_elements(public.nhom3_tong_hop()->'theo_xa') e
+-- where e->>'ghi_chu' is null
+-- on conflict (ma_xa) do nothing;

@@ -18,6 +18,7 @@ import Nhom3ConThieuPage from "./Nhom3ConThieuPage.jsx";
 import Nhom3ConThieuChiTietPage from "./Nhom3ConThieuChiTietPage.jsx";
 import Nhom3DashboardPage from "./Nhom3DashboardPage.jsx";
 import Nhom3TyLePage from "./Nhom3TyLePage.jsx";
+import Nhom3ConThieuDemoPage from "./Nhom3ConThieuDemoPage.jsx";
 import DanhMucHoSoPage from "./DanhMucHoSoPage.jsx";
 
 function Root() {
@@ -131,6 +132,19 @@ function Root() {
         maXa={params.get("ma_xa") || ""}
         tenXa={params.get("ten_xa") || ""}
         onNavigateBack={() => navigate("/nhom-3-con-thieu")}
+      />
+    );
+  }
+  if (path.startsWith("/nhom-3-con-thieu-demo")) {
+    return (
+      <Nhom3ConThieuDemoPage
+        onNavigateHome={() => navigate("/")}
+        onNavigateNhom3ConThieu={() => navigate("/nhom-3-con-thieu")}
+        onNavigateNhom3ChiTiet={(maXa, tenXa) =>
+          navigate(
+            `/nhom-3-chi-tiet?ma_xa=${encodeURIComponent(maXa)}&ten_xa=${encodeURIComponent(tenXa || "")}`,
+          )
+        }
       />
     );
   }

@@ -537,6 +537,32 @@ def get_nhom3_ty_le_gui_xuong(to_giam_sat_raw: str | None = None):
     return result, None
 
 
+_co_dinh_cache: dict[int | None, tuple[datetime, dict]] = {}
+
+
+def get_nhom3_tong_hop_co_dinh(to_giam_sat_raw: str | None = None):
+    """Trang demo '/nhom-3-con-thieu-demo' — số gửi xuống chốt cứng theo xã,
+    đã làm kẹp tối đa bằng số chốt (tỷ lệ không vượt 100%). Cache như
+    get_nhom3_ty_le_gui_xuong."""
+    to_giam_sat, error_response = _parse_to_giam_sat(to_giam_sat_raw)
+    if error_response:
+        return None, error_response
+
+    now = datetime.now(_GIO_VN)
+    cached = _co_dinh_cache.get(to_giam_sat)
+    if cached and (now - cached[0]).total_seconds() < _TY_LE_CACHE_GIAY:
+        return cached[1], None
+
+    result, error_response = gcn_repository.nhom3_tong_hop_co_dinh(to_giam_sat)
+    if error_response:
+        return None, error_response
+    if not isinstance(result, dict):
+        result = {}
+    result.setdefault("theo_xa", [])
+    _co_dinh_cache[to_giam_sat] = (now, result)
+    return result, None
+
+
 def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     """Xuất .xlsx tổng hợp tiến độ Nhóm 3 theo xã (lọc tuỳ chọn theo Tổ
     kiểm tra, giám sát 1-4) — Y HỆT bảng "Chi tiết theo xã/phường" trên
