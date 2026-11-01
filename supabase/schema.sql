@@ -2141,6 +2141,23 @@ alter table public.nhom3_tien_do_lich_su enable row level security;
 create index if not exists idx_nhom3_tien_do_lich_su_xa_time
     on public.nhom3_tien_do_lich_su (ma_xa, ghi_nhan_luc);
 
+-- Thửa đã XOÁ khỏi danh sách gửi xã nhom3_can_thu_thap (yêu cầu người dùng)
+-- — lưu nguyên dòng để khôi phục được: insert lại từ bảng này theo id.
+-- 01/11/2026: xoá thửa vụn (ONT/ODT < 5 m², loại khác < 10 m² theo
+-- thua_dat.dien_tich) CHƯA làm (chưa Nhóm 1/2, chưa nhập biểu).
+create table if not exists public.nhom3_can_thu_thap_da_xoa (
+    id bigint primary key,
+    ma_xa text,
+    so_to integer,
+    so_thua integer,
+    ma_dinh_danh text,
+    created_at timestamptz,
+    thuoc_du_an boolean,
+    ly_do text,
+    xoa_luc timestamptz not null default now()
+);
+alter table public.nhom3_can_thu_thap_da_xoa enable row level security;
+
 -- Thửa ĐÃ tham chiếu không gian (Chi nhánh KV ghép thửa GCN với thửa bản
 -- đồ) nhưng CHƯA lên Nhóm 1 trong dong_bo_du_lieu (yêu cầu người dùng) —
 -- nạp từ file BANGTHAMCHIEUKHONGGIANTHUADAT_*.xlsx (cột maXa,
