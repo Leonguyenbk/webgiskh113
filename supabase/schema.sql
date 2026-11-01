@@ -649,6 +649,15 @@ as $$
                 'nong_lam_truong', exists (
                     select 1 from public.nhom3_nong_lam_truong l
                     where l.ma_xa = t.ma_xa and l.so_to = t.so_to and l.so_thua = t.so_thua
+                ),
+                -- Thửa trùng/chồng đè đã loại khỏi danh sách gửi xã (ly_do bắt
+                -- đầu "Chồng đè", ghi kèm thửa được giữ) -> tô màu riêng + ghi
+                -- chú, xem THUA_TRUNG_COLOR ở frontend.
+                'thua_trung_ghi_chu', (
+                    select x.ly_do from public.nhom3_can_thu_thap_da_xoa x
+                    where x.ma_xa = t.ma_xa and x.so_to = t.so_to and x.so_thua = t.so_thua
+                      and x.ly_do like 'Chồng đè%'
+                    limit 1
                 )
             )
         ) as feature
@@ -859,6 +868,15 @@ as $$
                 'nong_lam_truong', exists (
                     select 1 from public.nhom3_nong_lam_truong l
                     where l.ma_xa = t.ma_xa and l.so_to = t.so_to and l.so_thua = t.so_thua
+                ),
+                -- Thửa trùng/chồng đè đã loại khỏi danh sách gửi xã (ly_do bắt
+                -- đầu "Chồng đè", ghi kèm thửa được giữ) -> tô màu riêng + ghi
+                -- chú, xem THUA_TRUNG_COLOR ở frontend.
+                'thua_trung_ghi_chu', (
+                    select x.ly_do from public.nhom3_can_thu_thap_da_xoa x
+                    where x.ma_xa = t.ma_xa and x.so_to = t.so_to and x.so_thua = t.so_thua
+                      and x.ly_do like 'Chồng đè%'
+                    limit 1
                 )
             )
         ) as feature
@@ -2169,6 +2187,10 @@ create table if not exists public.nhom3_can_thu_thap_da_xoa (
     xoa_luc timestamptz not null default now()
 );
 alter table public.nhom3_can_thu_thap_da_xoa enable row level security;
+create index if not exists nhom3_can_thu_thap_da_xoa_khoa_idx on public.nhom3_can_thu_thap_da_xoa (ma_xa, so_to, so_thua);
+-- 01/11/2026: xoá thêm thửa chồng đè (trùng/bị phủ >= 95% bởi thửa đã có dữ
+-- liệu, hoặc trùng thửa còn thiếu khác thì bỏ thửa số 100xxx) — ly_do
+-- "Chồng đè: ... — giữ <xã> tờ X thửa Y".
 
 -- Vùng Nông lâm trường (yêu cầu người dùng, 01/11/2026, file
 -- RANHDUAN/NLT/NLT.zip, VN2000 108°30' -> EPSG:4326 qua EPSG:9218). Thửa

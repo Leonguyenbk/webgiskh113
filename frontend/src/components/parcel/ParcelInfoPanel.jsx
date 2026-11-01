@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { DU_AN_COLOR, DU_AN_LABEL, GCN_COLOR, GCN_LABEL, GROUP_LABELS, NGOAI_DS_COLOR, NGOAI_DS_LABEL, THAM_CHIEU_KG_COLOR, THAM_CHIEU_KG_LABEL, NONG_LAM_TRUONG_COLOR, NONG_LAM_TRUONG_LABEL, getGroupColor, getGroupKey, isNgoaiDsGuiXa, isNhom12, isNongLamTruong, isThamChieuKg } from "../../utils/constants";
+import { DU_AN_COLOR, DU_AN_LABEL, GCN_COLOR, GCN_LABEL, GROUP_LABELS, NGOAI_DS_COLOR, NGOAI_DS_LABEL, THAM_CHIEU_KG_COLOR, THAM_CHIEU_KG_LABEL, NONG_LAM_TRUONG_COLOR, NONG_LAM_TRUONG_LABEL, THUA_TRUNG_COLOR, getGroupColor, getGroupKey, isNgoaiDsGuiXa, isNhom12, isNongLamTruong, isThamChieuKg, isThuaTrung } from "../../utils/constants";
 import { googleMapsDirectionsUrl } from "../../utils/geometry";
 import ParcelMissingInfo from "./ParcelMissingInfo";
 
@@ -149,6 +149,17 @@ export default function ParcelInfoPanel({
               <dd>
                 <span className="tag" style={{ color: "white", backgroundColor: NONG_LAM_TRUONG_COLOR }}>
                   {NONG_LAM_TRUONG_LABEL}
+                </span>
+              </dd>
+            </div>
+          )}
+
+          {isThuaTrung(parcel) && (
+            <div>
+              <dt>Thửa trùng</dt>
+              <dd>
+                <span className="tag" style={{ color: "#1c1917", backgroundColor: THUA_TRUNG_COLOR, whiteSpace: "normal" }}>
+                  {parcel.thua_trung_ghi_chu}
                 </span>
               </dd>
             </div>

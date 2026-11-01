@@ -78,6 +78,12 @@ export const THAM_CHIEU_KG_LABEL = "Đã tham chiếu không gian, chờ lên Nh
 export const NONG_LAM_TRUONG_COLOR = "#14532d";
 export const NONG_LAM_TRUONG_LABEL = "Vùng Nông lâm trường (không thu thập)";
 
+// Thửa trùng/chồng đè đã loại khỏi danh sách gửi xã (properties.thua_trung_ghi_chu
+// = lý do kèm thửa được giữ, xem nhom3_can_thu_thap_da_xoa) — tô nâu xám để xã
+// biết làm thửa được giữ thay vì thửa này (yêu cầu người dùng).
+export const THUA_TRUNG_COLOR = "#a8a29e";
+export const THUA_TRUNG_LABEL = "Thửa trùng/chồng đè, đã loại (làm thửa được giữ)";
+
 // Màu tô thửa ĐANG CHỌN trên bản đồ (chọn 1 hoặc nhiều). Tím đậm — tách
 // hẳn khỏi xanh lá (Nhóm 1), đỏ (Nhóm 2), xanh dương (đã nhập biểu), vàng
 // (thuộc dự án) và xám (chưa phân loại).
@@ -109,6 +115,17 @@ export function isNongLamTruong(properties = {}) {
   return groupKey === "DEFAULT" && !properties.tham_chieu_kg && Boolean(properties.nong_lam_truong);
 }
 
+export function isThuaTrung(properties = {}) {
+  const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
+  return (
+    groupKey === "DEFAULT" &&
+    !properties.tham_chieu_kg &&
+    !properties.co_gcn &&
+    !properties.nong_lam_truong &&
+    Boolean(properties.thua_trung_ghi_chu)
+  );
+}
+
 export function isNgoaiDsGuiXa(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
   return (
@@ -116,6 +133,7 @@ export function isNgoaiDsGuiXa(properties = {}) {
     !properties.co_gcn &&
     !properties.tham_chieu_kg &&
     !properties.nong_lam_truong &&
+    !properties.thua_trung_ghi_chu &&
     Boolean(properties.ngoai_ds_gui_xa)
   );
 }
@@ -126,6 +144,7 @@ export function getParcelFillColor(properties = {}) {
     if (properties.tham_chieu_kg) return THAM_CHIEU_KG_COLOR;
     if (properties.co_gcn) return GCN_COLOR;
     if (properties.nong_lam_truong) return NONG_LAM_TRUONG_COLOR;
+    if (properties.thua_trung_ghi_chu) return THUA_TRUNG_COLOR;
     if (properties.ngoai_ds_gui_xa) return NGOAI_DS_COLOR;
     if (properties.thuoc_du_an) return DU_AN_COLOR;
   }
@@ -157,7 +176,7 @@ export const TO_CHUC_STRIPE_CSS =
 // nếu properties.co_gcn đã true.
 export function isToChucChuaPhanLoai(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
-  if (groupKey !== "DEFAULT" || properties.co_gcn || properties.tham_chieu_kg || properties.nong_lam_truong) return false;
+  if (groupKey !== "DEFAULT" || properties.co_gcn || properties.tham_chieu_kg || properties.nong_lam_truong || properties.thua_trung_ghi_chu) return false;
   const raw = String(properties.muc_dich_su_dung || "");
   return raw
     .split("+")

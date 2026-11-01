@@ -47,6 +47,8 @@ import {
   THAM_CHIEU_KG_LABEL,
   NONG_LAM_TRUONG_COLOR,
   NONG_LAM_TRUONG_LABEL,
+  THUA_TRUNG_COLOR,
+  THUA_TRUNG_LABEL,
   SELECTED_COLOR,
   TO_CHUC_STRIPE_CSS,
   TO_CHUC_STRIPE_LABEL,
@@ -1335,6 +1337,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             <div>
               <span style={{ backgroundColor: NONG_LAM_TRUONG_COLOR }} />
               <label>{NONG_LAM_TRUONG_LABEL}</label>
+            </div>
+
+            <div>
+              <span style={{ backgroundColor: THUA_TRUNG_COLOR }} />
+              <label>{THUA_TRUNG_LABEL}</label>
             </div>
 
             <div>
