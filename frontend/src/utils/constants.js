@@ -70,6 +70,14 @@ export const NGOAI_DS_LABEL = "Không có trong DS gửi xã (không thu thập)
 export const THAM_CHIEU_KG_COLOR = "#86efac";
 export const THAM_CHIEU_KG_LABEL = "Đã tham chiếu không gian, chờ lên Nhóm 1 (Chi nhánh KV làm)";
 
+// Thửa nằm trong vùng Nông lâm trường >= 95% diện tích (properties.nong_lam_truong,
+// xem nhom3_nong_lam_truong trong supabase/schema.sql) — đã loại khỏi danh sách
+// gửi xã, tô xanh rừng đậm (yêu cầu người dùng). Chỉ áp dụng khi chưa là Nhóm
+// 1/2, chưa tham chiếu KG và chưa nhập biểu; đè lên màu "không có trong DS gửi
+// xã" và "thuộc dự án".
+export const NONG_LAM_TRUONG_COLOR = "#14532d";
+export const NONG_LAM_TRUONG_LABEL = "Vùng Nông lâm trường (không thu thập)";
+
 // Màu tô thửa ĐANG CHỌN trên bản đồ (chọn 1 hoặc nhiều). Tím đậm — tách
 // hẳn khỏi xanh lá (Nhóm 1), đỏ (Nhóm 2), xanh dương (đã nhập biểu), vàng
 // (thuộc dự án) và xám (chưa phân loại).
@@ -96,12 +104,18 @@ export function isThamChieuKg(properties = {}) {
   return groupKey === "DEFAULT" && Boolean(properties.tham_chieu_kg);
 }
 
+export function isNongLamTruong(properties = {}) {
+  const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
+  return groupKey === "DEFAULT" && !properties.tham_chieu_kg && Boolean(properties.nong_lam_truong);
+}
+
 export function isNgoaiDsGuiXa(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
   return (
     groupKey === "DEFAULT" &&
     !properties.co_gcn &&
     !properties.tham_chieu_kg &&
+    !properties.nong_lam_truong &&
     Boolean(properties.ngoai_ds_gui_xa)
   );
 }
@@ -111,6 +125,7 @@ export function getParcelFillColor(properties = {}) {
   if (groupKey === "DEFAULT") {
     if (properties.tham_chieu_kg) return THAM_CHIEU_KG_COLOR;
     if (properties.co_gcn) return GCN_COLOR;
+    if (properties.nong_lam_truong) return NONG_LAM_TRUONG_COLOR;
     if (properties.ngoai_ds_gui_xa) return NGOAI_DS_COLOR;
     if (properties.thuoc_du_an) return DU_AN_COLOR;
   }
@@ -142,7 +157,7 @@ export const TO_CHUC_STRIPE_CSS =
 // nếu properties.co_gcn đã true.
 export function isToChucChuaPhanLoai(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
-  if (groupKey !== "DEFAULT" || properties.co_gcn || properties.tham_chieu_kg) return false;
+  if (groupKey !== "DEFAULT" || properties.co_gcn || properties.tham_chieu_kg || properties.nong_lam_truong) return false;
   const raw = String(properties.muc_dich_su_dung || "");
   return raw
     .split("+")

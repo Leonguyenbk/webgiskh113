@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { DU_AN_COLOR, DU_AN_LABEL, GCN_COLOR, GCN_LABEL, GROUP_LABELS, NGOAI_DS_COLOR, NGOAI_DS_LABEL, THAM_CHIEU_KG_COLOR, THAM_CHIEU_KG_LABEL, getGroupColor, getGroupKey, isNgoaiDsGuiXa, isNhom12, isThamChieuKg } from "../../utils/constants";
+import { DU_AN_COLOR, DU_AN_LABEL, GCN_COLOR, GCN_LABEL, GROUP_LABELS, NGOAI_DS_COLOR, NGOAI_DS_LABEL, THAM_CHIEU_KG_COLOR, THAM_CHIEU_KG_LABEL, NONG_LAM_TRUONG_COLOR, NONG_LAM_TRUONG_LABEL, getGroupColor, getGroupKey, isNgoaiDsGuiXa, isNhom12, isNongLamTruong, isThamChieuKg } from "../../utils/constants";
 import { googleMapsDirectionsUrl } from "../../utils/geometry";
 import ParcelMissingInfo from "./ParcelMissingInfo";
 
@@ -138,6 +138,17 @@ export default function ParcelInfoPanel({
                   }}
                 >
                   {parcel.co_gcn ? GCN_LABEL : "Thửa đất chưa nhập biểu"}
+                </span>
+              </dd>
+            </div>
+          )}
+
+          {isNongLamTruong(parcel) && (
+            <div>
+              <dt>Nông lâm trường</dt>
+              <dd>
+                <span className="tag" style={{ color: "white", backgroundColor: NONG_LAM_TRUONG_COLOR }}>
+                  {NONG_LAM_TRUONG_LABEL}
                 </span>
               </dd>
             </div>

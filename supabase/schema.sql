@@ -643,6 +643,12 @@ as $$
                 'tham_chieu_kg', exists (
                     select 1 from public.nhom3_tham_chieu_khong_gian k
                     where k.ma_xa = t.ma_xa and k.so_to = t.so_to and k.so_thua = t.so_thua
+                ),
+                -- Thửa nằm trong vùng Nông lâm trường (xem nhom3_nong_lam_truong)
+                -- -> tô xanh rừng đậm, xem NONG_LAM_TRUONG_COLOR ở frontend.
+                'nong_lam_truong', exists (
+                    select 1 from public.nhom3_nong_lam_truong l
+                    where l.ma_xa = t.ma_xa and l.so_to = t.so_to and l.so_thua = t.so_thua
                 )
             )
         ) as feature
@@ -847,6 +853,12 @@ as $$
                 'tham_chieu_kg', exists (
                     select 1 from public.nhom3_tham_chieu_khong_gian k
                     where k.ma_xa = t.ma_xa and k.so_to = t.so_to and k.so_thua = t.so_thua
+                ),
+                -- Thửa nằm trong vùng Nông lâm trường (xem nhom3_nong_lam_truong)
+                -- -> tô xanh rừng đậm, xem NONG_LAM_TRUONG_COLOR ở frontend.
+                'nong_lam_truong', exists (
+                    select 1 from public.nhom3_nong_lam_truong l
+                    where l.ma_xa = t.ma_xa and l.so_to = t.so_to and l.so_thua = t.so_thua
                 )
             )
         ) as feature
@@ -2157,6 +2169,32 @@ create table if not exists public.nhom3_can_thu_thap_da_xoa (
     xoa_luc timestamptz not null default now()
 );
 alter table public.nhom3_can_thu_thap_da_xoa enable row level security;
+
+-- Vùng Nông lâm trường (yêu cầu người dùng, 01/11/2026, file
+-- RANHDUAN/NLT/NLT.zip, VN2000 108°30' -> EPSG:4326 qua EPSG:9218). Thửa
+-- nằm trong ranh >= 95% diện tích (cùng ngưỡng ranh dự án) ghi vào
+-- nhom3_nong_lam_truong: bản đồ tô xanh rừng đậm (properties.nong_lam_truong),
+-- thửa CHƯA làm bị xoá khỏi nhom3_can_thu_thap (sao lưu ở
+-- nhom3_can_thu_thap_da_xoa, ly_do 'Nông lâm trường').
+create table if not exists public.ranh_nong_lam_truong (
+    id bigserial primary key,
+    ten text,
+    geom geometry(MultiPolygon, 4326) not null,
+    nguon_file text,
+    tao_luc timestamptz not null default now()
+);
+create index if not exists ranh_nong_lam_truong_geom_gix on public.ranh_nong_lam_truong using gist (geom);
+alter table public.ranh_nong_lam_truong enable row level security;
+
+create table if not exists public.nhom3_nong_lam_truong (
+    ma_xa text not null,
+    so_to integer not null,
+    so_thua integer not null,
+    ty_le numeric,
+    ranh_id bigint references public.ranh_nong_lam_truong (id),
+    primary key (ma_xa, so_to, so_thua)
+);
+alter table public.nhom3_nong_lam_truong enable row level security;
 
 -- Thửa ĐÃ tham chiếu không gian (Chi nhánh KV ghép thửa GCN với thửa bản
 -- đồ) nhưng CHƯA lên Nhóm 1 trong dong_bo_du_lieu (yêu cầu người dùng) —
