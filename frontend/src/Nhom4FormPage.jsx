@@ -204,6 +204,24 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
     setFileTbxn(null);
     setFileInputKey((k) => k + 1);
   };
+  // Dấu tích cạnh nút "Lưu hồ sơ" (yêu cầu người dùng): bật = lưu xong xóa
+  // sạch biểu, chỉ giữ xã/phường; tắt = giữ nguyên mọi thông tin đã nhập
+  // (nhập tiếp hồ sơ giống nhau, chỉ sửa vài ô). Nhớ lựa chọn trên máy.
+  const [xoaFormSauKhiLuu, setXoaFormSauKhiLuu] = useState(() => {
+    try {
+      return localStorage.getItem("nhom4XoaFormSauKhiLuu") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const doiXoaFormSauKhiLuu = (checked) => {
+    setXoaFormSauKhiLuu(checked);
+    try {
+      localStorage.setItem("nhom4XoaFormSauKhiLuu", checked ? "1" : "0");
+    } catch {
+      /* trình duyệt chặn lưu — bỏ qua, chỉ không nhớ lựa chọn */
+    }
+  };
   const [status, setStatus] = useState("idle");
   // Tiến trình tải file lên khi Lưu hồ sơ (null = chưa gửi file) — mạng
   // chậm (đo thực tế Viettel ~0,06 MB/s) 1 hồ sơ có thể mất cả phút, không
@@ -740,6 +758,8 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
           );
       setResult(body);
       setStatus("done");
+      // Bỏ tích "xóa thông tin sau khi lưu" thì giữ nguyên biểu.
+      if (!xoaFormSauKhiLuu) return;
       // Gửi xong xóa sạch biểu, chỉ giữ xã/phường (yêu cầu người dùng) —
       // tránh hồ sơ kế tiếp dính chủ sử dụng/GCN của hồ sơ vừa nộp.
       setDoiTuong("Hộ gia đình, cá nhân");
@@ -1409,15 +1429,26 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
             )}
           </div>
 
-          <button type="submit" className="importButton" disabled={status === "submitting"}>
-            {status !== "submitting"
-              ? "Lưu hồ sơ"
-              : uploadPercent === null
-                ? "Đang kiểm tra thông tin…"
-                : uploadPercent < 100
-                  ? `Đang tải file lên… ${uploadPercent}%`
-                  : "Đang lưu…"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <button type="submit" className="importButton" disabled={status === "submitting"}>
+              {status !== "submitting"
+                ? "Lưu hồ sơ"
+                : uploadPercent === null
+                  ? "Đang kiểm tra thông tin…"
+                  : uploadPercent < 100
+                    ? `Đang tải file lên… ${uploadPercent}%`
+                    : "Đang lưu…"}
+            </button>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: 500 }}>
+              <input
+                type="checkbox"
+                checked={xoaFormSauKhiLuu}
+                onChange={(e) => doiXoaFormSauKhiLuu(e.target.checked)}
+                disabled={status === "submitting"}
+              />
+              Xóa thông tin trên biểu sau khi lưu (chỉ giữ xã/phường)
+            </label>
+          </div>
           {status === "submitting" && uploadPercent !== null && (
             <div className="uploadProgress">
               <progress max={100} value={uploadPercent} />
