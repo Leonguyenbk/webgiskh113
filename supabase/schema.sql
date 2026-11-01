@@ -2366,6 +2366,25 @@ create table if not exists public.nhom3_loai_123_da_lam (
 );
 alter table public.nhom3_loai_123_da_lam enable row level security;
 
+-- Mốc chốt "Nhóm 1 Chi nhánh KV làm" (yêu cầu người dùng, 01/11/2026):
+-- đúng các thửa Nhóm 1/2 CHƯA nhập biểu trong cache tại lúc chốt mới tính
+-- là Chi nhánh làm (trừ khỏi tổng gửi xã). Từ sau mốc này, thửa lên Nhóm 1
+-- (Chi nhánh ứng thửa, thêm vào nhom3_tham_chieu_khong_gian) hay xã nhập
+-- biểu đều tính cho XÃ làm — xem nhom3_tong_hop, nhom3_list_nhom1_*,
+-- nhom3_list_tong_gui_xa.
+create table if not exists public.nhom3_n1_chi_nhanh_chot (
+    ma_xa text not null,
+    so_to integer not null,
+    so_thua integer not null,
+    chot_luc timestamptz not null default now(),
+    primary key (ma_xa, so_to, so_thua)
+);
+alter table public.nhom3_n1_chi_nhanh_chot enable row level security;
+-- Chốt (đã chạy 01/11/2026):
+-- insert into public.nhom3_n1_chi_nhanh_chot (ma_xa, so_to, so_thua)
+-- select ma_xa, so_to, so_thua from public.nhom3_trang_thai_cache
+-- where la_nhom_1_2 and not co_nhap on conflict do nothing;
+
 -- Tổng hợp toàn dự án — trang tổng quan. CHỈ đọc cache (vài chục mili
 -- giây bất kể bảng gốc bao nhiêu triệu dòng) — xem refresh_nhom3_trang_thai_cache
 -- ở trên để biết cache được tính thế nào và khi nào cần gọi lại.
@@ -2408,8 +2427,11 @@ as $$
             -- Nhóm 1 chưa nhập là thửa do Chi nhánh khu vực làm trực
             -- tiếp, không qua form Nhóm 4/xã (yêu cầu người dùng, xem
             -- nhom3_list_nhom1_chua_nhap bên dưới để lấy danh sách thửa).
-            count(*) filter (where c.la_nhom_1_2 and c.co_nhap) as da_nhom_1_2_da_nhap,
-            count(*) filter (where c.la_nhom_1_2 and not c.co_nhap) as da_nhom_1_2_chua_nhap,
+            -- Từ mốc chốt nhom3_n1_chi_nhanh_chot: chỉ thửa CÓ trong mốc
+            -- (và vẫn chưa nhập biểu) mới là Chi nhánh làm; Nhóm 1 thêm sau
+            -- mốc (Chi nhánh ứng/tham chiếu) tính như xã làm.
+            count(*) filter (where c.la_nhom_1_2 and (c.co_nhap or cn.ma_xa is null)) as da_nhom_1_2_da_nhap,
+            count(*) filter (where c.la_nhom_1_2 and not c.co_nhap and cn.ma_xa is not null) as da_nhom_1_2_chua_nhap,
             count(*) filter (where not c.la_nhom_1_2 and c.da_thu_thap) as da_thu_thap,
             count(*) filter (where not c.la_nhom_1_2 and not c.da_thu_thap) as con_thieu_cache,
             -- Đã nhập (co_nhap) nhưng CHƯA đạt chuẩn đủ dữ liệu (da_thu_thap
@@ -2430,6 +2452,8 @@ as $$
         left join public.nhom3_to_giam_sat tg on tg.ma_xa = c.ma_xa
         left join public.nhom3_chua_lien_ket_khong_gian kg on kg.ma_xa = c.ma_xa
         left join public.nhom3_loai_123_da_lam l123 on l123.ma_xa = c.ma_xa
+        left join public.nhom3_n1_chi_nhanh_chot cn
+            on cn.ma_xa = c.ma_xa and cn.so_to = c.so_to and cn.so_thua = c.so_thua
         where p_to_giam_sat is null or tg.to_giam_sat = p_to_giam_sat
         group by c.ma_xa, xp.ten_xa, tg.khu_vuc, tg.to_giam_sat, kg.so_luong, kg.n1_chua_nhap_goc, l123.loai_1, l123.loai_2, l123.loai_3
     ),
@@ -2656,13 +2680,16 @@ as $$
         select
             c.ma_xa, c.so_to, c.so_thua, c.ma_dinh_danh,
             case
-                when c.la_nhom_1_2 then 'Nhóm 1 - đã nhập biểu'
+                when c.la_nhom_1_2 and c.co_nhap then 'Nhóm 1 - đã nhập biểu'
+                when c.la_nhom_1_2 then 'Nhóm 1 - Chi nhánh ứng sau 01/11 (tính xã làm)'
                 when c.da_thu_thap then 'Nhóm 3 - đã nhập biểu'
                 else 'Nhóm 3 - còn thiếu'
             end as ghi_chu
         from public.nhom3_trang_thai_cache c
+        left join public.nhom3_n1_chi_nhanh_chot cn
+            on cn.ma_xa = c.ma_xa and cn.so_to = c.so_to and cn.so_thua = c.so_thua
         where (p_ma_xa is null or c.ma_xa = p_ma_xa)
-          and not (c.la_nhom_1_2 and not c.co_nhap)
+          and not (c.la_nhom_1_2 and not c.co_nhap and cn.ma_xa is not null)
     ),
     ngoai_ds_raw as (
         select
@@ -2743,7 +2770,9 @@ begin
     select count(*) into v_total
     from public.nhom3_trang_thai_cache c
     where (p_ma_xa is null or c.ma_xa = p_ma_xa)
-      and c.la_nhom_1_2 and not c.co_nhap;
+      and c.la_nhom_1_2 and not c.co_nhap and exists (
+          select 1 from public.nhom3_n1_chi_nhanh_chot cn
+          where cn.ma_xa = c.ma_xa and cn.so_to = c.so_to and cn.so_thua = c.so_thua);
 
     select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
     from (
@@ -2751,7 +2780,9 @@ begin
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         where (p_ma_xa is null or c.ma_xa = p_ma_xa)
-          and c.la_nhom_1_2 and not c.co_nhap
+          and c.la_nhom_1_2 and not c.co_nhap and exists (
+          select 1 from public.nhom3_n1_chi_nhanh_chot cn
+          where cn.ma_xa = c.ma_xa and cn.so_to = c.so_to and cn.so_thua = c.so_thua)
         order by c.ma_xa, c.so_to, c.so_thua
         limit p_limit offset p_offset
     ) y;
@@ -2783,7 +2814,9 @@ begin
     select count(*) into v_total
     from public.nhom3_trang_thai_cache c
     where (p_ma_xa is null or c.ma_xa = p_ma_xa)
-      and c.la_nhom_1_2 and c.co_nhap;
+      and c.la_nhom_1_2 and (c.co_nhap or not exists (
+          select 1 from public.nhom3_n1_chi_nhanh_chot cn
+          where cn.ma_xa = c.ma_xa and cn.so_to = c.so_to and cn.so_thua = c.so_thua));
 
     select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) into v_items
     from (
@@ -2791,7 +2824,9 @@ begin
         from public.nhom3_trang_thai_cache c
         left join public.danhsachxaphuong xp on xp.ma_xa = c.ma_xa
         where (p_ma_xa is null or c.ma_xa = p_ma_xa)
-          and c.la_nhom_1_2 and c.co_nhap
+          and c.la_nhom_1_2 and (c.co_nhap or not exists (
+          select 1 from public.nhom3_n1_chi_nhanh_chot cn
+          where cn.ma_xa = c.ma_xa and cn.so_to = c.so_to and cn.so_thua = c.so_thua))
         order by c.ma_xa, c.so_to, c.so_thua
         limit p_limit offset p_offset
     ) y;

@@ -35,7 +35,7 @@ const TO_GIAM_SAT_OPTIONS = [
 const SORT_COLUMNS = [
   { key: "ten_xa", label: "Xã / phường", type: "text", defaultDir: "asc" },
   { key: "gui_xuong", label: "Số lượng gửi xuống (cố định)", type: "number", defaultDir: "desc", group: "loai4" },
-  { key: "da_nhom_1_2_da_nhap", label: "Nhóm 1 đã nhập biểu (Xã làm)", type: "number", defaultDir: "desc", group: "loai4" },
+  { key: "da_nhom_1_2_da_nhap", label: "Nhóm 1 xã làm (đã nhập biểu + lên Nhóm 1 sau 01/11)", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "da_thu_thap", label: "Đã nhập đủ dữ liệu", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "da_lam", label: "Đã làm", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "percent", label: "%", type: "number", defaultDir: "asc", group: "loai4" },
@@ -249,7 +249,7 @@ export default function Nhom3ConThieuDemoPage({ onNavigateHome, onNavigateNhom3C
                 <strong>{formatSo(tongHop.gui_xuong)}</strong>
               </div>
               <div className="statTile">
-                <span>Trong đó: Nhóm 1 đã nhập biểu (Xã làm)</span>
+                <span>Trong đó: Nhóm 1 xã làm (đã nhập biểu + lên Nhóm 1 sau 01/11)</span>
                 <strong style={{ color: "#2e7d32" }}>{formatSo(tongHop.da_nhom_1_2_da_nhap)}</strong>
               </div>
               <div className="statTile">

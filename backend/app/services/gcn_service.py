@@ -591,7 +591,7 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     ws.append([
         "Tổ giám sát", "Khu vực", "Mã xã", "Xã/Phường",
         "Tổng gửi xã (đã trừ Chi nhánh KV)",
-        "Nhóm 1 đã nhập biểu (Xã làm)", "Nhóm 1 chưa nhập biểu (Chi nhánh KV làm)",
+        "Nhóm 1 xã làm (đã nhập biểu + lên Nhóm 1 sau 01/11)", "Nhóm 1 Chi nhánh KV làm (chốt 01/11)",
         "Đã nhập đủ dữ liệu", "Đã làm", "%", "Còn thiếu",
         "Tổng theo kế hoạch (đã gồm Loại 1+2+3 đã làm)", "Đã thực hiện theo kế hoạch (gồm Loại 1+2+3 đã làm)", "% theo kế hoạch",
         "Ghi chú",
