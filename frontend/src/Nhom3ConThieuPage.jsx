@@ -47,9 +47,6 @@ const SORT_COLUMNS = [
   { key: "da_lam", label: "Đã làm (Nhóm 1 đã nhập + đã nhập biểu)", type: "number", defaultDir: "desc", group: "loai4" },
   { key: "percent", label: "%", type: "number", defaultDir: "asc", group: "loai4" },
   { key: "con_thieu", label: "Còn thiếu", type: "number", defaultDir: "desc", group: "loai4" },
-  { key: "chua_lien_ket_khong_gian", label: "Chưa liên kết không gian", type: "number", defaultDir: "desc", group: "loai4" },
-  { key: "tong_tru_kg", label: "Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)", type: "number", defaultDir: "desc", group: "loai4" },
-  { key: "percent_tru_kg", label: "% (trừ cả chưa liên kết KG)", type: "number", defaultDir: "asc", group: "loai4" },
   { key: "tong_ke_hoach", label: "Tổng danh sách theo kế hoạch (đã gồm Loại 1+2+3 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
   { key: "da_lam_ke_hoach", label: "Đã thực hiện theo kế hoạch (gồm Loại 1+2+3 đã làm)", type: "number", defaultDir: "desc", group: "ke_hoach" },
   { key: "percent_ke_hoach", label: "Tỷ lệ theo kế hoạch", type: "number", defaultDir: "asc", group: "ke_hoach" },
@@ -183,7 +180,6 @@ export default function Nhom3ConThieuPage({
         ten_xa: row.ten_xa || row.ma_xa,
         da_lam: daLam,
         percent: formatPercent(daLam, row.tong),
-        percent_tru_kg: formatPercent(daLam, row.tong_tru_kg),
         da_lam_ke_hoach: daLamKeHoach,
         percent_ke_hoach: formatPercent(daLamKeHoach, row.tong_ke_hoach),
       };
@@ -218,7 +214,6 @@ export default function Nhom3ConThieuPage({
 
   const daLam = (tongHop?.da_nhom_1_2_da_nhap || 0) + (tongHop?.da_thu_thap || 0);
   const tyLeDaLam = formatPercent(daLam, tongHop?.tong || 0);
-  const tyLeDaLamTruKg = formatPercent(daLam, tongHop?.tong_tru_kg || 0);
   const daLamKeHoach = daLam + (tongHop?.loai_123_da_lam || 0);
   const tyLeKeHoach = formatPercent(daLamKeHoach, tongHop?.tong_ke_hoach || 0);
 
@@ -340,20 +335,6 @@ export default function Nhom3ConThieuPage({
               <div className="statTile">
                 <span>Còn thiếu dữ liệu</span>
                 <strong style={{ color: "#c0392b" }}>{formatSo(tongHop.con_thieu)}</strong>
-              </div>
-              <div className="statTile">
-                <span>Chưa liên kết không gian</span>
-                <strong style={{ color: "#6a817e" }}>{formatSo(tongHop.chua_lien_ket_khong_gian)}</strong>
-              </div>
-              <div className="statTile">
-                <span>Tổng gửi xã (đã trừ Chi nhánh KV + chưa liên kết KG)</span>
-                <strong>{formatSo(tongHop.tong_tru_kg)}</strong>
-              </div>
-              <div className="statTile">
-                <span>Tỷ lệ đã làm (trừ cả chưa liên kết KG)</span>
-                <strong style={{ color: "#2e7d32" }}>
-                  {formatSo(daLam)} <span style={{ fontWeight: 400, fontSize: 14 }}>({tyLeDaLamTruKg}%)</span>
-                </strong>
               </div>
               <div className="statTile">
                 <span>Trong đó: Loại 1 + 2 + 3 đã làm (VPĐK gửi song song)</span>
@@ -487,9 +468,6 @@ export default function Nhom3ConThieuPage({
                             <td>{formatSo(row.da_lam)}</td>
                             <td>{row.percent}%</td>
                             <td>{formatSo(row.con_thieu)}</td>
-                            <td>{formatSo(row.chua_lien_ket_khong_gian)}</td>
-                            <td>{formatSo(row.tong_tru_kg)}</td>
-                            <td>{row.percent_tru_kg}%</td>
                             <td style={{ background: KE_HOACH_BG, borderLeft: KE_HOACH_BORDER }}>
                               {formatSo(row.tong_ke_hoach)}
                             </td>

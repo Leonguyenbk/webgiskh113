@@ -2442,10 +2442,14 @@ as $$
             con_thieu_cache as con_thieu,
             da_nhap_chua_dat,
             chua_lien_ket_khong_gian,
-            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian) as tong_tru_kg,
+            -- KHÔNG trừ chưa liên kết KG nữa (yêu cầu người dùng, 01/11/2026 —
+            -- thửa KG Chi nhánh đã tham chiếu đã tính Nhóm 1 qua
+            -- nhom3_tham_chieu_khong_gian). Giữ tên cột cho tương thích,
+            -- giá trị = tong.
+            (tong_cache - da_nhom_1_2_chua_nhap) as tong_tru_kg,
             loai_1_da_lam,
             loai_123_da_lam,
-            (tong_cache - da_nhom_1_2_chua_nhap - chua_lien_ket_khong_gian + loai_123_da_lam) as tong_ke_hoach,
+            (tong_cache - da_nhom_1_2_chua_nhap + loai_123_da_lam) as tong_ke_hoach,
             null::text as ghi_chu
         from raw
 
