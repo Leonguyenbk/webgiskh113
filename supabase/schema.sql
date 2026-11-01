@@ -636,6 +636,13 @@ as $$
                 -- NGOAI_DS_COLOR trong frontend/src/utils/constants.js.
                 'ngoai_ds_gui_xa', n3.ma_xa is null and exists (
                     select 1 from public.nhom3_can_thu_thap x where x.ma_xa = t.ma_xa
+                ),
+                -- Đã tham chiếu không gian, chưa lên Nhóm 1 (xem
+                -- nhom3_tham_chieu_khong_gian) -> tô xanh lá nhạt + ghi chú,
+                -- xem THAM_CHIEU_KG_COLOR trong frontend/src/utils/constants.js.
+                'tham_chieu_kg', exists (
+                    select 1 from public.nhom3_tham_chieu_khong_gian k
+                    where k.ma_xa = t.ma_xa and k.so_to = t.so_to and k.so_thua = t.so_thua
                 )
             )
         ) as feature
@@ -833,6 +840,13 @@ as $$
                 -- NGOAI_DS_COLOR trong frontend/src/utils/constants.js.
                 'ngoai_ds_gui_xa', n3.ma_xa is null and exists (
                     select 1 from public.nhom3_can_thu_thap x where x.ma_xa = t.ma_xa
+                ),
+                -- Đã tham chiếu không gian, chưa lên Nhóm 1 (xem
+                -- nhom3_tham_chieu_khong_gian) -> tô xanh lá nhạt + ghi chú,
+                -- xem THAM_CHIEU_KG_COLOR trong frontend/src/utils/constants.js.
+                'tham_chieu_kg', exists (
+                    select 1 from public.nhom3_tham_chieu_khong_gian k
+                    where k.ma_xa = t.ma_xa and k.so_to = t.so_to and k.so_thua = t.so_thua
                 )
             )
         ) as feature
@@ -2127,6 +2141,25 @@ alter table public.nhom3_tien_do_lich_su enable row level security;
 create index if not exists idx_nhom3_tien_do_lich_su_xa_time
     on public.nhom3_tien_do_lich_su (ma_xa, ghi_nhan_luc);
 
+-- Thửa ĐÃ tham chiếu không gian (Chi nhánh KV ghép thửa GCN với thửa bản
+-- đồ) nhưng CHƯA lên Nhóm 1 trong dong_bo_du_lieu (yêu cầu người dùng) —
+-- nạp từ file BANGTHAMCHIEUKHONGGIANTHUADAT_*.xlsx (cột maXa,
+-- soHieuToBanDoKhongGian, soThuTuThuaKhongGian) bằng
+-- backend/scripts/nap_tham_chieu_khong_gian.py, upsert theo khoá thửa.
+-- Thống kê Nhóm 3 coi như Nhóm 1 Chi nhánh KV làm (xem
+-- refresh_nhom3_trang_thai_cache), bản đồ tô xanh lá nhạt + ghi chú
+-- (properties.tham_chieu_kg). Thửa đã là Nhóm 1/2 thật thì bỏ qua.
+create table if not exists public.nhom3_tham_chieu_khong_gian (
+    ma_xa text not null,
+    so_to integer not null,
+    so_thua integer not null,
+    ghi_chu text,
+    nguon_file text,
+    cap_nhat_luc timestamptz not null default now(),
+    primary key (ma_xa, so_to, so_thua)
+);
+alter table public.nhom3_tham_chieu_khong_gian enable row level security;
+
 create or replace function public.refresh_nhom3_trang_thai_cache()
 returns integer
 language plpgsql
@@ -2179,6 +2212,12 @@ begin
         select d.ma_xa, d.so_to, d.so_thua
         from public.dong_bo_du_lieu d
         where upper(trim(d.phan_loai_ke_hoach_2959)) in ('NHÓM 1', 'NHÓM 2')
+        -- Thửa đã tham chiếu không gian nhưng chưa lên Nhóm 1 (xem
+        -- nhom3_tham_chieu_khong_gian) — tính như Nhóm 1 Chi nhánh KV làm
+        -- (yêu cầu người dùng). union khử trùng thửa đã là Nhóm 1/2 thật.
+        union
+        select k.ma_xa, k.so_to, k.so_thua
+        from public.nhom3_tham_chieu_khong_gian k
     )
     select
         t.ma_xa, t.so_to, t.so_thua, t.ma_dinh_danh,

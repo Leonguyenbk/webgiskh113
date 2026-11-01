@@ -62,6 +62,14 @@ export const DU_AN_LABEL = "Thuộc dự án";
 export const NGOAI_DS_COLOR = "#0f172a";
 export const NGOAI_DS_LABEL = "Không có trong DS gửi xã (không thu thập)";
 
+// Thửa đã tham chiếu không gian nhưng CHƯA lên Nhóm 1 (properties.tham_chieu_kg,
+// xem nhom3_tham_chieu_khong_gian trong supabase/schema.sql) — thống kê đã
+// tính như Nhóm 1 Chi nhánh KV làm, nên tô xanh lá nhạt gần màu Nhóm 1 và
+// ghi chú riêng (yêu cầu người dùng). Chỉ áp dụng khi chưa là Nhóm 1/2 thật,
+// và đè lên màu "đã nhập biểu"/"thuộc dự án"/"không có trong DS gửi xã".
+export const THAM_CHIEU_KG_COLOR = "#86efac";
+export const THAM_CHIEU_KG_LABEL = "Đã tham chiếu không gian, chờ lên Nhóm 1 (Chi nhánh KV làm)";
+
 // Màu tô thửa ĐANG CHỌN trên bản đồ (chọn 1 hoặc nhiều). Tím đậm — tách
 // hẳn khỏi xanh lá (Nhóm 1), đỏ (Nhóm 2), xanh dương (đã nhập biểu), vàng
 // (thuộc dự án) và xám (chưa phân loại).
@@ -83,14 +91,25 @@ export function getGroupColor(phanLoai = "") {
   return GROUP_COLORS[getGroupKey(phanLoai)];
 }
 
+export function isThamChieuKg(properties = {}) {
+  const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
+  return groupKey === "DEFAULT" && Boolean(properties.tham_chieu_kg);
+}
+
 export function isNgoaiDsGuiXa(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
-  return groupKey === "DEFAULT" && !properties.co_gcn && Boolean(properties.ngoai_ds_gui_xa);
+  return (
+    groupKey === "DEFAULT" &&
+    !properties.co_gcn &&
+    !properties.tham_chieu_kg &&
+    Boolean(properties.ngoai_ds_gui_xa)
+  );
 }
 
 export function getParcelFillColor(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
   if (groupKey === "DEFAULT") {
+    if (properties.tham_chieu_kg) return THAM_CHIEU_KG_COLOR;
     if (properties.co_gcn) return GCN_COLOR;
     if (properties.ngoai_ds_gui_xa) return NGOAI_DS_COLOR;
     if (properties.thuoc_du_an) return DU_AN_COLOR;
@@ -123,7 +142,7 @@ export const TO_CHUC_STRIPE_CSS =
 // nếu properties.co_gcn đã true.
 export function isToChucChuaPhanLoai(properties = {}) {
   const groupKey = getGroupKey(properties.dong_bo?.phan_loai_ke_hoach_2959);
-  if (groupKey !== "DEFAULT" || properties.co_gcn) return false;
+  if (groupKey !== "DEFAULT" || properties.co_gcn || properties.tham_chieu_kg) return false;
   const raw = String(properties.muc_dich_su_dung || "");
   return raw
     .split("+")

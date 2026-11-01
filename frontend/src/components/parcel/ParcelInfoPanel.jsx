@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { DU_AN_COLOR, DU_AN_LABEL, GCN_COLOR, GCN_LABEL, GROUP_LABELS, NGOAI_DS_COLOR, NGOAI_DS_LABEL, getGroupColor, getGroupKey, isNgoaiDsGuiXa, isNhom12 } from "../../utils/constants";
+import { DU_AN_COLOR, DU_AN_LABEL, GCN_COLOR, GCN_LABEL, GROUP_LABELS, NGOAI_DS_COLOR, NGOAI_DS_LABEL, THAM_CHIEU_KG_COLOR, THAM_CHIEU_KG_LABEL, getGroupColor, getGroupKey, isNgoaiDsGuiXa, isNhom12, isThamChieuKg } from "../../utils/constants";
 import { googleMapsDirectionsUrl } from "../../utils/geometry";
 import ParcelMissingInfo from "./ParcelMissingInfo";
 
@@ -114,6 +114,17 @@ export default function ParcelInfoPanel({
               </span>
             </dd>
           </div>
+
+          {isThamChieuKg(parcel) && (
+            <div>
+              <dt>Ghi chú</dt>
+              <dd>
+                <span className="tag" style={{ color: "#14532d", backgroundColor: THAM_CHIEU_KG_COLOR }}>
+                  {THAM_CHIEU_KG_LABEL}
+                </span>
+              </dd>
+            </div>
+          )}
 
           {!dangNhom12 && (
             <div>

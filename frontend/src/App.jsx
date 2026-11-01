@@ -43,6 +43,8 @@ import {
   NEAR_ME_TARGET,
   NGOAI_DS_COLOR,
   NGOAI_DS_LABEL,
+  THAM_CHIEU_KG_COLOR,
+  THAM_CHIEU_KG_LABEL,
   SELECTED_COLOR,
   TO_CHUC_STRIPE_CSS,
   TO_CHUC_STRIPE_LABEL,
@@ -1312,6 +1314,11 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 <label>{GROUP_LABELS[code]}</label>
               </div>
             ))}
+
+            <div>
+              <span style={{ backgroundColor: THAM_CHIEU_KG_COLOR }} />
+              <label>{THAM_CHIEU_KG_LABEL}</label>
+            </div>
 
             <div>
               <span style={{ backgroundColor: GCN_COLOR }} />
