@@ -3794,3 +3794,99 @@ grant execute on function public.danhmuchoso_list(integer, integer, text, intege
 -- Trang demo /nhom-3-con-thieu-demo đã bỏ (yêu cầu người dùng, 01/11/2026).
 drop function if exists public.nhom3_tong_hop_co_dinh(integer);
 drop table if exists public.nhom3_gui_xuong_co_dinh;
+
+-- =========================================================
+-- DANH MỤC TRONG KHO — theo biểu tách dòng CSDL (kết quả tool tách dòng từ
+-- danh mục hồ sơ đưa lên VBDLIS): mỗi dòng = 1 người sử dụng đất x 1 thửa
+-- mới của 1 hồ sơ. Gửi file lại thì UPSERT theo hồ sơ (ma_xa, nam, cap,
+-- stt_ho_so): xoá các dòng cũ của hồ sơ đó rồi ghi lại theo file mới, để
+-- cập nhật tờ/thửa mới (1 hồ sơ có thể tách ra nhiều thửa mới). Riêng hồ sơ
+-- trong kho ĐÃ ứng tờ/thửa mới mà file gửi sau để trống toàn bộ tờ/thửa mới
+-- của hồ sơ đó thì GIỮ NGUYÊN trong kho (không để file cũ hơn xoá số đã ứng).
+-- =========================================================
+create table if not exists public.danh_muc_trong_kho (
+    id bigserial primary key,
+    ma_xa text not null,
+    ten_xa text,
+    nam integer not null,
+    cap text not null,
+    stt_ho_so text not null,
+    ten_nguoi_su_dung text,
+    thua_cu text,
+    to_cu text,
+    thua_moi text,
+    to_moi text,
+    dia_chi text,
+    so_seri_gcn text,
+    loai_ho_so text,
+    ngay_bien_dong text,
+    gcn_thu_hoi text,
+    xa_cu text,
+    nguon_file text,
+    cap_nhat_luc timestamptz not null default now()
+);
+create index if not exists danh_muc_trong_kho_ho_so_idx on public.danh_muc_trong_kho (ma_xa, nam, cap, stt_ho_so);
+create index if not exists danh_muc_trong_kho_thua_moi_idx on public.danh_muc_trong_kho (ma_xa, to_moi, thua_moi);
+create index if not exists danh_muc_trong_kho_seri_idx on public.danh_muc_trong_kho (so_seri_gcn);
+
+create or replace function public.upsert_danh_muc_trong_kho(p_data jsonb, p_nguon_file text default null)
+returns jsonb
+language plpgsql
+as $$
+declare
+    v_xoa integer;
+    v_them integer;
+    v_ho_so integer;
+    v_ho_so_moi integer;
+    v_giu integer;
+begin
+    create temp table _dmk on commit drop as
+    select nullif(trim(r->>'ma_xa'), '') ma_xa, nullif(trim(r->>'ten_xa'), '') ten_xa,
+           (r->>'nam')::integer nam, nullif(trim(r->>'cap'), '') cap, nullif(trim(r->>'stt_ho_so'), '') stt_ho_so,
+           nullif(trim(r->>'ten_nguoi_su_dung'), '') ten_nguoi_su_dung,
+           nullif(trim(r->>'thua_cu'), '') thua_cu, nullif(trim(r->>'to_cu'), '') to_cu,
+           nullif(trim(r->>'thua_moi'), '') thua_moi, nullif(trim(r->>'to_moi'), '') to_moi,
+           nullif(trim(r->>'dia_chi'), '') dia_chi, nullif(trim(r->>'so_seri_gcn'), '') so_seri_gcn,
+           nullif(trim(r->>'loai_ho_so'), '') loai_ho_so, nullif(trim(r->>'ngay_bien_dong'), '') ngay_bien_dong,
+           nullif(trim(r->>'gcn_thu_hoi'), '') gcn_thu_hoi, nullif(trim(r->>'xa_cu'), '') xa_cu
+    from jsonb_array_elements(p_data->'rows') r;
+
+    delete from _dmk where ma_xa is null or nam is null or cap is null or stt_ho_so is null;
+
+    -- Hồ sơ đã ứng tờ/thửa mới trong kho, file mới không có tờ/thửa mới nào -> giữ nguyên.
+    create temp table _dmk_giu on commit drop as
+    select distinct d.ma_xa, d.nam, d.cap, d.stt_ho_so from _dmk d
+    where exists (select 1 from public.danh_muc_trong_kho k
+                  where k.ma_xa = d.ma_xa and k.nam = d.nam and k.cap = d.cap and k.stt_ho_so = d.stt_ho_so
+                    and (k.to_moi is not null or k.thua_moi is not null))
+      and not exists (select 1 from _dmk d2
+                      where d2.ma_xa = d.ma_xa and d2.nam = d.nam and d2.cap = d.cap and d2.stt_ho_so = d.stt_ho_so
+                        and (d2.to_moi is not null or d2.thua_moi is not null));
+    get diagnostics v_giu = row_count;
+    delete from _dmk d using _dmk_giu g
+    where d.ma_xa = g.ma_xa and d.nam = g.nam and d.cap = g.cap and d.stt_ho_so = g.stt_ho_so;
+
+    select count(*) into v_ho_so from (select distinct ma_xa, nam, cap, stt_ho_so from _dmk) h;
+    select count(*) into v_ho_so_moi from (select distinct ma_xa, nam, cap, stt_ho_so from _dmk) h
+    where not exists (select 1 from public.danh_muc_trong_kho k
+                      where k.ma_xa = h.ma_xa and k.nam = h.nam and k.cap = h.cap and k.stt_ho_so = h.stt_ho_so);
+
+    delete from public.danh_muc_trong_kho k
+    using (select distinct ma_xa, nam, cap, stt_ho_so from _dmk) h
+    where k.ma_xa = h.ma_xa and k.nam = h.nam and k.cap = h.cap and k.stt_ho_so = h.stt_ho_so;
+    get diagnostics v_xoa = row_count;
+
+    insert into public.danh_muc_trong_kho (ma_xa, ten_xa, nam, cap, stt_ho_so, ten_nguoi_su_dung, thua_cu, to_cu,
+        thua_moi, to_moi, dia_chi, so_seri_gcn, loai_ho_so, ngay_bien_dong, gcn_thu_hoi, xa_cu, nguon_file)
+    select ma_xa, ten_xa, nam, cap, stt_ho_so, ten_nguoi_su_dung, thua_cu, to_cu,
+        thua_moi, to_moi, dia_chi, so_seri_gcn, loai_ho_so, ngay_bien_dong, gcn_thu_hoi, xa_cu, p_nguon_file
+    from _dmk;
+    get diagnostics v_them = row_count;
+
+    return jsonb_build_object('so_dong', v_them, 'so_ho_so', v_ho_so, 'ho_so_moi', v_ho_so_moi,
+                              'ho_so_cap_nhat', v_ho_so - v_ho_so_moi, 'dong_cu_da_thay', v_xoa,
+                              'ho_so_giu_nguyen', v_giu);
+end;
+$$;
+
+grant execute on function public.upsert_danh_muc_trong_kho(jsonb, text) to service_role;

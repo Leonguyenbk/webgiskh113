@@ -249,3 +249,87 @@ def import_dong_bo(filename: str, data: bytes):
         return None, (jsonify({"error": detail, "total": len(rows)}), 502)
 
     return {"ok": True, "total": len(rows), "imported": imported}, None
+
+
+# Biểu tách dòng CSDL (danh mục trong kho): tiêu đề cột trong file -> cột trong
+# bảng danh_muc_trong_kho. Đọc theo tiêu đề (không theo vị trí) để file sau có
+# thêm/bớt/đổi thứ tự cột vẫn nhập được.
+_DMK_COT = {
+    "mã xã": "ma_xa",
+    "tên xã": "ten_xa",
+    "năm": "nam",
+    "cặp": "cap",
+    "stt hồ sơ": "stt_ho_so",
+    "tên người sử dụng đất": "ten_nguoi_su_dung",
+    "thửa đất số (cũ)": "thua_cu",
+    "bản đồ số (cũ)": "to_cu",
+    "thửa đất số (mới)": "thua_moi",
+    "bản đồ số (mới)": "to_moi",
+    "địa chỉ thửa đất": "dia_chi",
+    "số seri gcn": "so_seri_gcn",
+    "loại hồ sơ": "loai_ho_so",
+    "ngày biến động": "ngay_bien_dong",
+    "gcn thu hồi": "gcn_thu_hoi",
+    "xã cũ": "xa_cu",
+}
+_DMK_BAT_BUOC = ("ma_xa", "nam", "cap", "stt_ho_so")
+
+
+def _dmk_text(value):
+    if value is None:
+        return None
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if hasattr(value, "strftime"):
+        return value.strftime("%d/%m/%Y")
+    text = str(value).strip()
+    return text or None
+
+
+def _doc_bieu_tach_dong(data: bytes) -> list[dict]:
+    import io
+
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    for ws in wb.worksheets:
+        rows = ws.iter_rows(values_only=True)
+        for header in rows:
+            cot = {}
+            for i, ten in enumerate(header):
+                key = " ".join(str(ten or "").lower().split())
+                if key in _DMK_COT:
+                    cot[_DMK_COT[key]] = i
+            if all(k in cot for k in _DMK_BAT_BUOC):
+                ket_qua = []
+                for values in rows:
+                    dong = {f: _dmk_text(values[i]) if i < len(values) else None for f, i in cot.items()}
+                    if any(dong.values()):
+                        ket_qua.append(dong)
+                return ket_qua
+    raise ValueError("Không tìm thấy dòng tiêu đề có đủ cột Mã xã, Năm, Cặp, STT hồ sơ")
+
+
+def import_danh_muc_trong_kho(filename: str, data: bytes):
+    try:
+        rows = _doc_bieu_tach_dong(data)
+    except Exception as exc:  # noqa: BLE001 - lỗi đọc file người dùng tải lên, phải báo rõ nguyên nhân
+        return None, (jsonify({"error": f"Không đọc được file: {exc}"}), 400)
+
+    loi = [i + 2 for i, r in enumerate(rows) if not all(r.get(k) for k in _DMK_BAT_BUOC)]
+    for r in rows:
+        try:
+            r["nam"] = int(r["nam"]) if r.get("nam") else None
+        except ValueError:
+            r["nam"] = None
+    loi += [i + 2 for i, r in enumerate(rows) if r.get("nam") is None and (i + 2) not in loi]
+    hop_le = [r for r in rows if all(r.get(k) for k in _DMK_BAT_BUOC)]
+    if not hop_le:
+        return None, (jsonify({"error": "File không có dòng dữ liệu hợp lệ"}), 400)
+
+    data_kq, error_response = supabase_client.call_rpc(
+        "upsert_danh_muc_trong_kho", {"p_data": {"rows": hop_le}, "p_nguon_file": filename}, timeout=300
+    )
+    if error_response:
+        return None, error_response
+    return {"ok": True, "tong_dong_file": len(rows), "dong_bo_qua": sorted(loi)[:50], "so_dong_bo_qua": len(loi), **(data_kq or {})}, None

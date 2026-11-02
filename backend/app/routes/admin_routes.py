@@ -67,3 +67,18 @@ def import_dong_bo():
     if error_response:
         return error_response
     return jsonify(data)
+
+
+@admin_bp.post("/api/import-danh-muc-trong-kho")
+def import_danh_muc_trong_kho():
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Thiếu file Excel biểu tách dòng"}), 400
+
+    data, error_response = import_service.import_danh_muc_trong_kho(uploaded.filename, uploaded.read())
+    if error_response:
+        return error_response
+    return jsonify(data)

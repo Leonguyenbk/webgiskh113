@@ -19,6 +19,7 @@ import Nhom3ConThieuChiTietPage from "./Nhom3ConThieuChiTietPage.jsx";
 import Nhom3DashboardPage from "./Nhom3DashboardPage.jsx";
 import Nhom3TyLePage from "./Nhom3TyLePage.jsx";
 import DanhMucHoSoPage from "./DanhMucHoSoPage.jsx";
+import ImportDanhMucKhoPage from "./ImportDanhMucKhoPage.jsx";
 
 function Root() {
   const [path, setPath] = useState(window.location.pathname);
@@ -72,8 +73,12 @@ function Root() {
         onNavigateNhom3Dashboard={() => navigate("/nhom-3-dashboard")}
         onNavigateNhom3TyLe={() => navigate("/nhom-3-ty-le")}
         onNavigateDanhMucHoSo={() => navigate("/danh-muc-ho-so")}
+        onNavigateDanhMucKho={() => navigate("/danh-muc-trong-kho")}
       />
     );
+  }
+  if (path.startsWith("/danh-muc-trong-kho")) {
+    return <ImportDanhMucKhoPage onNavigateHome={() => navigate("/")} />;
   }
   if (path.startsWith("/danh-muc-ho-so")) {
     return <DanhMucHoSoPage onNavigateHome={() => navigate("/")} />;

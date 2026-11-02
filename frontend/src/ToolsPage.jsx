@@ -33,6 +33,7 @@ export default function ToolsPage({
   onNavigateNhom3Dashboard,
   onNavigateNhom3TyLe,
   onNavigateDanhMucHoSo,
+  onNavigateDanhMucKho,
 }) {
   const ADMIN_TOOLS = [
     {
@@ -65,6 +66,11 @@ export default function ToolsPage({
       name: "📝 Nhập biểu Nhóm 4",
       description: "Nhập biểu mẫu thu thập dữ liệu thửa đất (Hộ gia đình/Tổ chức), lưu vào cơ sở dữ liệu, hồ sơ quét lên Google Drive.",
       onNavigate: onNavigateNhom4,
+    },
+    {
+      name: "📦 Danh mục trong kho",
+      description: "Gửi file biểu tách dòng CSDL (danh mục hồ sơ đưa lên VBDLIS), cập nhật danh mục trong kho theo hồ sơ — gửi lại file để cập nhật tờ/thửa mới.",
+      onNavigate: onNavigateDanhMucKho,
     },
     {
       name: "🗺️ Nhập ranh giới thôn",

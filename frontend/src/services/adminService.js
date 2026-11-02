@@ -91,3 +91,15 @@ export function syncNguonGcn(maNguon, token) {
     errorFallback: "Đồng bộ thất bại",
   });
 }
+
+export function importDanhMucTrongKho(file, token) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request("/api/import-danh-muc-trong-kho", {
+    method: "POST",
+    body: formData,
+    isFormData: true,
+    token,
+    errorFallback: "Nhập danh mục trong kho thất bại",
+  });
+}
