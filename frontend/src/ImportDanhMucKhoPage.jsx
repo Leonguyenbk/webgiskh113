@@ -49,7 +49,7 @@ export default function ImportDanhMucKhoPage({ onNavigateHome }) {
 
       <section className="importWrap">
         <form className="importCard" onSubmit={handleSubmit}>
-          <label htmlFor="syncFile">File Excel biểu tách dòng</label>
+          <label htmlFor="syncFile">File Excel biểu tách dòng hoặc danh mục gốc</label>
           <input
             id="syncFile"
             type="file"
@@ -61,6 +61,8 @@ export default function ImportDanhMucKhoPage({ onNavigateHome }) {
             Thửa/Bản đồ số (cũ), Thửa/Bản đồ số (mới), Địa chỉ, Số seri GCN, Loại hồ sơ,
             Ngày biến động, GCN thu hồi, Xã cũ. Hồ sơ (Mã xã + Năm + Cặp + STT hồ sơ) đã
             có trong kho sẽ được thay bằng các dòng trong file mới (cập nhật tờ/thửa mới).
+            Gửi file danh mục gốc (chưa tách dòng, tiêu đề "STT hồ sơ" ở cột D) cũng được —
+            hệ thống tự tách dòng. Google Sheet danh mục được đồng bộ tự động mỗi giờ.
           </p>
 
           <label htmlFor="syncToken">Mã xác thực</label>

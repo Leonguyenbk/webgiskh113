@@ -3890,3 +3890,15 @@ end;
 $$;
 
 grant execute on function public.upsert_danh_muc_trong_kho(jsonb, text) to service_role;
+
+-- Danh sách xã/phường để đồng bộ danh mục trong kho nhận ra xã theo cột địa
+-- chỉ / tên trang tính (xem backend/app/services/danh_muc_kho_service.py).
+create or replace function public.danh_muc_kho_ds_xa()
+returns table (ma_xa text, ten_xa text)
+language sql
+stable
+as $$
+    select ma_xa::text, ten_xa::text from public.danhsachxaphuong;
+$$;
+
+grant execute on function public.danh_muc_kho_ds_xa() to service_role;

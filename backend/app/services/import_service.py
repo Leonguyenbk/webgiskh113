@@ -313,6 +313,9 @@ def _doc_bieu_tach_dong(data: bytes) -> list[dict]:
 def import_danh_muc_trong_kho(filename: str, data: bytes):
     try:
         rows = _doc_bieu_tach_dong(data)
+    except ValueError:
+        # Không phải biểu tách dòng -> thử đọc như file danh mục hồ sơ gốc (tự tách dòng).
+        return _import_danh_muc_goc(filename, data)
     except Exception as exc:  # noqa: BLE001 - lỗi đọc file người dùng tải lên, phải báo rõ nguyên nhân
         return None, (jsonify({"error": f"Không đọc được file: {exc}"}), 400)
 
@@ -333,3 +336,21 @@ def import_danh_muc_trong_kho(filename: str, data: bytes):
     if error_response:
         return None, error_response
     return {"ok": True, "tong_dong_file": len(rows), "dong_bo_qua": sorted(loi)[:50], "so_dong_bo_qua": len(loi), **(data_kq or {})}, None
+
+
+def _import_danh_muc_goc(filename: str, data: bytes):
+    from . import danh_muc_kho_service
+
+    try:
+        rows, canh_bao = danh_muc_kho_service.doc_danh_muc_goc(data)
+    except Exception as exc:  # noqa: BLE001 - lỗi đọc file người dùng tải lên, phải báo rõ nguyên nhân
+        return None, (jsonify({"error": f"Không đọc được file: {exc}"}), 400)
+    if not rows:
+        return None, (jsonify({"error": "File không có dòng dữ liệu hợp lệ"}), 400)
+    ket_qua, error_response = danh_muc_kho_service.ghi_kho(rows, filename)
+    if error_response:
+        return None, error_response
+    return {
+        "ok": True, "tong_dong_file": len(rows), "dong_bo_qua": [], "so_dong_bo_qua": 0,
+        "so_canh_bao": len(canh_bao), "canh_bao": canh_bao[:50], **(ket_qua or {}),
+    }, None

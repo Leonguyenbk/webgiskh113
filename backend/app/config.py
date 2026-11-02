@@ -26,6 +26,10 @@ class Config:
 
     FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
     IMPORT_TOKEN = os.getenv("IMPORT_TOKEN", "")
+    # Link Google Sheet danh mục hồ sơ gốc (chia sẻ "bất kỳ ai có link") — đồng bộ
+    # định kỳ vào danh_muc_trong_kho, xem services/danh_muc_kho_service.py. Chỉ
+    # đặt trong backend/.env (link chứa dữ liệu người sử dụng đất).
+    DANH_MUC_KHO_SHEET_URL = os.getenv("DANH_MUC_KHO_SHEET_URL", "")
 
     GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
     GOOGLE_DRIVE_ROOT_FOLDER_ID = os.getenv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "")

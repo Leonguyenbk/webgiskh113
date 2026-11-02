@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from ..services import import_service
+from ..services import danh_muc_kho_service, import_service
 from ..utils.validators import check_import_token
 
 admin_bp = Blueprint("admin", __name__)
@@ -79,6 +79,18 @@ def import_danh_muc_trong_kho():
         return jsonify({"error": "Thiếu file Excel biểu tách dòng"}), 400
 
     data, error_response = import_service.import_danh_muc_trong_kho(uploaded.filename, uploaded.read())
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
+@admin_bp.post("/api/danh-muc-trong-kho/sync")
+def sync_danh_muc_trong_kho():
+    # Gọi định kỳ bởi scripts/sync_danh_muc_kho.ps1 (Task Scheduler) hoặc gọi tay.
+    if not check_import_token():
+        return jsonify({"error": "Mã xác thực không đúng"}), 401
+
+    data, error_response = danh_muc_kho_service.dong_bo_google_sheet()
     if error_response:
         return error_response
     return jsonify(data)
