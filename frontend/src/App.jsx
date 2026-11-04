@@ -102,6 +102,24 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
 
   // Độ mờ (fillOpacity) lớp phủ thửa đất — kéo slider 0-100%, mặc định 70%.
   const [parcelOpacity, setParcelOpacity] = useState(0.7);
+  // Bật/tắt khung ghi chú màu trên bản đồ — nhớ lựa chọn theo trình duyệt.
+  const [legendOpen, setLegendOpen] = useState(() => {
+    try {
+      return localStorage.getItem("legendOpen") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const toggleLegend = () => {
+    setLegendOpen((open) => {
+      try {
+        localStorage.setItem("legendOpen", open ? "0" : "1");
+      } catch {
+        // localStorage có thể bị chặn — chỉ không nhớ được lựa chọn.
+      }
+      return !open;
+    });
+  };
 
   // Leaflet cache kích thước container, không tự phát hiện đổi kích thước
   // do CSS (ẩn header/sidebar) — phải tự gọi invalidateSize() sau khi
@@ -1309,8 +1327,17 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             Bấm ranh thửa để xem thông tin · giữ Ctrl/Shift để chọn nhiều thửa
           </div>
 
-          <div className="landLegend">
-            <strong>Ghi chú</strong>
+          <div className={`landLegend${legendOpen ? "" : " collapsed"}`}>
+            <button
+              type="button"
+              className="legendToggle"
+              onClick={toggleLegend}
+              aria-expanded={legendOpen}
+              title={legendOpen ? "Ẩn ghi chú" : "Hiện ghi chú"}
+            >
+              <strong>Ghi chú</strong>
+              <em>{legendOpen ? "▾ Ẩn" : "▸ Hiện"}</em>
+            </button>
 
             {["NHÓM 1", "NHÓM 2"].map((code) => (
               <div key={code}>
