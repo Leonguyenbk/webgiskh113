@@ -75,6 +75,14 @@ export function getThongKeNguonNhap({ signal } = {}) {
   });
 }
 
+export function getThongKeKhuVuc(params, { signal } = {}) {
+  return request("/api/thong-ke/khu-vuc", {
+    params,
+    signal,
+    errorFallback: "Không tải được thống kê khu vực",
+  });
+}
+
 export function getNhom3TongHop(params, { signal } = {}) {
   return request("/api/nhom3-con-thieu/tong-hop", {
     params,

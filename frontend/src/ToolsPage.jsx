@@ -31,6 +31,7 @@ export default function ToolsPage({
   onNavigateThongKeNguonNhap,
   onNavigateNhom3ConThieu,
   onNavigateNhom3Dashboard,
+  onNavigateKhuVucDongHoa,
   onNavigateNhom3TyLe,
   onNavigateDanhMucHoSo,
   onNavigateDanhMucKho,
@@ -106,6 +107,11 @@ export default function ToolsPage({
       name: "📋 Nhóm 3 — tỷ lệ so với số gửi xuống",
       description: "Theo xã: số lượng gửi xuống (đã trừ dự án), Nhóm 1 và đã nhập biểu trong danh sách, tổng và tỷ lệ.",
       onNavigate: onNavigateNhom3TyLe,
+    },
+    {
+      name: "🥧 Khu vực Đông Hòa — tiến độ nhập biểu",
+      description: "Tốc độ nhập biểu, tỷ lệ hoàn thành và biểu đồ bánh của 3 đơn vị khu vực Đông Hòa.",
+      onNavigate: onNavigateKhuVucDongHoa,
     },
     {
       name: "🗂️ Danh mục hồ sơ lưu trữ",

@@ -916,6 +916,18 @@ label[for="mplisCookie"] {
   .dashboardCharts2Col { grid-template-columns: 1fr; }
 }
 
+.kvFilter { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; color: #334155; }
+.kvFilter select { max-width: 100%; padding: 6px 8px; font-size: 13px; }
+.kvGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin-top: 12px; }
+.kvSpeed { margin: 0; font-size: 12px; color: #334155; }
+.kvSpeed strong { font-size: 18px; color: #102a2b; }
+.kvPie { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.kvPair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; margin-top: 12px; }
+.kvPair > .importCard { min-width: 0; margin: 0; }
+.kvLegend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #334155; }
+.kvLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.kvLegend i { width: 11px; height: 11px; border-radius: 3px; }
+.kvNote { margin: 12px 0 0; font-size: 12px; color: #6a817e; }
 .pieWrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pieLegend { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; width: 100%; }
 .pieLegend > div { display: flex; align-items: center; gap: 8px; }

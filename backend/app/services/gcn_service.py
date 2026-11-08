@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -475,6 +476,37 @@ def _parse_to_giam_sat(raw: str | None):
     return value, None
 
 
+# nhom3_tong_hop mất ~11s (gộp ~1,8 triệu dòng cache) trong khi cache Nhóm 3
+# chỉ đổi mỗi 2 giờ — giữ kết quả vài phút. Khóa để nhiều người mở trang cùng
+# lúc khi hết hạn chỉ tính 1 lần. Kết quả dùng chung: nơi gọi không được sửa.
+_TONG_HOP_CACHE_GIAY = 300
+_tong_hop_cache: dict[int | None, tuple[datetime, dict]] = {}
+_tong_hop_lock = threading.Lock()
+
+
+def _nhom3_tong_hop_co_cache(to_giam_sat: int | None):
+    def con_han():
+        cached = _tong_hop_cache.get(to_giam_sat)
+        if cached and (datetime.now(_GIO_VN) - cached[0]).total_seconds() < _TONG_HOP_CACHE_GIAY:
+            return cached[1]
+        return None
+
+    result = con_han()
+    if result is not None:
+        return result, None
+    with _tong_hop_lock:
+        result = con_han()
+        if result is not None:
+            return result, None
+        result, error_response = gcn_repository.nhom3_tong_hop(to_giam_sat)
+        if error_response:
+            return None, error_response
+        if not isinstance(result, dict):
+            result = {}
+        _tong_hop_cache[to_giam_sat] = (datetime.now(_GIO_VN), result)
+        return result, None
+
+
 def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
     """Trang '/nhom-3-con-thieu' — tổng hợp danh sách thửa cần thu thập
     Nhóm 3 (bảng nhom3_can_thu_thap) so với Nhóm 1/2 và đã thu thập. Lọc
@@ -484,11 +516,10 @@ def get_nhom3_tong_hop(to_giam_sat_raw: str | None = None):
     if error_response:
         return None, error_response
 
-    result, error_response = gcn_repository.nhom3_tong_hop(to_giam_sat)
+    result, error_response = _nhom3_tong_hop_co_cache(to_giam_sat)
     if error_response:
         return None, error_response
-    if not isinstance(result, dict):
-        result = {}
+    result = dict(result)
     result.setdefault("tong", 0)
     result.setdefault("da_nhom_1_2", 0)
     result.setdefault("da_nhom_1_2_da_nhap", 0)
@@ -553,10 +584,9 @@ def export_nhom3_tong_hop_xlsx(to_giam_sat_raw: str | None = None):
     if error_response:
         return None, error_response
 
-    result, error_response = gcn_repository.nhom3_tong_hop(to_giam_sat)
+    result, error_response = _nhom3_tong_hop_co_cache(to_giam_sat)
     if error_response:
         return None, error_response
-    result = result if isinstance(result, dict) else {}
     theo_xa = result.get("theo_xa") if isinstance(result.get("theo_xa"), list) else []
 
     wb = Workbook()
@@ -688,7 +718,7 @@ def get_thong_ke_buon_ma_thuot(so_ngay_raw: str | None):
     if cached and (now - cached[0]).total_seconds() < _BMT_CACHE_GIAY:
         return cached[1], None
 
-    tong_hop, error_response = gcn_repository.nhom3_tong_hop(None)
+    tong_hop, error_response = _nhom3_tong_hop_co_cache(None)
     if error_response:
         return None, error_response
     theo_xa = (tong_hop.get("theo_xa") if isinstance(tong_hop, dict) else None) or []
@@ -723,10 +753,58 @@ def get_thong_ke_buon_ma_thuot(so_ngay_raw: str | None):
     return result, None
 
 
+_khu_vuc_cache: dict[tuple[str, int], tuple[datetime, dict]] = {}
+
+
+def get_thong_ke_khu_vuc(khu_vuc_raw: str | None, so_ngay_raw: str | None):
+    """Số liệu các xã của 1 khu vực cho trang thống kê riêng: dòng của từng
+    xã trong nhom3_tong_hop và số thửa nhập biểu web theo ngày."""
+    khu_vuc = (khu_vuc_raw or "").strip()
+    if not khu_vuc:
+        return None, (jsonify({"error": "Thiếu khu_vuc"}), 400)
+    try:
+        so_ngay = int((so_ngay_raw or "").strip() or _BMT_SO_NGAY_MAC_DINH)
+    except ValueError:
+        return None, (jsonify({"error": "so_ngay không hợp lệ"}), 400)
+    so_ngay = min(max(so_ngay, 1), _BMT_SO_NGAY_TOI_DA)
+
+    now = datetime.now(_GIO_VN)
+    cached = _khu_vuc_cache.get((khu_vuc, so_ngay))
+    if cached and (now - cached[0]).total_seconds() < _BMT_CACHE_GIAY:
+        return cached[1], None
+
+    tong_hop, error_response = _nhom3_tong_hop_co_cache(None)
+    if error_response:
+        return None, error_response
+    theo_xa = (tong_hop.get("theo_xa") if isinstance(tong_hop, dict) else None) or []
+    cac_xa = [x for x in theo_xa if x.get("khu_vuc") == khu_vuc]
+    if not cac_xa:
+        return None, (jsonify({"error": f"Chưa có số liệu khu vực {khu_vuc}"}), 404)
+
+    theo_ngay = {}
+    for xa in cac_xa:
+        thong_ke, error_response = gcn_repository.thong_ke_nhom3_xa(xa["ma_xa"], so_ngay)
+        if error_response:
+            return None, error_response
+        theo_ngay[xa["ma_xa"]] = (thong_ke or {}).get("nhap_bieu_web_theo_ngay", [])
+
+    result = {
+        "khu_vuc": khu_vuc,
+        "cap_nhat_luc": gcn_repository.nhom3_cache_computed_at(),
+        "tao_luc": now.isoformat(),
+        "so_ngay": so_ngay,
+        "theo_xa": cac_xa,
+        "nhap_bieu_web_theo_ngay": theo_ngay,
+    }
+    _khu_vuc_cache[(khu_vuc, so_ngay)] = (now, result)
+    return result, None
+
+
 def refresh_nhom3_cache():
     result, error_response = gcn_repository.refresh_nhom3_trang_thai_cache()
     if error_response:
         return None, error_response
+    _tong_hop_cache.clear()
     # Hàm SQL trả về số dòng đã ghi vào cache (PostgREST bọc trong scalar).
     rows = result if isinstance(result, int) else None
     return {"ok": True, "rows": rows}, None

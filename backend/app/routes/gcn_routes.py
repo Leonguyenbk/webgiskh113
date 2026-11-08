@@ -156,6 +156,18 @@ def thong_ke_buon_ma_thuot():
     return jsonify(data)
 
 
+@gcn_bp.get("/api/thong-ke/khu-vuc")
+def thong_ke_khu_vuc():
+    # Trang thống kê riêng theo khu vực: ?khu_vuc=<tên khu vực>&so_ngay=<1-365>.
+    # Kết quả giữ 5 phút ở server.
+    data, error_response = gcn_service.get_thong_ke_khu_vuc(
+        request.args.get("khu_vuc"), request.args.get("so_ngay")
+    )
+    if error_response:
+        return error_response
+    return jsonify(data)
+
+
 @gcn_bp.get("/api/nhom3-con-thieu/export-tong-hop")
 def nhom3_con_thieu_export_tong_hop():
     # Xuất .xlsx tổng hợp tiến độ theo xã: khối lượng gửi xuống, đã vào dữ

@@ -37,6 +37,8 @@ export const GROUP_LABELS = {
   DEFAULT: "Chưa phân loại",
 };
 
+export const NHOM3_TRONG_DS_LABEL = "Nhóm 3 (trong danh sách gửi xã, chưa có dữ liệu)";
+
 // Thửa đã có dữ liệu GCN (properties.co_gcn, xem get_parcels_in_view/
 // search_parcels trong supabase/schema.sql) được tô xanh dương — nhưng
 // chỉ khi thửa CHƯA thuộc Nhóm 1/Nhóm 2, vì màu nhóm quan trọng hơn và
@@ -123,6 +125,21 @@ export function isThuaTrung(properties = {}) {
     !properties.co_gcn &&
     !properties.nong_lam_truong &&
     Boolean(properties.thua_trung_ghi_chu)
+  );
+}
+
+// Bộ lọc "Nhóm 3 (trong danh sách gửi xã, chưa có dữ liệu)": chỉ còn thửa xã
+// phải đi thu thập — khớp số "còn thiếu" ở /nhom-3-con-thieu. Dùng cờ gốc,
+// không dùng isNgoaiDsGuiXa/isNongLamTruong (các hàm đó phục vụ tô màu).
+// Thửa chồng đè, thửa vụn đã xoá khỏi danh sách nên thuộc ngoai_ds_gui_xa.
+// Thửa tham chiếu không gian do Chi nhánh KV làm nên cũng không hiện.
+export function isNhom3TrongDsGuiXa(properties = {}) {
+  return (
+    !properties.co_gcn &&
+    !properties.tham_chieu_kg &&
+    !properties.ngoai_ds_gui_xa &&
+    !properties.thuoc_du_an &&
+    !properties.nong_lam_truong
   );
 }
 

@@ -17,8 +17,8 @@ const VIEWPORT_PAD = 0.25;
 // được số thửa trên ảnh quét để ứng thửa, zoom nhỏ hơn chỉ tốn tải. Đã chọn
 // xã/tờ ở sidebar: 13 — chỉ trong 1 xã, đã lọc theo khung nhìn, và chọn 1
 // tờ thì bản đồ tự fitBounds về khoảng zoom 15, ngưỡng 16 sẽ ra màn trống.
-const MIN_LOAD_ZOOM = 18;
-const MIN_LOAD_ZOOM_FILTERED = 13;
+const MIN_LOAD_ZOOM = 17;
+const MIN_LOAD_ZOOM_FILTERED = 14;
 
 // Phải khớp CHÍNH XÁC name="..." của LayersControl.Overlay bọc lớp này
 // trong App.jsx — Leaflet phát sự kiện overlayadd/overlayremove kèm đúng
