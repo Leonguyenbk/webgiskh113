@@ -41,6 +41,13 @@ def _text(node: ET.Element, name: str, default: str = "") -> str:
     return (child.text or "").strip() if child is not None else default
 
 
+def _so_nguyen(value: str) -> int:
+    """'44' hoặc '44.00000000000' -> 44; rỗng -> 0."""
+    if not value:
+        return 0
+    return int(float(value))
+
+
 def _ring(pos_list: str, transformer: Transformer) -> list[list[float]]:
     values = [float(value) for value in pos_list.split()]
     if len(values) % 2:
@@ -114,9 +121,12 @@ def _feature_from_member(member: ET.Element, transformer: Transformer, index: in
     if rings is None:
         return None
 
-    # File OGR/shapefile cắt tên trường còn 10 ký tự (soHieuToBa, soThuTuThu).
-    so_to = int(_text(parcel, "soHieuToBanDo") or _text(parcel, "soHieuToBa") or "0")
-    so_thua = int(_text(parcel, "soThuTuThua") or _text(parcel, "soThuTuThu") or "0")
+    # File OGR/shapefile cắt tên trường còn 10 ký tự (soHieuToBa, soThuTuThu);
+    # file qua ArcGIS Spatial Join còn đặt tên trùng thành soHieuT001,
+    # soThuTu001 (cột gốc soHieuToBa/soThuTuThu vẫn có nhưng để trống) và
+    # ghi số dạng "5.00000000000".
+    so_to = _so_nguyen(_first_text(parcel, ("soHieuToBanDo", "soHieuToBa", "soHieuT001")))
+    so_thua = _so_nguyen(_first_text(parcel, ("soThuTuThua", "soThuTuThu", "soThuTu001")))
     dien_tich_raw = _text(parcel, "dienTich", "0")
 
     return {
@@ -138,7 +148,7 @@ def _feature_from_member(member: ET.Element, transformer: Transformer, index: in
             "ten_chu": _text(parcel, "tenChu"),
             # Tên chủ đăng ký theo sổ mục kê cũ — đa số file chưa có thẻ này,
             # để trống thì upsert_thua_dat_diff giữ nguyên giá trị đã có.
-            "ten_chu_dk": _text(parcel, "tenChuDK") or _text(parcel, "tenChuDangKy"),
+            "ten_chu_dk": _first_text(parcel, ("tenChuDK", "tenChuDangKy")),
             "dia_chi": _text(parcel, "diaChi"),
         },
     }
@@ -217,13 +227,26 @@ def iter_rows(source: BinaryIO) -> Iterator[dict]:
 #     khớp cứng theo tên thẻ bọc multi-part.
 # Nếu sai tên thẻ thực tế thì sẽa lại _TEN_THON_TAGS/_MA_XA_TAGS theo lỗi
 # "thiếu tên thôn/mã xã" khi người dùng thử nhập file thật.
-_TEN_THON_TAGS = ("tenThon", "tenThonBuon", "tenBuonThon", "tenDonVi", "ten")
+_TEN_THON_TAGS = ("tenThon", "tenThonBuon", "tenBuonThon", "tenDonVi", "ten", "thon")
 _MA_XA_TAGS = ("maXa", "maDVHC", "ma_xa")
 
 
+def _norm_tag(name: str) -> str:
+    return name.replace("_", "").lower()
+
+
 def _first_text(node: ET.Element, names: tuple[str, ...]) -> str:
+    # So khớp không phân biệt hoa/thường và bỏ dấu "_": file xuất qua
+    # QGIS/ArcGIS (OGR) giữ nguyên tên cột shapefile (TEN_THON, MaXa,
+    # ma_xa...) thay vì tenThon/maXa của file VBDLIS.
+    values = {}
+    for child in node:
+        key = _norm_tag(_local_name(child.tag))
+        text = (child.text or "").strip()
+        if text and key not in values:
+            values[key] = text
     for name in names:
-        value = _text(node, name)
+        value = values.get(_norm_tag(name))
         if value:
             return value
     return ""
@@ -253,9 +276,12 @@ def _feature_ranh_thon_from_member(member: ET.Element, transformer: Transformer)
     if thon is None:
         return None
 
+    # VBDLIS bọc hình học trong <Geometry>; file OGR dùng tên khác
+    # (geometryProperty, msGeometry, the_geom...) — không có <Geometry> thì
+    # gom mọi Polygon nằm trong feature.
     geometry = _child(thon, "Geometry")
     if geometry is None:
-        return None
+        geometry = thon
 
     parts = _multipolygon_rings_from_geometry(geometry, transformer)
     if parts is None:
@@ -281,7 +307,7 @@ def iter_rows_ranh_thon(source: BinaryIO) -> Iterator[dict]:
     context = ET.iterparse(source, events=("start", "end"))
     _, root = next(context)
     for event, elem in context:
-        if event != "end" or _local_name(elem.tag) != "member":
+        if event != "end" or _local_name(elem.tag) not in ("member", "featureMember"):
             continue
         feature = _feature_ranh_thon_from_member(elem, transformer)
         if feature is not None:

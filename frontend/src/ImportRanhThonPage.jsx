@@ -91,7 +91,7 @@ export default function ImportRanhThonPage({ onNavigateHome }) {
         <div className="brandMark">GIS</div>
         <div>
           <h1>Nhập ranh giới thôn</h1>
-          <p>Đẩy file Shapefile (.zip gồm .shp/.shx/.dbf/.prj) vào cơ sở dữ liệu</p>
+          <p>Đẩy file Shapefile (.zip gồm .shp/.shx/.dbf/.prj) hoặc GML (.gml) vào cơ sở dữ liệu</p>
         </div>
         <a
           className="backLink"
@@ -107,16 +107,17 @@ export default function ImportRanhThonPage({ onNavigateHome }) {
 
       <section className="importWrap">
         <form className="importCard" onSubmit={handleSubmit}>
-          <label htmlFor="ranhThonFile">File Shapefile (.zip)</label>
+          <label htmlFor="ranhThonFile">File Shapefile (.zip) hoặc GML (.gml)</label>
           <input
             id="ranhThonFile"
             type="file"
-            accept=".zip"
+            accept=".zip,.gml,.xml"
             onChange={(event) => setFile(event.target.files?.[0] || null)}
           />
           <p className="importHint">
-            Nén cả .shp, .shx, .dbf (và .prj nếu có) vào 1 file .zip trước khi tải lên. Thuộc tính mỗi vùng phải có
-            cột mã xã và tên thôn.
+            Shapefile: nén cả .shp, .shx, .dbf (và .prj nếu có) vào 1 file .zip trước khi tải lên. GML: tải thẳng
+            file .gml, tọa độ VN-2000 kinh tuyến trục 108°30'. Thuộc tính mỗi vùng phải có mã xã (maXa/MA_XA) và tên
+            thôn (tenThon/TEN_THON).
           </p>
 
           <label htmlFor="importToken">Mã xác thực</label>
