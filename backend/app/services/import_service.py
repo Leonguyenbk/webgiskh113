@@ -7,6 +7,7 @@ import gml_reader
 import shapefile_reader
 from sync_reader import parse_sync_file
 from ..repositories import ranh_thon_repository, supabase_client
+from . import ranh_xa_mau_service
 
 
 def _refresh_ranh_gioi_thon_cache(ma_xa_list) -> str | None:
@@ -22,6 +23,15 @@ def _refresh_ranh_gioi_thon_cache(ma_xa_list) -> str | None:
     admin biết mà tự chạy lại `select public.refresh_ranh_gioi_thon_cache(
     '<ma_xa>');` nếu cần."""
     warnings = []
+    # Tô lại 4 màu theo xã TRƯỚC khi build cache (cache chứa properties.mau).
+    # Xã khác bị đổi màu (do xã vừa nhập giáp nó) cũng phải làm mới cache.
+    ma_xa_list = list(ma_xa_list)
+    xa_doi_mau, mau_warning = ranh_xa_mau_service.cap_nhat_mau_ranh_xa(
+        supabase_client.call_rpc
+    )
+    if mau_warning:
+        current_app.logger.warning(mau_warning)
+    ma_xa_list += sorted(xa_doi_mau - set(ma_xa_list))
     for ma_xa in ma_xa_list:
         _, error_response = supabase_client.call_rpc(
             "refresh_ranh_gioi_thon_cache", {"p_ma_xa": ma_xa}, timeout=30

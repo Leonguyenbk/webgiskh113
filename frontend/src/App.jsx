@@ -56,12 +56,30 @@ import {
   VIEWPORT_SEARCH_TARGET,
   getGroupKey,
   getParcelFillColor,
+  getRanhXaColor,
   getToChucStripePattern,
   isNgoaiDsGuiXa,
   isNhom3TrongDsGuiXa,
   isToChucChuaPhanLoai,
 } from "./utils/constants";
 import { featureKey } from "./utils/geometry";
+
+// Kiểu vẽ lớp "Ranh giới thôn": màu theo xã (4 màu, xã giáp nhau khác màu —
+// xem RANH_XA_COLORS). Nền rất nhạt để vẫn đọc được màu phân loại thửa bên
+// dưới; viền đậm để nhận ra ranh. Để ở module (hàm cố định) để GeoJSON không
+// setStyle lại mỗi lần App render.
+function ranhThonStyle(feature) {
+  const mauXa = getRanhXaColor(feature.properties);
+  const daTo = Number.isInteger(feature.properties?.mau);
+  return {
+    color: mauXa,
+    weight: daTo ? 3 : 2,
+    opacity: 1,
+    dashArray: daTo ? null : "6 4",
+    fillColor: mauXa,
+    fillOpacity: daTo ? 0.12 : 0,
+  };
+}
 
 const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const GOOGLE_SUBDOMAINS = ["mt0", "mt1", "mt2", "mt3"];
@@ -361,6 +379,9 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
     });
     return map;
   }, [xaOptions]);
+  // Tooltip ranh thôn đọc tên xã qua ref (bindTooltip chỉ chạy 1 lần lúc vẽ).
+  const xaNameByCodeRef = useRef(xaNameByCode);
+  xaNameByCodeRef.current = xaNameByCode;
 
   const filteredXaOptions = useMemo(() => {
     const keyword = xaQuery.trim().toLocaleLowerCase("vi");
@@ -1274,16 +1295,19 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                 <GeoJSON
                   ref={ranhThonLayerRef}
                   data={{ type: "FeatureCollection", features: [] }}
-                  style={{
-                    color: "#dc2626",
-                    weight: 2,
-                    opacity: 1,
-                    dashArray: "6 4",
-                    fillOpacity: 0,
-                  }}
+                  style={ranhThonStyle}
                   onEachFeature={(feature, layer) => {
-                    if (feature.properties?.ten_thon) {
-                      layer.bindTooltip(feature.properties.ten_thon, { sticky: true });
+                    const p = feature.properties || {};
+                    if (p.ten_thon || p.ma_xa) {
+                      // Hàm (không phải chuỗi) để luôn lấy tên xã mới nhất —
+                      // danh sách xã có thể tải xong SAU khi lớp này vẽ.
+                      layer.bindTooltip(
+                        () => {
+                          const tenXa = xaNameByCodeRef.current?.[p.ma_xa] || p.ma_xa || "";
+                          return [p.ten_thon, tenXa].filter(Boolean).join(" — ");
+                        },
+                        { sticky: true },
+                      );
                     }
                   }}
                 />

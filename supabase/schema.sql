@@ -284,6 +284,84 @@ alter table public.ranh_gioi_thon_cache enable row level security;
 -- Không tạo policy nào — cùng quy ước với ranh_gioi_thon: chỉ backend
 -- (Service Role) đọc/ghi qua RPC, frontend không gọi thẳng Supabase.
 
+-- =========================================================
+-- MÀU RANH THÔN THEO XÃ (định lý 4 màu): mỗi xã có ranh thôn được gán 1
+-- trong 4 màu (0..3) sao cho 2 xã giáp nhau không cùng màu — cán bộ nhìn
+-- bản đồ biết ngay ranh thôn nào thuộc xã nào. Màu thật (mã hex) do
+-- frontend quy định (RANH_XA_COLORS trong utils/constants.js), chọn khác
+-- hẳn các màu phân loại thửa đất.
+-- Việc tô màu (backtracking, giữ màu cũ nếu được) chạy ở backend
+-- (app/services/ranh_xa_mau_service.py) mỗi lần nhập/xoá ranh thôn; ở đây
+-- chỉ có bảng lưu kết quả + hàm tìm xã giáp nhau + hàm lưu.
+create table if not exists public.ranh_xa_mau (
+    ma_xa text primary key,
+    mau smallint not null check (mau between 0 and 3),
+    updated_at timestamptz not null default now()
+);
+
+alter table public.ranh_xa_mau enable row level security;
+
+-- Mỗi xã đang có ranh thôn: danh sách xã giáp (2 thôn khác xã cách nhau
+-- <= ~30m, tính theo độ ở EPSG:4326 cho nhanh — ranh 2 xã số hoá lệch
+-- nhau vài mét vẫn coi là giáp) + màu hiện đang lưu (null nếu chưa có).
+create or replace function public.ranh_xa_ke_nhau()
+returns table (ma_xa text, ke text[], mau smallint)
+language sql
+stable
+security definer
+set search_path = public, extensions
+set statement_timeout = '120s'
+as $$
+    with x as (
+        select distinct r.ma_xa from public.ranh_gioi_thon r
+    ),
+    e as (
+        select distinct a.ma_xa as a, b.ma_xa as b
+        from public.ranh_gioi_thon a
+        join public.ranh_gioi_thon b
+          on a.ma_xa <> b.ma_xa
+         and a.geom && ST_Expand(b.geom, 0.0003)
+         and ST_DWithin(a.geom, b.geom, 0.0003)
+    )
+    select x.ma_xa,
+           coalesce(array_agg(e.b order by e.b) filter (where e.b is not null), '{}'::text[]),
+           m.mau
+    from x
+    left join e on e.a = x.ma_xa
+    left join public.ranh_xa_mau m on m.ma_xa = x.ma_xa
+    group by x.ma_xa, m.mau
+    order by x.ma_xa;
+$$;
+
+revoke all on function public.ranh_xa_ke_nhau() from public;
+grant execute on function public.ranh_xa_ke_nhau() to service_role;
+
+-- Ghi đè toàn bộ bảng màu: p_mau = {"<ma_xa>": 0..3, ...}. Xã không còn
+-- trong p_mau (đã xoá hết ranh thôn) bị xoá khỏi bảng.
+create or replace function public.luu_ranh_xa_mau(p_mau jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+    v_rows integer;
+begin
+    delete from public.ranh_xa_mau m where not (p_mau ? m.ma_xa);
+    insert into public.ranh_xa_mau (ma_xa, mau, updated_at)
+    select k, v::smallint, now() from jsonb_each_text(p_mau) as t(k, v)
+    on conflict (ma_xa) do update set
+        mau = excluded.mau,
+        updated_at = case when public.ranh_xa_mau.mau = excluded.mau
+                          then public.ranh_xa_mau.updated_at else now() end;
+    get diagnostics v_rows = row_count;
+    return v_rows;
+end;
+$$;
+
+revoke all on function public.luu_ranh_xa_mau(jsonb) from public;
+grant execute on function public.luu_ranh_xa_mau(jsonb) to service_role;
+
 -- Tính lại cache cho 1 xã (p_ma_xa chỉ định) hoặc TOÀN BỘ (p_ma_xa null).
 -- CHỦ ĐÍCH: chỉ được gọi khi dữ liệu ranh_gioi_thon thật sự đổi (sau
 -- import/xoá ở import_service.py) hoặc chạy tay 1 lần để backfill — KHÔNG
@@ -318,7 +396,9 @@ begin
                         'geometry', ST_AsGeoJSON(r.geom)::jsonb,
                         'properties', jsonb_build_object(
                             'ma_xa', r.ma_xa,
-                            'ten_thon', r.ten_thon
+                            'ten_thon', r.ten_thon,
+                            -- Chỉ số màu xã (0..3, xem ranh_xa_mau) — null nếu chưa tô.
+                            'mau', m.mau
                         )
                     )
                     order by r.ten_thon
@@ -326,6 +406,7 @@ begin
             ) as feature_collection,
             count(*)::integer as so_thon
         from public.ranh_gioi_thon r
+        left join public.ranh_xa_mau m on m.ma_xa = r.ma_xa
         where p_ma_xa is null or r.ma_xa = p_ma_xa
         group by r.ma_xa
     )

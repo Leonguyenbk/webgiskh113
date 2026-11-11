@@ -91,6 +91,21 @@ export const THUA_TRUNG_LABEL = "Thửa trùng/chồng đè, đã loại (làm t
 // (thuộc dự án) và xám (chưa phân loại).
 export const SELECTED_COLOR = "#9333ea";
 
+// Màu ranh thôn THEO XÃ (định lý 4 màu): mỗi xã có properties.mau = 0..3
+// do backend tô (ranh_xa_mau_service.py) sao cho 2 xã giáp nhau khác màu.
+// 4 màu này cố ý KHÁC HẲN mọi màu phân loại thửa ở trên (xanh lá, đỏ, xám,
+// xanh dương, vàng, gần đen, xanh lá nhạt, xanh rừng, nâu xám, tím).
+export const RANH_XA_COLORS = ["#f97316", "#06b6d4", "#ec4899", "#7c2d12"];
+// Xã chưa được tô (mau null — vd vừa nhập mà tô màu lỗi): giữ đỏ đứt như cũ.
+export const RANH_XA_COLOR_MAC_DINH = "#dc2626";
+
+export function getRanhXaColor(properties = {}) {
+  const mau = properties.mau;
+  return Number.isInteger(mau) && RANH_XA_COLORS[mau]
+    ? RANH_XA_COLORS[mau]
+    : RANH_XA_COLOR_MAC_DINH;
+}
+
 export function getGroupKey(phanLoai = "") {
   const normalized = phanLoai.trim().toUpperCase();
   return GROUP_COLORS[normalized] ? normalized : "DEFAULT";
