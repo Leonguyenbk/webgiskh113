@@ -21,7 +21,7 @@ ranh_gml_bp = Blueprint("ranh_gml", __name__)
 # bắt buộc mã xác thực: RANH_GML_TOKEN (mã riêng, chỉ mở
 # /api/ranh-gml/*) hoặc IMPORT_TOKEN.
 GIOI_HAN_THUA = 60000
-GIOI_HAN_VUNG = 2000
+GIOI_HAN_VUNG = 50000  # tool cũ (chưa chia đợt) gửi cả ranh 1 lần — vd 7.067 vùng trồng
 
 
 @ranh_gml_bp.get("/api/ranh-gml/kiem-tra")
