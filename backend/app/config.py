@@ -26,6 +26,10 @@ class Config:
 
     FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
     IMPORT_TOKEN = os.getenv("IMPORT_TOKEN", "")
+    # Mã riêng cho Ranh_GML_Tool (tool desktop xuất GML theo ranh, phát cho
+    # máy khác) — CHỈ mở được /api/ranh-gml/*, khác IMPORT_TOKEN (mở mọi
+    # endpoint nhập liệu/quản trị) nên phát ra ngoài an toàn hơn.
+    RANH_GML_TOKEN = os.getenv("RANH_GML_TOKEN", "")
     # Link Google Sheet danh mục hồ sơ gốc (chia sẻ "bất kỳ ai có link") — đồng bộ
     # định kỳ vào danh_muc_trong_kho, xem services/danh_muc_kho_service.py. Chỉ
     # đặt trong backend/.env (link chứa dữ liệu người sử dụng đất).
