@@ -14,6 +14,17 @@ from ..utils.nhom4_validation import normalize_thoi_han_su_dung, validate_payloa
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
 
+# list_loai_dat_options() quét ~4 triệu dòng thua_dat (~7s) — cache 1 giờ
+# trong bộ nhớ tiến trình, danh sách mã loại đất thực tế gần như không đổi
+# theo giờ. Restart service (deploy code mới) thì cache tự làm mới.
+_LOAI_DAT_CACHE: dict = {"items": None, "ts": 0.0}
+_LOAI_DAT_CACHE_TTL_GIAY = 3600
+
+# Thửa đã thuộc Nhóm 1/Nhóm 2 (KH 2959) coi như đã có dữ liệu từ trước —
+# không cần nhập biểu Nhóm 4 nữa, giống quy ước đã dùng ở
+# gcn_thu_thap_theo_xa (supabase/schema.sql).
+NHOM_1_2 = {"NHÓM 1", "NHÓM 2"}
+
 
 def _is_nhom_1_2(phan_loai) -> bool:
     return str(phan_loai or "").strip().upper() in NHOM_1_2
