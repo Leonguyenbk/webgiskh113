@@ -204,6 +204,17 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
   const [filePhu, setFilePhu] = useState(null);
   const [fileTbxn, setFileTbxn] = useState(null);
   const [loiHsq, setLoiHsq] = useState("");
+  // Trạng thái ký số của file chính đang chọn: null (chưa chọn/đang kiểm),
+  // true (đã ký số), false (chưa ký số) — hiện ngay dưới ô file.
+  const [kySoChinh, setKySoChinh] = useState(null);
+  useEffect(() => {
+    let huy = false;
+    setKySoChinh(null);
+    if (fileChinh) pdfCoChuKySo(fileChinh).then((ok) => !huy && setKySoChinh(ok));
+    return () => {
+      huy = true;
+    };
+  }, [fileChinh]);
   // "Dùng chung hồ sơ quét" (yêu cầu người dùng: 1 đơn nhiều thửa) — bật
   // thì "+ Thêm thửa đất" KHÔNG xóa 3 ô file (giữ nguyên để áp cho thửa kế
   // tiếp, khỏi chọn lại), và lúc nộp chỉ gửi ĐÚNG 1 bộ file dùng chung cho
@@ -890,6 +901,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
         onChange={chonFileHsq(setFileChinh, cheDo === "Đã có GCN" ? "File Giấy chứng nhận" : "File Đơn đăng ký")}
       />
       {fileChinh && <p className="importHint">Đã chọn: {fileChinh.name} ({dungLuongMB(fileChinh)} MB)</p>}
+      {fileChinh && kySoChinh === true && (
+        <p className="importHint" style={{ color: "#1e7e34", fontWeight: 600 }}>✓ File đã có chữ ký số.</p>
+      )}
+      {fileChinh && kySoChinh === false && (
+        <p className="nhom4AiCanhBao">⚠ File này CHƯA CÓ CHỮ KÝ SỐ — từ ngày 15/11/2026 sẽ không được nhận, vui lòng ký số trước khi nộp.</p>
+      )}
       <label>File PDF Giấy tờ (tùy chọn)</label>
       <input
         key={`phu-${fileInputKey}`}
