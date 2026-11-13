@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+from datetime import datetime, timezone
 
 import re
 import time
@@ -9,10 +11,34 @@ import uuid
 from flask import current_app, jsonify
 
 from ..repositories import local_file_storage, nhom4_repository
+from ..utils.pdf_ky_so import co_chu_ky_so
 from ..repositories.nhom4_repository import NHOM4_MA_NGUON, NHOM4_TEN_NGUON
 from ..utils.nhom4_validation import normalize_thoi_han_su_dung, validate_payload
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
+
+# Từ 00:00 15/11/2026 (giờ VN) file chính (Đơn đăng ký / Giấy chứng nhận)
+# BẮT BUỘC là PDF đã ký số — yêu cầu chủ dự án. Lượt nộp TRƯỚC mốc này giữ
+# nguyên, không kiểm lại. Đổi mốc qua biến môi trường NHOM4_KY_SO_TU (ISO).
+NHOM4_KY_SO_TU = datetime.fromisoformat(os.getenv("NHOM4_KY_SO_TU", "2026-11-15T00:00:00+07:00"))
+
+
+def _bat_buoc_ky_so() -> bool:
+    return datetime.now(timezone.utc) >= NHOM4_KY_SO_TU
+
+
+def _loi_ky_so(storage, label: str) -> str | None:
+    """None nếu không cần/đạt; câu lỗi nếu file chính chưa ký số."""
+    if not _bat_buoc_ky_so() or not storage or not storage.filename:
+        return None
+    data = storage.stream.read()
+    storage.stream.seek(0)
+    if co_chu_ky_so(data):
+        return None
+    return (
+        f"file PDF {label} \"{storage.filename}\" CHƯA CÓ CHỮ KÝ SỐ — từ ngày "
+        f"{NHOM4_KY_SO_TU.strftime('%d/%m/%Y')} chỉ nhận file đã ký số."
+    )
 
 # list_loai_dat_options() quét ~4 triệu dòng thua_dat (~7s) — cache 1 giờ
 # trong bộ nhớ tiến trình, danh sách mã loại đất thực tế gần như không đổi
@@ -420,6 +446,9 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
                 jsonify({"error": f"Hồ sơ quét dùng chung: chưa chọn file PDF {label_chinh}."}),
                 400,
             )
+        loi = _loi_ky_so(chinh, label_chinh)
+        if loi:
+            return None, (jsonify({"error": f"Hồ sơ quét dùng chung: {loi}"}), 400)
         for storage, label in (
             (shared_files.get("chinh"), "File chính"),
             (shared_files.get("phu"), "Giấy tờ"),
@@ -444,6 +473,9 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
                     jsonify({"error": f"{nhan_thua}: chưa chọn file PDF {label_chinh}."}),
                     400,
                 )
+            loi = _loi_ky_so(chinh, label_chinh)
+            if loi:
+                return None, (jsonify({"error": f"{nhan_thua}: {loi}"}), 400)
             for storage, label in (
                 (files.get("chinh"), "File chính"),
                 (files.get("phu"), "Giấy tờ"),

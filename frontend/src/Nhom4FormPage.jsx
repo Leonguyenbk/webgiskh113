@@ -140,6 +140,33 @@ function LoaiDatCombo({ id, value, options, onChange }) {
 // Nhom4_AI_Tool) rồi tự điền biểu; người dùng chỉ nhập số tờ/số thửa theo
 // bản đồ địa chính hiện tại cho từng thửa AI đọc được, soát lại rồi Lưu hồ
 // sơ như form thường (hồ sơ quét dùng chung cho cả danh sách thửa).
+// Mốc bắt buộc ký số file chính — khớp NHOM4_KY_SO_TU ở backend.
+const KY_SO_TU = new Date("2026-11-15T00:00:00+07:00");
+const batBuocKySo = () => Date.now() >= KY_SO_TU.getTime();
+
+// Kiểm cấu trúc chữ ký số PDF (giống backend/app/utils/pdf_ky_so.py):
+// /ByteRange [0 b c d] trỏ đúng khối /Contents <hex> khác rỗng.
+async function pdfCoChuKySo(file) {
+  try {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let text = "";
+    const CH = 0x8000;
+    for (let i = 0; i < buf.length; i += CH) text += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
+    const re = /\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/g;
+    let m;
+    while ((m = re.exec(text))) {
+      const [a, b, c, d] = m.slice(1).map(Number);
+      if (a !== 0 || b <= 0 || c <= b || c + d > buf.length) continue;
+      const khoi = text.slice(b, c).trim();
+      const hm = /^<\s*([0-9A-Fa-f\s]+)>$/.exec(khoi);
+      if (hm && hm[1].replace(/\s+/g, "").replace(/0+$/, "").length >= 200) return true;
+    }
+    return false;
+  } catch {
+    return true; // không đọc được file thì để máy chủ kiểm
+  }
+}
+
 export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false }) {
   const [xaList, setXaList] = useState([]);
   const [maXa, setMaXa] = useState("");
@@ -597,13 +624,24 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
 
   // Chặn file quét quá MAX_HSQ_MB ngay lúc chọn (yêu cầu người dùng) —
   // mạng xã chậm, tải file lớn lên mất cả phút rồi mới bị từ chối.
-  const chonFileHsq = (setter, label) => (e) => {
-    const f = e.target.files?.[0] || null;
+  const chonFileHsq = (setter, label) => async (e) => {
+    const input = e.target;
+    const f = input.files?.[0] || null;
     if (f && f.size > MAX_HSQ_MB * 1024 * 1024) {
       const loi = `${label} "${f.name}" nặng ${dungLuongMB(f)} MB, vượt giới hạn ${MAX_HSQ_MB} MB — vui lòng nén/quét lại file nhỏ hơn.`;
       setError(loi);
       setLoiHsq(loi);
-      e.target.value = "";
+      input.value = "";
+      setter(null);
+      return;
+    }
+    // Từ 15/11/2026 file chính (Đơn đăng ký / GCN) phải là PDF ĐÃ KÝ SỐ —
+    // kiểm ngay lúc chọn file (máy chủ cũng kiểm lại, xem pdf_ky_so.py).
+    if (f && setter === setFileChinh && batBuocKySo() && !(await pdfCoChuKySo(f))) {
+      const loi = `${label} "${f.name}" CHƯA CÓ CHỮ KÝ SỐ — từ ngày 15/11/2026 chỉ nhận file PDF đã ký số.`;
+      setError(loi);
+      setLoiHsq(loi);
+      input.value = "";
       setter(null);
       return;
     }
@@ -843,7 +881,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
         </p>
       )}
       <label>
-        {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"} (bắt buộc)
+        {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"} (bắt buộc{batBuocKySo() ? ", đã ký số" : " — từ 15/11/2026 phải là file đã ký số"})
       </label>
       <input
         key={`chinh-${fileInputKey}`}
