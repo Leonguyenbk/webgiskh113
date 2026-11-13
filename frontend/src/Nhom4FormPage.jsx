@@ -140,11 +140,11 @@ function LoaiDatCombo({ id, value, options, onChange }) {
 // Nhom4_AI_Tool) rồi tự điền biểu; người dùng chỉ nhập số tờ/số thửa theo
 // bản đồ địa chính hiện tại cho từng thửa AI đọc được, soát lại rồi Lưu hồ
 // sơ như form thường (hồ sơ quét dùng chung cho cả danh sách thửa).
-// Mốc bắt buộc ký số file chính — khớp NHOM4_KY_SO_TU ở backend.
+// Mốc bắt buộc ký số file chính (CHỈ kiểm ở frontend — yêu cầu chủ dự án).
 const KY_SO_TU = new Date("2026-11-15T00:00:00+07:00");
 const batBuocKySo = () => Date.now() >= KY_SO_TU.getTime();
 
-// Kiểm cấu trúc chữ ký số PDF (giống backend/app/utils/pdf_ky_so.py):
+// Kiểm cấu trúc chữ ký số PDF (PAdES; ảnh chữ ký dán vào/ô ký trống không đạt):
 // /ByteRange [0 b c d] trỏ đúng khối /Contents <hex> khác rỗng.
 async function pdfCoChuKySo(file) {
   try {
@@ -163,7 +163,7 @@ async function pdfCoChuKySo(file) {
     }
     return false;
   } catch {
-    return true; // không đọc được file thì để máy chủ kiểm
+    return true; // không đọc được file thì không chặn
   }
 }
 
@@ -636,7 +636,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
       return;
     }
     // Từ 15/11/2026 file chính (Đơn đăng ký / GCN) phải là PDF ĐÃ KÝ SỐ —
-    // kiểm ngay lúc chọn file (máy chủ cũng kiểm lại, xem pdf_ky_so.py).
+    // kiểm ngay lúc chọn file (chỉ kiểm ở frontend).
     if (f && setter === setFileChinh && batBuocKySo() && !(await pdfCoChuKySo(f))) {
       const loi = `${label} "${f.name}" CHƯA CÓ CHỮ KÝ SỐ — từ ngày 15/11/2026 chỉ nhận file PDF đã ký số.`;
       setError(loi);
