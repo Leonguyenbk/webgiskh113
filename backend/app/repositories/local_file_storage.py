@@ -32,13 +32,18 @@ def upload_pdf(folder_id: str, filename: str, content: bytes) -> dict:
 
     path = target_dir / safe_filename
     if path.exists():
+        # Trùng tên: nếu đã có file NỘI DUNG Y HỆT (VD 1 GCN cấp chung nhiều
+        # thửa, nộp từng thửa một) thì DÙNG LẠI file đó, không nhân bản; nội
+        # dung khác mới lưu thêm bản _2, _3...
         stem, dot, ext = safe_filename.rpartition(".")
-        for i in range(2, 1000):
-            candidate = f"{stem}_{i}.{ext}" if dot else f"{safe_filename}_{i}"
-            path = target_dir / candidate
-            if not path.exists():
-                safe_filename = candidate
+        for i in range(1, 1000):
+            candidate = safe_filename if i == 1 else (f"{stem}_{i}.{ext}" if dot else f"{safe_filename}_{i}")
+            cand_path = target_dir / candidate
+            if not cand_path.exists():
+                path, safe_filename = cand_path, candidate
                 break
+            if cand_path.stat().st_size == len(content) and cand_path.read_bytes() == content:
+                return {"id": f"{folder_id}/{candidate}", "name": filename}
 
     path.write_bytes(content)
     return {"id": f"{folder_id}/{safe_filename}", "name": filename}

@@ -444,14 +444,14 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
     # để tên file trên Drive không trùng nhau (mỗi thửa 1 bộ hồ sơ quét
     # riêng, ghi đè lẫn nhau thì mất dữ liệu). Chỉ 1 thửa thì giữ nguyên
     # tên gốc (không hậu tố) cho khớp quy ước cũ.
-    nhieu_thua = len(parcels) > 1
     chinh_suffix = "GCN" if da_co_gcn else "DDK"
 
+    # 13/11/2026: nhiều thửa cùng 1 GCN thì DÙNG CHUNG 1 file "<sph>-GCN.pdf"
+    # (không nhân bản _T.._TH.. hay _2, _3...) — upload_pdf tự dùng lại file
+    # sẵn có khi nội dung trùng hệt; nội dung khác mới lưu thêm bản _2.
     def _base_name_cho_thua(so_to, so_thua) -> str:
         if da_co_gcn:
             raw = str((payload.get("gcn") or {}).get("so_phat_hanh") or "").strip()
-            if nhieu_thua:
-                raw = f"{raw}_T{so_to}_TH{so_thua}"
             return _sanitize_filename(raw)
         return _sanitize_filename(_default_so_phat_hanh(ma_xa, so_to, so_thua))
 
@@ -487,20 +487,17 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
             else None
         )
 
-        file_info_list = []
-        for parcel in parcels:
-            thua = parcel.get("thua") or {}
-            so_to = _to_int(thua.get("so_to"))
-            so_thua = _to_int(thua.get("so_thua"))
-            base_name = _base_name_cho_thua(so_to, so_thua)
-
-            file_info, error_response = _upload_files(
-                ma_xa, payload.get("ten_xa"), base_name, chinh_suffix,
-                chinh_bytes, phu_bytes, tbxn_bytes,
-            )
-            if error_response:
-                return None, error_response
-            file_info_list.append(file_info)
+        # Dùng chung hồ sơ quét: ghi ĐÚNG 1 bộ file (đặt tên theo thửa đầu),
+        # mọi thửa trong lượt nộp trỏ cùng bộ file đó — không nhân bản.
+        thua0 = (parcels[0].get("thua") or {}) if parcels else {}
+        file_info, error_response = _upload_files(
+            ma_xa, payload.get("ten_xa"),
+            _base_name_cho_thua(_to_int(thua0.get("so_to")), _to_int(thua0.get("so_thua"))),
+            chinh_suffix, chinh_bytes, phu_bytes, tbxn_bytes,
+        )
+        if error_response:
+            return None, error_response
+        file_info_list = [dict(file_info) for _ in parcels]
     else:
         file_info_list = []
         for parcel, files in zip(parcels, files_by_parcel):
