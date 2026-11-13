@@ -222,3 +222,61 @@ def insert_rows(rows: list[dict]):
     if not response.ok:
         return None, (jsonify({"error": response.text}), response.status_code)
     return True, None
+
+
+# --- Nộp lại để BỔ SUNG HỒ SƠ QUÉT (13/11/2026) ------------------------------
+# Từ 16/10 đến 13/11 biểu Nhóm 4 từng cho nộp KHÔNG kèm file chính (Đơn đăng
+# ký/Giấy chứng nhận) — sai yêu cầu. Các bản đó chưa ký số nên xã được nộp
+# lại: thửa mà MỌI dòng hiện có đều là biểu Nhóm 4 không có file chính thì
+# KHÔNG bị chặn "đã có dữ liệu"; bản mới (bắt buộc có file) ghi xong mới xóa
+# bản cũ (xoa_ban_khong_file). Dữ liệu Google Sheet không thuộc diện này.
+
+
+def phan_loai_khoa_da_co(keys: list[str]):
+    """Trả ((khoa_chan, khoa_bo_sung_file), None) hoặc (None, error_response).
+    khoa_chan: thửa đã có dữ liệu thật sự -> chặn nộp lại.
+    khoa_bo_sung_file: thửa chỉ có bản biểu Nhóm 4 không kèm file chính -> cho nộp lại."""
+    unique_keys = sorted({k for k in keys if k})
+    if not unique_keys:
+        return (set(), set()), None
+    try:
+        with supabase_client._CursorCtx(timeout=15) as cur:
+            cur.execute(
+                """
+                select madvhc_soto_sothua as k,
+                       bool_and(ma_nguon = %s and coalesce(file_chinh_drive_id, '') = '') as thieu_file
+                from public.du_lieu_gcn
+                where madvhc_soto_sothua = any(%s)
+                group by 1
+                """,
+                (NHOM4_MA_NGUON, unique_keys),
+            )
+            rows = cur.fetchall()
+    except Exception as exc:  # noqa: BLE001
+        return None, (jsonify({"error": f"Lỗi kiểm tra dữ liệu đã có: {exc}"}), 500)
+    chan = {r["k"] for r in rows if not r["thieu_file"]}
+    bo_sung = {r["k"] for r in rows if r["thieu_file"]}
+    return (chan, bo_sung), None
+
+
+def xoa_ban_khong_file(keys: list[str], submission_id_moi: str):
+    """Xóa các dòng biểu Nhóm 4 KHÔNG có file chính của các thửa vừa nộp lại
+    (giữ nguyên dòng của lượt nộp mới). Trả (so_dong_xoa, None) hoặc (None, err)."""
+    unique_keys = sorted({k for k in keys if k})
+    if not unique_keys:
+        return 0, None
+    try:
+        with supabase_client._CursorCtx(timeout=30) as cur:
+            cur.execute(
+                """
+                delete from public.du_lieu_gcn
+                where madvhc_soto_sothua = any(%s)
+                  and ma_nguon = %s
+                  and coalesce(file_chinh_drive_id, '') = ''
+                  and submission_id is distinct from %s::uuid
+                """,
+                (unique_keys, NHOM4_MA_NGUON, submission_id_moi),
+            )
+            return cur.rowcount, None
+    except Exception as exc:  # noqa: BLE001
+        return None, (jsonify({"error": f"Lỗi xóa bản cũ không file: {exc}"}), 500)

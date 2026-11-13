@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import re
 import time
 import uuid
@@ -53,9 +55,12 @@ def check_trung_thua(ma_xa: str, so_to: str, so_thua: str):
     if error_response:
         return None, error_response
 
-    trung, error_response = nhom4_repository.exists_key(_make_key(ma_xa, so_to_int, so_thua_int))
+    key = _make_key(ma_xa, so_to_int, so_thua_int)
+    phan_loai_khoa, error_response = nhom4_repository.phan_loai_khoa_da_co([key])
     if error_response:
         return None, error_response
+    trung = key in phan_loai_khoa[0]
+    bo_sung_file = key in phan_loai_khoa[1]
 
     phan_loai, error_response = nhom4_repository.get_phan_loai(ma_xa, so_to_int, so_thua_int)
     if error_response:
@@ -66,6 +71,7 @@ def check_trung_thua(ma_xa: str, so_to: str, so_thua: str):
         "nhom_1_2": _is_nhom_1_2(phan_loai),
         "phan_loai": phan_loai,
         "ton_tai": ton_tai,
+        "bo_sung_file": bo_sung_file,
     }, None
 
 
@@ -254,9 +260,13 @@ def _reject_existing(seen_in_payload: set[str], parcel_keys: list[tuple[int, int
     GCN. EXISTS 1 bản ghi cùng khóa madvhc_soto_sothua => thửa đã có dữ
     liệu (dù thửa đó có nhiều dòng do nhiều chủ) => không cho nộp. KHÔNG
     dùng bảng khóa phụ (nhom4_thua_da_nop đã bỏ) để quyết định."""
-    existing, err = nhom4_repository.filter_existing_keys(list(seen_in_payload))
+    # Ngoại lệ: thửa CHỈ có bản biểu Nhóm 4 không kèm file chính (nộp
+    # 16/10–13/11 khi file từng bị nới thành tùy chọn) -> cho nộp lại để bổ
+    # sung hồ sơ quét; bản cũ bị xóa sau khi bản mới ghi xong (submit_ho_so).
+    phan_loai, err = nhom4_repository.phan_loai_khoa_da_co(list(seen_in_payload))
     if err:
         return err
+    existing, _bo_sung = phan_loai
     for _so_to, _so_thua, _key in parcel_keys:
         if _key in existing:
             return (
@@ -397,9 +407,19 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
     che_do = payload.get("che_do") or ""
     da_co_gcn = che_do == "Đã có GCN"
     dung_chung = bool(payload.get("dung_chung_ho_so_quet"))
+    # BẮT BUỘC có file chính: Giấy chứng nhận (đã có GCN) hoặc Đơn đăng ký —
+    # yêu cầu của chủ dự án (13/11/2026); commit 7f6881d (16/10) từng nới
+    # thành tùy chọn là sai yêu cầu.
+    label_chinh = "Giấy chứng nhận" if da_co_gcn else "Đơn đăng ký"
 
     if dung_chung:
         shared_files = shared_files or {}
+        chinh = shared_files.get("chinh")
+        if not chinh or not chinh.filename:
+            return None, (
+                jsonify({"error": f"Hồ sơ quét dùng chung: chưa chọn file PDF {label_chinh}."}),
+                400,
+            )
         for storage, label in (
             (shared_files.get("chinh"), "File chính"),
             (shared_files.get("phu"), "Giấy tờ"),
@@ -415,13 +435,15 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
                 400,
             )
 
-        # File chính (hồ sơ quét) không còn bắt buộc — nhiều nơi nhập dữ liệu
-        # không có sẵn file quét, buộc có file chặn luôn việc nộp. _validate_pdf
-        # tự bỏ qua khi storage rỗng (không chọn file), giống phu/tbxn vốn đã
-        # tùy chọn từ trước.
         for parcel, files in zip(parcels, files_by_parcel):
             thua = parcel.get("thua") or {}
             nhan_thua = f"thửa {thua.get('so_thua')}, tờ {thua.get('so_to')}"
+            chinh = files.get("chinh")
+            if not chinh or not chinh.filename:
+                return None, (
+                    jsonify({"error": f"{nhan_thua}: chưa chọn file PDF {label_chinh}."}),
+                    400,
+                )
             for storage, label in (
                 (files.get("chinh"), "File chính"),
                 (files.get("phu"), "Giấy tờ"),
@@ -548,11 +570,22 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
     if error_response:
         return None, error_response
 
+    # Bản mới (có file chính) đã ghi -> xóa bản cũ không file của các thửa
+    # nộp lại để bổ sung hồ sơ quét (xem _reject_existing). Lỗi ở bước này
+    # không làm hỏng lượt nộp: chỉ còn dòng cũ thừa, log lại để dọn sau.
+    so_dong_cu, err_xoa = nhom4_repository.xoa_ban_khong_file(
+        [key for _so_to, _so_thua, key in parcel_keys], submission_id
+    )
+    if err_xoa:
+        logging.getLogger(__name__).error("Xóa bản cũ không file thất bại: submission %s", submission_id)
+        so_dong_cu = 0
+
     return {
         "ok": True,
         "message": f"Đã lưu {len(parcels)} thửa, tổng {len(rows)} dòng, kèm file quét trên máy chủ.",
         "so_thua": len(parcels),
         "so_dong": len(rows),
+        "so_dong_cu_da_thay": so_dong_cu,
     }, None
 
 

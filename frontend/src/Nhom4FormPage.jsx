@@ -291,6 +291,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
       if (result?.ton_tai === false) setTrungThuaStatus("khongtontai");
       else if (result?.nhom_1_2) setTrungThuaStatus("nhom12");
       else if (result?.trung) setTrungThuaStatus("trung");
+      else if (result?.bo_sung_file) setTrungThuaStatus("bosungfile");
       else setTrungThuaStatus("ok");
     } catch {
       setTrungThuaStatus("");
@@ -442,6 +443,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
     }
     if (trungThuaStatus === "trung") {
       setError("Thửa này đã có dữ liệu GCN — không thêm được vào danh sách.");
+      return;
+    }
+    // BẮT BUỘC có file chính (Đơn đăng ký hoặc Giấy chứng nhận) — yêu cầu
+    // của chủ dự án; commit 7f6881d (16/10) từng nới thành tùy chọn là sai.
+    if (!dungChungHoSo && !fileChinh) {
+      setError(`Vui lòng chọn file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"} cho thửa này trước khi thêm.`);
       return;
     }
     setError("");
@@ -642,6 +649,18 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
           " — bấm Sửa để chọn loại đất trước khi nộp.",
       );
     }
+    // BẮT BUỘC có file chính (Đơn đăng ký hoặc Giấy chứng nhận) cho mọi thửa.
+    if (dungChungHoSo ? !fileChinh : parcels.some((p) => !p.fileChinh)) {
+      const thieuFile = dungChungHoSo ? [] : parcels.filter((p) => !p.fileChinh);
+      return setError(
+        `Thiếu file PDF ${cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"}` +
+          (dungChungHoSo
+            ? " (hồ sơ quét dùng chung) — chọn file trước khi nộp."
+            : ` cho ${thieuFile.length} thửa: ` +
+              thieuFile.map((p) => `${p.thua.soTo}/${p.thua.soThua}`).join(", ") +
+              " — bấm Sửa để chọn file trước khi nộp."),
+      );
+    }
     if (nguoiHienTai.hoTen && !nguoiHienTai.cccd) {
       return setError("Đã nhập tên người sử dụng đất hiện tại thì phải nhập CCCD.");
     }
@@ -824,7 +843,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
         </p>
       )}
       <label>
-        {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận" : "File PDF Đơn đăng ký"} (tùy chọn)
+        {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"} (bắt buộc)
       </label>
       <input
         key={`chinh-${fileInputKey}`}
@@ -1230,6 +1249,12 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
             </div>
           )}
           {trungThuaStatus === "ok" && <div className="notice">Thửa này thuộc Nhóm 3 — chưa có trong dữ liệu đã nhập.</div>}
+          {trungThuaStatus === "bosungfile" && (
+            <div className="notice error">
+              Thửa này đã nhập trước đây nhưng CHƯA CÓ hồ sơ quét — nhập lại đầy đủ và đính kèm file PDF{" "}
+              {cheDo === "Đã có GCN" ? "Giấy chứng nhận" : "Đơn đăng ký"} để bổ sung (bản nhập cũ sẽ được thay thế).
+            </div>
+          )}
 
           {cheDo === "Đã có GCN" && (
             <div className="nhom4Grid2">
@@ -1413,7 +1438,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
                         ? " — 📎 Dùng chung hồ sơ quét"
                         : p.fileChinh
                           ? ` — 📎 ${p.fileChinh.name}`
-                          : " — (không có file quét)"}
+                          : " — ⚠ chưa có file quét"}
                     </span>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button type="button" className="nhom4MiniBtn" onClick={() => suaThua(index)}>

@@ -33,10 +33,18 @@ function logNhom4Submit(proxyServer) {
 }
 
 const proxy = {
+  // Nhập biểu Nhóm 4 đi LUỒNG RIÊNG: tiến trình backend thứ 2 (service
+  // WebGIS-Backend-Nhom4, port 5001, cùng code) — giờ cao điểm bản đồ tải
+  // thửa cả xã chiếm hết thread ở port 5000 khiến kiểm tra/lưu biểu phải
+  // xếp hàng 2–19 giây. Khai báo TRƯỚC "/api": vite lấy khóa khớp đầu tiên.
+  "/api/nhom4": {
+    target: "http://127.0.0.1:5001",
+    changeOrigin: true,
+    configure: logNhom4Submit,
+  },
   "/api": {
     target: "http://127.0.0.1:5000",
     changeOrigin: true,
-    configure: logNhom4Submit,
   },
   "/tiles": {
     target: "http://127.0.0.1:5000",

@@ -14,6 +14,9 @@ from flask import Flask, g, request
 # cả lúc tải file lên) đo ở proxy vite preview, xem frontend/vite.config.js.
 SUBMIT_LOG_PATH = Path(__file__).resolve().parent.parent / "logs" / "nhom4_submit.log"
 SUBMIT_PATH = "/api/nhom4/ho-so"
+# Bước kiểm tra trước khi gửi file — chỉ ghi lượt BỊ CHẶN (kèm lý do) để
+# biết người dùng gặp lỗi gì (access log chỉ có mã 400/409).
+CHECK_PATH = "/api/nhom4/kiem-tra-ho-so"
 
 _access_logger = logging.getLogger("webgis.access")
 _submit_logger = logging.getLogger("webgis.nhom4_submit")
@@ -51,7 +54,11 @@ def _submit_info(response) -> dict:
         "bytes": request.content_length,
     }
     try:
-        payload = json.loads(request.form.get("payload") or "{}")
+        if request.path == CHECK_PATH:
+            info["buoc"] = "kiem_tra"
+            payload = request.get_json(silent=True) or {}
+        else:
+            payload = json.loads(request.form.get("payload") or "{}")
         info["ma_xa"] = payload.get("ma_xa")
         info["so_thua"] = len(payload.get("thua_list") or [])
         info["dung_chung"] = bool(payload.get("dung_chung_ho_so_quet"))
@@ -93,7 +100,10 @@ def init_request_log(app: Flask, access_log: bool = False) -> None:
                 response.status_code,
                 elapsed_ms,
             )
-        if request.method == "POST" and request.path == SUBMIT_PATH:
+        if request.method == "POST" and (
+            request.path == SUBMIT_PATH
+            or (request.path == CHECK_PATH and response.status_code >= 400)
+        ):
             try:
                 _submit_logger.info(json.dumps(_submit_info(response), ensure_ascii=False))
             except Exception:

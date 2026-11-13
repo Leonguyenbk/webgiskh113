@@ -51,7 +51,7 @@ def _get_pool():
     with _pool_lock:
         pool = _pools.get(dsn)
         if pool is None:
-            pool = psycopg2.pool.ThreadedConnectionPool(1, 20, dsn)
+            pool = psycopg2.pool.ThreadedConnectionPool(1, 32, dsn)  # >= số thread waitress (run.py)
             _pools[dsn] = pool
         return pool
 
