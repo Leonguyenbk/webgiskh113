@@ -407,11 +407,19 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
     che_do = payload.get("che_do") or ""
     da_co_gcn = che_do == "Đã có GCN"
     dung_chung = bool(payload.get("dung_chung_ho_so_quet"))
-    # Bắt buộc file chính (Đơn đăng ký/GCN) và ký số CHỈ kiểm ở frontend
-    # (Nhom4FormPage.jsx) — yêu cầu chủ dự án 13/11/2026: backend không kiểm.
+    # Chủ dự án 13/11/2026: backend BẮT BUỘC có file chính (Đơn đăng ký /
+    # Giấy chứng nhận) — chặn cả trang cũ chưa tải lại; còn KÝ SỐ chỉ kiểm ở
+    # frontend (Nhom4FormPage.jsx), backend không kiểm ký số.
+    label_chinh = "Giấy chứng nhận" if da_co_gcn else "Đơn đăng ký"
 
     if dung_chung:
         shared_files = shared_files or {}
+        chinh = shared_files.get("chinh")
+        if not chinh or not chinh.filename:
+            return None, (
+                jsonify({"error": f"Hồ sơ quét dùng chung: chưa chọn file PDF {label_chinh}."}),
+                400,
+            )
         for storage, label in (
             (shared_files.get("chinh"), "File chính"),
             (shared_files.get("phu"), "Giấy tờ"),
@@ -430,6 +438,12 @@ def submit_ho_so(payload: dict, files_by_parcel: list[dict] | None, shared_files
         for parcel, files in zip(parcels, files_by_parcel):
             thua = parcel.get("thua") or {}
             nhan_thua = f"thửa {thua.get('so_thua')}, tờ {thua.get('so_to')}"
+            chinh = files.get("chinh")
+            if not chinh or not chinh.filename:
+                return None, (
+                    jsonify({"error": f"{nhan_thua}: chưa chọn file PDF {label_chinh}."}),
+                    400,
+                )
             for storage, label in (
                 (files.get("chinh"), "File chính"),
                 (files.get("phu"), "Giấy tờ"),
