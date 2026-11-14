@@ -1,14 +1,15 @@
 name: Đồng bộ dữ liệu GCN
 
-# Mỗi 2 giờ chạy một đợt đồng bộ.
+# 14/11/2026: ĐÃ BỎ lịch tự chạy — lịch "2 giờ/lần" của GitHub thực tế bị
+# giãn 6–9 giờ/lần. Đồng bộ định kỳ giờ chạy ngay trên máy chủ mỗi 1 giờ
+# (Task Scheduler "WebGIS-SyncGcnSheets", backend/scripts/sync_gcn_sheets.py).
+# Workflow này chỉ còn để chạy TAY khi cần (Actions → Run workflow).
 # Đồng bộ tuần tự từng nguồn Google Sheet đang kích hoạt:
 # nguồn 1 xong mới tới nguồn 2, rồi nguồn 3...
 # Không gọi /sync-all để tránh một request xử lý toàn bộ nguồn.
 # Nếu một nguồn lỗi thì ghi nhận lỗi và tiếp tục nguồn kế tiếp.
 
 on:
-  schedule:
-    - cron: "0 */2 * * *"
   workflow_dispatch: {}
 
 jobs:
