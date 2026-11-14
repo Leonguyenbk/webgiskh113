@@ -141,7 +141,7 @@ function LoaiDatCombo({ id, value, options, onChange }) {
 // bản đồ địa chính hiện tại cho từng thửa AI đọc được, soát lại rồi Lưu hồ
 // sơ như form thường (hồ sơ quét dùng chung cho cả danh sách thửa).
 // Mốc bắt buộc ký số file chính (CHỈ kiểm ở frontend — yêu cầu chủ dự án).
-const KY_SO_TU = new Date("2026-11-15T00:00:00+07:00");
+const KY_SO_TU = new Date("2026-11-16T00:00:00+07:00");
 const batBuocKySo = () => Date.now() >= KY_SO_TU.getTime();
 
 // Kiểm cấu trúc chữ ký số PDF (PAdES; ảnh chữ ký dán vào/ô ký trống không đạt):
@@ -646,10 +646,10 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
       setter(null);
       return;
     }
-    // Từ 15/11/2026 file chính (Đơn đăng ký / GCN) phải là PDF ĐÃ KÝ SỐ —
+    // Từ 16/11/2026 file chính (Đơn đăng ký / GCN) phải là PDF ĐÃ KÝ SỐ —
     // kiểm ngay lúc chọn file (chỉ kiểm ở frontend).
     if (f && setter === setFileChinh && batBuocKySo() && !(await pdfCoChuKySo(f))) {
-      const loi = `${label} "${f.name}" CHƯA CÓ CHỮ KÝ SỐ — từ ngày 15/11/2026 chỉ nhận file PDF đã ký số.`;
+      const loi = `${label} "${f.name}" CHƯA CÓ CHỮ KÝ SỐ — từ ngày 16/11/2026 chỉ nhận file PDF đã ký số.`;
       setError(loi);
       setLoiHsq(loi);
       input.value = "";
@@ -892,7 +892,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
         </p>
       )}
       <label>
-        {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"} (bắt buộc{batBuocKySo() ? ", đã ký số" : " — từ 15/11/2026 phải là file đã ký số"})
+        {cheDo === "Đã có GCN" ? "File PDF Giấy chứng nhận *" : "File PDF Đơn đăng ký *"} (bắt buộc{batBuocKySo() ? ", đã ký số" : " — từ 16/11/2026 phải là file đã ký số"})
       </label>
       <input
         key={`chinh-${fileInputKey}`}
@@ -905,7 +905,7 @@ export default function Nhom4FormPage({ onNavigateHome, prefill, aiMode = false 
         <p className="importHint" style={{ color: "#1e7e34", fontWeight: 600 }}>✓ File đã có chữ ký số.</p>
       )}
       {fileChinh && kySoChinh === false && (
-        <p className="nhom4AiCanhBao">⚠ File này CHƯA CÓ CHỮ KÝ SỐ — từ ngày 15/11/2026 sẽ không được nhận, vui lòng ký số trước khi nộp.</p>
+        <p className="nhom4AiCanhBao">⚠ File này CHƯA CÓ CHỮ KÝ SỐ — từ ngày 16/11/2026 sẽ không được nhận, vui lòng ký số trước khi nộp.</p>
       )}
       <label>File PDF Giấy tờ (tùy chọn)</label>
       <input
