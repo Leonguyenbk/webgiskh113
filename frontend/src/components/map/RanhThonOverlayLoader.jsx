@@ -15,10 +15,11 @@ const OVERLAY_NAME = "Ranh giới thôn";
 // supabase/schema.sql). onNeed cũng được App.jsx gọi khi người dùng chọn 1
 // xã ở bộ lọc (cần danh sách thôn cho dropdown "Thôn"), không chỉ khi bật
 // lớp bản đồ.
-export default function RanhThonOverlayLoader({ onNeed }) {
+// overlayName: dùng lại cho lớp "Ranh giới xã" (cùng cơ chế tải khi bật).
+export default function RanhThonOverlayLoader({ onNeed, overlayName = OVERLAY_NAME }) {
   useMapEvents({
     overlayadd: (event) => {
-      if (event.name === OVERLAY_NAME) onNeed();
+      if (event.name === overlayName) onNeed();
     },
   });
   return null;

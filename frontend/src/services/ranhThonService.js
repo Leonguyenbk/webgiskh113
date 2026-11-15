@@ -45,3 +45,23 @@ export function getRanhGioiThonAllCached() {
 
   return allInflight;
 }
+
+// Ranh giới 102 xã/phường (lớp "Ranh giới xã", backend/app/repositories/
+// ranh_xa_repository.py) — dữ liệu gần như tĩnh nên cache hết vòng đời tab.
+let xaCache = null;
+let xaInflight = null;
+
+export function getRanhGioiXaCached() {
+  if (xaCache) return Promise.resolve(xaCache);
+  if (!xaInflight) {
+    xaInflight = request("/api/ranh-xa", { errorFallback: "Không tải được ranh giới xã" })
+      .then((data) => {
+        xaCache = data;
+        return data;
+      })
+      .finally(() => {
+        xaInflight = null;
+      });
+  }
+  return xaInflight;
+}

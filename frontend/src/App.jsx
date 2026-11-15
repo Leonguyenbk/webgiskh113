@@ -31,7 +31,7 @@ import MapSheetTilesLoader from "./components/map/MapSheetTilesLoader";
 import RanhThonOverlayLoader from "./components/map/RanhThonOverlayLoader";
 import ParcelInfoPanel from "./components/parcel/ParcelInfoPanel";
 import { getXaList } from "./services/parcelService";
-import { getRanhGioiThonAllCached } from "./services/ranhThonService";
+import { getRanhGioiThonAllCached, getRanhGioiXaCached } from "./services/ranhThonService";
 import { searchBanDoNen } from "./services/mapSheetService";
 import {
   DU_AN_COLOR,
@@ -81,7 +81,24 @@ function ranhThonStyle(feature) {
   };
 }
 
-const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+// Lớp "Ranh giới xã" (102 xã/phường): CHỈ vẽ viền (fill: false) để không
+// che/chặn bấm thửa đất bên dưới — rê chuột lên viền mới hiện tên xã.
+function ranhXaStyle(feature) {
+  return {
+    color: getRanhXaColor(feature.properties),
+    weight: 3.5,
+    opacity: 0.95,
+    fill: false,
+  };
+}
+
+function ranhXaOnEachFeature(feature, layer) {
+  const p = feature.properties || {};
+  const ten = [p.loai, p.ten_xa].filter(Boolean).join(" ");
+  layer.bindTooltip(`${ten}${p.ma_xa ? ` (${p.ma_xa})` : ""}`, { sticky: true });
+}
+
+const OSM_TILE_URL ="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const GOOGLE_SUBDOMAINS = ["mt0", "mt1", "mt2", "mt3"];
 const GOOGLE_HYBRID_URL = "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}";
 const GOOGLE_SATELLITE_URL = "https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}";
@@ -235,6 +252,22 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
   useEffect(() => {
     if (maXa) ensureRanhThonLoaded();
   }, [maXa, ensureRanhThonLoaded]);
+
+  // Ranh giới xã: chỉ tải khi người dùng bật lớp (mặc định tắt).
+  const ranhXaLayerRef = useRef(null);
+  const [ranhXaData, setRanhXaData] = useState(null);
+  const ranhXaLoadedRef = useRef(false);
+  const ensureRanhXaLoaded = useCallback(() => {
+    if (ranhXaLoadedRef.current) return;
+    ranhXaLoadedRef.current = true;
+    getRanhGioiXaCached()
+      .then((result) => {
+        if (ranhThonMountedRef.current) setRanhXaData(result);
+      })
+      .catch(() => {
+        ranhXaLoadedRef.current = false;
+      });
+  }, []);
 
   // Danh sách thôn của xã đang chọn trong bộ lọc (không phải xã đã tra
   // cứu) — suy ra thẳng từ ranhThonData đã tải sẵn, không gọi thêm API.
@@ -665,6 +698,14 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
       layer.addData(ranhThonData);
     }
   }, [ranhThonData]);
+
+  // Cùng lý do như ranh thôn: clearLayers()+addData(), không remount.
+  useEffect(() => {
+    const layer = ranhXaLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (ranhXaData?.features?.length) layer.addData(ranhXaData);
+  }, [ranhXaData]);
 
   const shownCount = filtered?.features?.length ?? 0;
   const isFiltering = query.trim().length > 0;
@@ -1223,6 +1264,7 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
             />
 
             <RanhThonOverlayLoader onNeed={ensureRanhThonLoaded} />
+            <RanhThonOverlayLoader onNeed={ensureRanhXaLoaded} overlayName="Ranh giới xã" />
 
             <MapInstanceCapture onReady={setMapInstance} />
 
@@ -1288,6 +1330,15 @@ export default function App({ onNavigateTools, onNavigateNhom4 }) {
                   data={{ type: "FeatureCollection", features: [] }}
                   style={style}
                   onEachFeature={onEachFeature}
+                />
+              </LayersControl.Overlay>
+
+              <LayersControl.Overlay name="Ranh giới xã">
+                <GeoJSON
+                  ref={ranhXaLayerRef}
+                  data={{ type: "FeatureCollection", features: [] }}
+                  style={ranhXaStyle}
+                  onEachFeature={ranhXaOnEachFeature}
                 />
               </LayersControl.Overlay>
 
