@@ -273,7 +273,9 @@ def export_danh_sach_da_nhap_xlsx(
             _ngay_nhap_excel(row.get("ngay_nhap")),
             "Biểu Nhóm 4" if row.get("is_form") else "Đồng bộ Sheet",
         ])
-        ws.cell(row=ws.max_row, column=7).number_format = "dd/mm/yyyy hh:mm:ss"
+        # index + 1 = dòng vừa thêm (dòng 1 là tiêu đề); không dùng ws.max_row
+        # trong vòng lặp — openpyxl quét toàn bộ ô mỗi lần gọi (rất chậm).
+        ws.cell(row=index + 1, column=7).number_format = "dd/mm/yyyy hh:mm:ss"
     if not rows:
         ws.append(["", "Xã/phường này chưa có dữ liệu đã nhập"])
     for col, width in zip("ABCDEFGH", (7, 24, 9, 8, 9, 22, 20, 15)):
@@ -1036,7 +1038,11 @@ def export_nhom3_con_thieu_xlsx(ma_xa: str):
     ws = wb.active
     ws.title = "Tong gui xa"[:31]
     ws.append(["Mã xã", "Số tờ", "Số thửa", "Mã định danh", "Ghi chú"])
-    for row in rows:
+    # Số dòng tự đếm (r), KHÔNG dùng ws.max_row trong vòng lặp: openpyxl
+    # tính max_row bằng cách quét toàn bộ ô mỗi lần gọi -> xã vài chục
+    # nghìn thửa mất 3-10 phút/lần xuất, nhiều người bấm cùng lúc chiếm hết
+    # luồng waitress, cả web treo (sáng 16/11/2026).
+    for r, row in enumerate(rows, start=2):
         ws.append([
             _xlsx_cell(row.get("ma_xa")),
             _xlsx_cell(row.get("so_to")),
@@ -1045,7 +1051,6 @@ def export_nhom3_con_thieu_xlsx(ma_xa: str):
             _xlsx_cell(row.get("ghi_chu")),
         ])
         if "đã nhập" in (row.get("ghi_chu") or ""):
-            r = ws.max_row
             for col in range(1, 6):
                 ws.cell(row=r, column=col).fill = _CON_THIEU_FILL_DA_LAM
     if not rows:
